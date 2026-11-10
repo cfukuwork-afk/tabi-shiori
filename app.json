@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "旅のしおり",
+    "slug": "tabi-shiori",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.fukuda.tabishiori",
+      "config": { "usesNonExemptEncryption": false }
+    },
+    "web": { "favicon": "./assets/favicon.png" },
+    "splash": { "image": "./assets/splash-icon.png", "resizeMode": "contain", "backgroundColor": "#FFF7EE" },
+    "backgroundColor": "#FFF7EE",
+    "runtimeVersion": { "policy": "sdkVersion" },
+    "plugins": [
+      ["expo-image-picker", { "photosPermission": "予約のスクショを読み取るために写真ライブラリを使います。" }]
+    ]
+  }
+}

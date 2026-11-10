@@ -1,0 +1,15 @@
+# main ブランチに変更が入るたびに、Expo Go 向けの更新を自動で公開する
+name: Publish to Expo Go
+
+on:
+  push:
+    branches: ['main']
+
+jobs:
+  publish:
+    name: Publish update
+    type: update
+    params:
+      branch: main
+      platform: ios
+      message: "自動公開"

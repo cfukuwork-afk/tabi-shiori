@@ -1,0 +1,22 @@
+# App Store へ出すためのビルドと提出
+# expo.dev の「Run workflow」から手動で実行するか、release ブランチに push すると動きます
+name: Release iOS
+
+on:
+  push:
+    branches: ['release']
+
+jobs:
+  build:
+    name: Build iOS
+    type: build
+    params:
+      platform: ios
+      profile: production
+
+  submit:
+    name: Submit to App Store Connect
+    type: submit
+    needs: [build]
+    params:
+      build_id: ${{ needs.build.outputs.build_id }}
