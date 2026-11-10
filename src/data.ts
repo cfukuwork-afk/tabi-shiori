@@ -2,7 +2,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FALLBACK_PER_USD, findCurrency } from './currencies';
 
-export type BookingType = 'flight' | 'train' | 'bus' | 'hotel' | 'car' | 'ticket' | 'food' | 'other';
+export type BookingType = 'flight' | 'train' | 'bus' | 'hotel' | 'car' | 'ticket' | 'food' | 'plan' | 'other';
 
 export const TYPES: { id: BookingType; icon: string; color: string; soft: string }[] = [
   { id: 'flight', icon: 'airplane', color: '#3B5BDB', soft: '#EDF0FB' },
@@ -12,6 +12,7 @@ export const TYPES: { id: BookingType; icon: string; color: string; soft: string
   { id: 'car', icon: 'car-sport', color: '#E8590C', soft: '#FCEEE6' },
   { id: 'ticket', icon: 'ticket', color: '#D6336C', soft: '#FBEAF0' },
   { id: 'food', icon: 'restaurant', color: '#B07D00', soft: '#F8F1DF' },
+  { id: 'plan', icon: 'flag', color: '#0B7285', soft: '#E3F2F4' },
   { id: 'other', icon: 'bookmark', color: '#6C727C', soft: '#EFEFEF' },
 ];
 /** 旅行の表紙の色（emoji 欄に色コードを入れて使う） */

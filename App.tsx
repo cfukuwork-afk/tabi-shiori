@@ -150,7 +150,7 @@ function Main() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [newTrip, setNewTrip] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [adding, setAdding] = useState<{ tripId: string; edit?: Booking; initial?: { text?: string; image?: string } } | null>(null);
+  const [adding, setAdding] = useState<{ tripId: string; edit?: Booking; initial?: { text?: string; image?: string; planDate?: string } } | null>(null);
   const [detail, setDetail] = useState<{ tripId: string; id: string } | null>(null);
   const [incoming, setIncoming] = useState<{ text?: string; image?: string } | null>(null);
   const [settleIn, setSettleIn] = useState<{ n: string; c: string; p: { f: string; t: string; a: number }[] } | null>(null);
@@ -226,6 +226,7 @@ function Main() {
             setOpenId(null);
           }}
           onAdd={() => setAdding({ tripId: trip.id })}
+          onAddPlan={(d) => setAdding({ tripId: trip.id, initial: { planDate: d } })}
           onShare={() => Share.share({ message: itineraryText(trip) })}
           onOpen={(b) => setDetail({ tripId: trip.id, id: b.id })}
         />
@@ -657,7 +658,9 @@ function TripScreen({
   onAdd,
   onOpen,
   onShare,
+  onAddPlan,
 }: {
+  onAddPlan: (date: string) => void;
   onShare: () => void;
   trip: Trip;
   rate: RateInfo;
@@ -714,8 +717,13 @@ function TripScreen({
           </Pressable>
         ))}
       </View>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 140 }} keyboardShouldPersistTaps="handled">
-        {tab === 'plan' && <PlanTab trip={trip} onOpen={onOpen} onJournal={setJournalDay} />}
+      <ScrollView
+        contentContainerStyle={{ padding: 20, paddingBottom: 140 }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        automaticallyAdjustKeyboardInsets
+      >
+        {tab === 'plan' && <PlanTab trip={trip} onOpen={onOpen} onJournal={setJournalDay} onAddPlan={onAddPlan} />}
         {tab === 'bookings' && <BookingsTab trip={trip} rate={rate} onOpen={onOpen} />}
         {tab === 'money' && <MoneyTab trip={trip} rate={rate} onChange={onChange} />}
         {tab === 'pack' && <PackTab trip={trip} onChange={onChange} />}
@@ -759,7 +767,7 @@ function JournalSheet({
   const [photos, setPhotos] = useState<string[]>(value.photos ?? []);
   return (
     <Sheet visible onClose={onClose} tall>
-      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" showsVerticalScrollIndicator={false}>
         <Text style={s.kicker}>{t('journal').toUpperCase()}</Text>
         <Text style={s.sheetTitle}>{prettyDate(date)}</Text>
         <TextInput
@@ -795,7 +803,7 @@ function JournalSheet({
   );
 }
 
-function PlanTab({ trip, onOpen, onJournal }: { trip: Trip; onOpen: (b: Booking) => void; onJournal?: (d: string) => void }) {
+function PlanTab({ trip, onOpen, onJournal, onAddPlan }: { trip: Trip; onOpen: (b: Booking) => void; onJournal?: (d: string) => void; onAddPlan?: (d: string) => void }) {
   const tl = timeline(trip);
   const today = todayStr();
   const days = tripDays(trip).map((date) => ({ date, items: tl.find((d) => d.date === date)?.items ?? [] }));
@@ -815,7 +823,7 @@ function PlanTab({ trip, onOpen, onJournal }: { trip: Trip; onOpen: (b: Booking)
             {!!start && <Text style={s.dayN}>{t('dayN', { n: daysBetween(start, date) + 1 })}</Text>}
             <Text style={s.dayDate}>{prettyDate(date)}</Text>
           </View>
-          {items.length === 0 && <Text style={[s.hint, { marginLeft: 52, marginBottom: 8 }]}>{t('freeDay')}</Text>}
+          {items.length === 0 && !onAddPlan && <Text style={[s.hint, { marginLeft: 52, marginBottom: 8 }]}>{t('freeDay')}</Text>}
           {items.map((it, i) => {
             const b = it.booking;
             const ty = typeOf(b.type);
@@ -851,6 +859,12 @@ function PlanTab({ trip, onOpen, onJournal }: { trip: Trip; onOpen: (b: Booking)
               </View>
             );
           })}
+          {onAddPlan && (
+            <Pressable onPress={() => onAddPlan(date)} hitSlop={6} style={({ pressed }) => [s.addPlan, pressed && { opacity: 0.6 }]}>
+              <Icon name="add" size={15} color={C.sub} />
+              <Text style={s.addPlanText}>{items.length ? t('addPlan') : `${t('freeDay')} ・ ${t('addPlan')}`}</Text>
+            </Pressable>
+          )}
           {onJournal && date <= today && <JournalBlock entry={trip.journal?.[date]} onPress={() => onJournal(date)} />}
         </View>
       ))}
@@ -1373,19 +1387,22 @@ function AddBookingSheet({
   onSave,
   initial,
 }: {
-  initial?: { text?: string; image?: string };
+  initial?: { text?: string; image?: string; planDate?: string };
   trip: Trip;
   edit?: Booking;
   home: string;
   onClose: () => void;
   onSave: (b: Booking) => void;
 }) {
-  const [mode, setMode] = useState<'choose' | 'text' | 'form'>(edit ? 'form' : 'choose');
+  const [mode, setMode] = useState<'choose' | 'text' | 'form'>(edit || initial?.planDate ? 'form' : 'choose');
   const [text, setText] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [b, setB] = useState<Booking>(
-    edit ?? { id: uid(), type: 'flight', title: '', start: tripRange(trip).start ?? todayStr(), currency: home, createdAt: Date.now() },
+    edit ??
+      (initial?.planDate
+        ? { id: uid(), type: 'plan', title: '', start: initial.planDate, currency: home, createdAt: Date.now() }
+        : { id: uid(), type: 'flight', title: '', start: tripRange(trip).start ?? todayStr(), currency: home, createdAt: Date.now() }),
   );
   const set = (p: Partial<Booking>) => setB((x) => ({ ...x, ...p }));
   const applyParsed = (src: string, photo?: string) => {
@@ -1433,7 +1450,7 @@ function AddBookingSheet({
   };
   const cur = findCurrency(b.currency || home);
   useEffect(() => {
-    if (!initial) return;
+    if (!initial || initial.planDate) return;
     if (initial.image) readImage(keepImage(initial.image));
     else if (initial.text) applyParsed(initial.text);
   }, []);
@@ -1446,6 +1463,15 @@ function AddBookingSheet({
           <AddOption icon="scan-outline" title={t('fromShot')} sub={busy ? t('ocrBusy') : t('fromShotSub')} onPress={pickShot} />
           <AddOption icon="mail-open-outline" title={t('fromText')} sub={t('fromTextSub')} onPress={() => setMode('text')} />
           <AddOption icon="create-outline" title={t('manual')} sub={t('manualSub')} onPress={() => setMode('form')} />
+          <AddOption
+            icon="flag-outline"
+            title={t('addPlan')}
+            sub={t('planSub')}
+            onPress={() => {
+              set({ type: 'plan' });
+              setMode('form');
+            }}
+          />
         </>
       )}
       {mode === 'text' && (
@@ -1477,8 +1503,8 @@ function AddBookingSheet({
         </>
       )}
       {mode === 'form' && (
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
-          <Text style={s.sheetTitle}>{edit ? t('edit') : t('addTitle')}</Text>
+        <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={{ paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
+          <Text style={s.sheetTitle}>{edit ? t('edit') : b.type === 'plan' ? t('addPlan') : t('addTitle')}</Text>
           {!!note && (
             <View style={s.note}>
               <Text style={s.noteText}>{note}</Text>
@@ -1492,7 +1518,26 @@ function AddBookingSheet({
               </Pressable>
             ))}
           </View>
-          <Field label={t('title')} value={b.title} onChange={(v) => set({ title: v })} />
+          <Field label={b.type === 'plan' ? t('planName') : t('title')} value={b.title} onChange={(v) => set({ title: v })} placeholder={b.type === 'plan' ? t('planTitlePh') : undefined} />
+          {b.type === 'plan' && tripDays(trip).length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 6 }} contentContainerStyle={{ gap: 6, alignItems: 'center' }} keyboardShouldPersistTaps="handled">
+              {tripDays(trip).map((d, i) => (
+                <Pressable key={d} onPress={() => set({ start: d })} style={[s.typeChip, b.start === d && { backgroundColor: C.ink, borderColor: C.ink }]}>
+                  <Text style={[s.chipText, b.start === d && { color: '#fff' }]}>{`${t('dayN', { n: i + 1 })} ・ ${prettyDate(d)}`}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          )}
+          {b.type === 'plan' ? (
+            <>
+              <View style={s.two}>
+                <Field label={t('time')} value={b.startTime ?? ''} onChange={(v) => set({ startTime: v || undefined })} placeholder="10:00" small />
+                <Field label={t('endTime')} value={b.endTime ?? ''} onChange={(v) => set({ endTime: v || undefined })} placeholder="12:00" small />
+              </View>
+              <Field label={t('place')} value={b.from ?? ''} onChange={(v) => set({ from: v || undefined })} />
+            </>
+          ) : (
+          <>
           <View style={s.two}>
             <DateField label={t('startDate')} value={b.start} onChange={(v) => set({ start: v })} />
             <Field label={t('time')} value={b.startTime ?? ''} onChange={(v) => set({ startTime: v || undefined })} placeholder="09:30" small />
@@ -1507,6 +1552,8 @@ function AddBookingSheet({
             <Field label={t('code')} value={b.code ?? ''} onChange={(v) => set({ code: v || undefined })} />
             <Field label={t('seat')} value={b.seat ?? ''} onChange={(v) => set({ seat: v || undefined })} small />
           </View>
+          </>
+          )}
           <Text style={s.label}>{t('price')}</Text>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <TextInput
@@ -1741,7 +1788,7 @@ function BookingDetail({
             />
           )}
           {!isDate(b.end) && b.endTime && <Info k={t('time')} v={`→ ${b.endTime}`} />}
-          {!!b.from && <Info k={t('from')} v={b.from} onMap />}
+          {!!b.from && <Info k={b.type === 'plan' ? t('place') : t('from')} v={b.from} onMap />}
           {!!b.to && <Info k={t('to')} v={b.to} onMap />}
           {b.type === 'flight' && (() => {
             const dep = toMyTime(b.from, b.start, b.startTime);
@@ -1970,6 +2017,8 @@ const s = StyleSheet.create({
   tlTime: { fontWeight: '800', color: C.ink, fontSize: 13, marginTop: 14, fontVariant: ['tabular-nums'] },
   tlDotSmall: { width: 10, height: 10, borderRadius: 5, borderWidth: 2.5, backgroundColor: C.bg, marginTop: 17 },
   tlRail: { flex: 1, width: 1.5, backgroundColor: C.line, marginTop: 2 },
+  addPlan: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 78, marginBottom: 8, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: C.line, alignSelf: 'flex-start' },
+  addPlanText: { color: C.sub, fontWeight: '700', fontSize: 13 },
   tlCard: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.card, borderRadius: 18, padding: 12, marginLeft: 8, marginBottom: 10, borderWidth: 1, borderColor: C.line },
   tlTitle: { fontSize: 15, fontWeight: '800', color: C.ink },
   tlEdge: { fontSize: 11.5, fontWeight: '800', marginTop: 1 },
