@@ -61,6 +61,8 @@ export type Trip = {
   members: Member[];
   bookings: Booking[];
   checklist: { id: string; text: string; done: boolean }[];
+  cover?: string; // 表紙の写真（端末内のURI）
+  journal?: Record<string, { text?: string; photos?: string[] }>; // 日ごとの思い出
   createdAt: number;
 };
 
@@ -169,6 +171,20 @@ export function tripRange(t: Trip): { start?: string; end?: string } {
   ds.sort();
   return { start: t.start || ds[0], end: t.end || ds[ds.length - 1] };
 }
+
+/** 旅行の全日程（予約のない日も含む。最大60日） */
+export function tripDays(t: Trip): string[] {
+  const { start, end } = tripRange(t);
+  const set = new Set<string>(timeline(t).map((d) => d.date));
+  Object.keys(t.journal ?? {}).forEach((d) => set.add(d));
+  if (start && end && daysBetween(start, end) <= 60) for (let d = start; d <= end; d = shiftDate(d, 1)) set.add(d);
+  return [...set].sort();
+}
+export const isPast = (t: Trip, today = todayStr()) => {
+  const { end } = tripRange(t);
+  return !!end && end < today;
+};
+export const memoryPhotos = (t: Trip) => Object.values(t.journal ?? {}).flatMap((j) => j.photos ?? []);
 
 /** しおり用：日付ごとの予定（ホテル・レンタカーは開始日と終了日の両方に出す） */
 export type TimelineItem = { booking: Booking; edge: 'start' | 'end' | 'single'; time?: string };

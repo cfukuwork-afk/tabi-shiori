@@ -22,6 +22,9 @@ import {
   COVERS,
   coverOf,
   monogram,
+  isPast,
+  memoryPhotos,
+  tripDays,
   DEFAULT_SETTINGS,
   RateInfo,
   Settings,
@@ -68,11 +71,18 @@ const TypeBadge = ({ type, size = 38 }: { type: BookingType; size?: number }) =>
   );
 };
 /** 旅行の表紙（色＋頭文字） */
-const Cover = ({ trip, size = 52 }: { trip: { name: string; emoji: string }; size?: number }) => (
-  <View style={{ width: size, height: size, borderRadius: size * 0.3, backgroundColor: coverOf(trip), alignItems: 'center', justifyContent: 'center' }}>
-    <Text style={{ color: '#fff', fontWeight: '900', fontSize: size * 0.34, letterSpacing: 0.5 }}>{monogram(trip.name)}</Text>
-  </View>
-);
+const Cover = ({ trip, size = 52 }: { trip: { name: string; emoji: string; cover?: string }; size?: number }) =>
+  trip.cover ? (
+    <Image source={{ uri: trip.cover }} style={{ width: size, height: size, borderRadius: size * 0.3, backgroundColor: C.chip }} />
+  ) : (
+    <View style={{ width: size, height: size, borderRadius: size * 0.3, backgroundColor: coverOf(trip), alignItems: 'center', justifyContent: 'center' }}>
+      <Text style={{ color: '#fff', fontWeight: '900', fontSize: size * 0.34, letterSpacing: 0.5 }}>{monogram(trip.name)}</Text>
+    </View>
+  );
+const pickImage = async () => {
+  const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
+  return !r.canceled && r.assets?.[0] ? r.assets[0].uri : null;
+};
 
 export default function App() {
   return (
@@ -220,7 +230,7 @@ function Main() {
         settings={settings}
         onDone={(s, sample) => {
           changeSettings({ ...s, onboarded: true });
-          if (sample) updateTrips((all) => [sampleTrip(s), ...all]);
+          if (sample) updateTrips((all) => [sampleTrip(s), pastSample(s), ...all]);
         }}
       />
     </View>
@@ -289,9 +299,12 @@ function Home({
           <Text style={[s.hint, { textAlign: 'center', marginTop: 10 }]}>{t('noTrips')}</Text>
         </View>
       )}
-      {sorted.map((tr) => (
-        <TripCard key={tr.id} trip={tr} rate={rate} onPress={() => onOpen(tr.id)} />
-      ))}
+      {sorted
+        .filter((tr) => !isPast(tr))
+        .map((tr) => (
+          <TripCard key={tr.id} trip={tr} rate={rate} onPress={() => onOpen(tr.id)} />
+        ))}
+      <Memories trips={sorted.filter((tr) => isPast(tr))} onOpen={onOpen} />
     </ScrollView>
   );
 }
@@ -304,6 +317,52 @@ function statusOf(tr: Trip) {
   if (start <= today) return { label: t('onTrip'), tone: 'mint' as const };
   const n = daysBetween(today, start);
   return { label: n === 0 ? t('today') : t('daysLeft', { n }), tone: 'pink' as const };
+}
+
+function Memories({ trips, onOpen }: { trips: Trip[]; onOpen: (id: string) => void }) {
+  if (!trips.length) return null;
+  const years = [...new Set(trips.map((tr) => (tripRange(tr).start ?? '').slice(0, 4)))].sort().reverse();
+  return (
+    <>
+      <Text style={[s.sec, { marginTop: 30 }]}>{t('memories').toUpperCase()}</Text>
+      {years.map((y) => (
+        <View key={y}>
+          <Text style={s.year}>{y}</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingRight: 20 }} style={{ marginHorizontal: -20, paddingLeft: 20 }}>
+            {trips
+              .filter((tr) => (tripRange(tr).start ?? '').startsWith(y))
+              .map((tr) => {
+                const { start, end } = tripRange(tr);
+                const photos = memoryPhotos(tr);
+                const img = tr.cover ?? photos[0];
+                return (
+                  <Pressable key={tr.id} onPress={() => onOpen(tr.id)} style={({ pressed }) => [s.memCard, pressed && { opacity: 0.9 }]}>
+                    {img ? (
+                      <Image source={{ uri: img }} style={StyleSheet.absoluteFill} />
+                    ) : (
+                      <View style={[StyleSheet.absoluteFill, { backgroundColor: coverOf(tr), alignItems: 'center', justifyContent: 'center' }]}>
+                        <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 64, fontWeight: '900' }}>{monogram(tr.name)}</Text>
+                      </View>
+                    )}
+                    <View style={s.memShade} />
+                    <View style={{ position: 'absolute', left: 14, right: 14, bottom: 12 }}>
+                      <Text style={s.memName} numberOfLines={1}>
+                        {tr.name}
+                      </Text>
+                      <Text style={s.memSub}>
+                        {start ? prettyDate(start) : ''}
+                        {end && end !== start ? ` – ${prettyDate(end)}` : ''}
+                        {photos.length ? `  ·  ${photos.length} ${t('photosN')}` : ''}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+          </ScrollView>
+        </View>
+      ))}
+    </>
+  );
 }
 
 function TripCard({ trip, rate, onPress }: { trip: Trip; rate: RateInfo; onPress: () => void }) {
@@ -445,6 +504,7 @@ function TripScreen({
   onOpen: (b: Booking) => void;
 }) {
   const [tab, setTab] = useState<Tab>('plan');
+  const [journalDay, setJournalDay] = useState<string | null>(null);
   const [sure, setSure] = useState(false);
   const { start, end } = tripRange(trip);
   const total = tripTotal(trip, rate);
@@ -454,7 +514,15 @@ function TripScreen({
         <Pressable onPress={onBack} hitSlop={14} style={s.back}>
           <Icon name="chevron-back" size={20} />
         </Pressable>
-        <Cover trip={trip} size={40} />
+        <Pressable
+          onPress={async () => {
+            const uri = await pickImage();
+            if (uri) onChange((tr) => ({ ...tr, cover: uri }));
+          }}
+          onLongPress={() => onChange((tr) => ({ ...tr, cover: undefined }))}
+        >
+          <Cover trip={trip} size={40} />
+        </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={s.tripHeadName} numberOfLines={1}>
             {trip.name}
@@ -476,7 +544,7 @@ function TripScreen({
         ))}
       </View>
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 140 }} keyboardShouldPersistTaps="handled">
-        {tab === 'plan' && <PlanTab trip={trip} onOpen={onOpen} />}
+        {tab === 'plan' && <PlanTab trip={trip} onOpen={onOpen} onJournal={setJournalDay} />}
         {tab === 'bookings' && <BookingsTab trip={trip} rate={rate} onOpen={onOpen} />}
         {tab === 'money' && <MoneyTab trip={trip} rate={rate} onChange={onChange} />}
         {tab === 'pack' && <PackTab trip={trip} onChange={onChange} />}
@@ -490,12 +558,76 @@ function TripScreen({
           <Text style={s.fabText}>{t('addBooking')}</Text>
         </Pressable>
       )}
+      {journalDay && (
+        <JournalSheet
+          date={journalDay}
+          value={trip.journal?.[journalDay] ?? {}}
+          onClose={() => setJournalDay(null)}
+          onSave={(v) => {
+            onChange((tr) => ({ ...tr, journal: { ...(tr.journal ?? {}), [journalDay]: v } }));
+            setJournalDay(null);
+          }}
+        />
+      )}
     </View>
   );
 }
 
-function PlanTab({ trip, onOpen }: { trip: Trip; onOpen: (b: Booking) => void }) {
-  const days = timeline(trip);
+function JournalSheet({
+  date,
+  value,
+  onClose,
+  onSave,
+}: {
+  date: string;
+  value: { text?: string; photos?: string[] };
+  onClose: () => void;
+  onSave: (v: { text?: string; photos?: string[] }) => void;
+}) {
+  const [text, setText] = useState(value.text ?? '');
+  const [photos, setPhotos] = useState<string[]>(value.photos ?? []);
+  return (
+    <Sheet visible onClose={onClose} tall>
+      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <Text style={s.kicker}>{t('journal').toUpperCase()}</Text>
+        <Text style={s.sheetTitle}>{prettyDate(date)}</Text>
+        <TextInput
+          style={[s.input, { height: 160, textAlignVertical: 'top', lineHeight: 22 }]}
+          multiline
+          value={text}
+          onChangeText={setText}
+          placeholder={t('journalPh')}
+          placeholderTextColor={C.sub}
+        />
+        <Text style={s.label}>{t('photos')}</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {photos.map((p) => (
+            <Pressable key={p} onLongPress={() => setPhotos(photos.filter((x) => x !== p))}>
+              <Image source={{ uri: p }} style={s.memThumb} />
+            </Pressable>
+          ))}
+          <Pressable
+            style={[s.memThumb, s.thumbAdd]}
+            onPress={async () => {
+              const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8, allowsMultipleSelection: true });
+              if (!r.canceled) setPhotos([...photos, ...r.assets.map((a) => a.uri)]);
+            }}
+          >
+            <Icon name="add" size={22} color={C.sub} />
+          </Pressable>
+        </View>
+        <Pressable style={s.primary} onPress={() => onSave({ text: text.trim() || undefined, photos: photos.length ? photos : undefined })}>
+          <Text style={s.primaryText}>{t('save')}</Text>
+        </Pressable>
+      </ScrollView>
+    </Sheet>
+  );
+}
+
+function PlanTab({ trip, onOpen, onJournal }: { trip: Trip; onOpen: (b: Booking) => void; onJournal?: (d: string) => void }) {
+  const tl = timeline(trip);
+  const today = todayStr();
+  const days = tripDays(trip).map((date) => ({ date, items: tl.find((d) => d.date === date)?.items ?? [] }));
   const { start } = tripRange(trip);
   if (!days.length)
     return (
@@ -512,6 +644,7 @@ function PlanTab({ trip, onOpen }: { trip: Trip; onOpen: (b: Booking) => void })
             {!!start && <Text style={s.dayN}>{t('dayN', { n: daysBetween(start, date) + 1 })}</Text>}
             <Text style={s.dayDate}>{prettyDate(date)}</Text>
           </View>
+          {items.length === 0 && <Text style={[s.hint, { marginLeft: 52, marginBottom: 8 }]}>{t('freeDay')}</Text>}
           {items.map((it, i) => {
             const b = it.booking;
             const ty = typeOf(b.type);
@@ -547,9 +680,39 @@ function PlanTab({ trip, onOpen }: { trip: Trip; onOpen: (b: Booking) => void })
               </View>
             );
           })}
+          {onJournal && date <= today && <JournalBlock entry={trip.journal?.[date]} onPress={() => onJournal(date)} />}
         </View>
       ))}
     </>
+  );
+}
+
+function JournalBlock({ entry, onPress }: { entry?: { text?: string; photos?: string[] }; onPress: () => void }) {
+  const has = !!entry?.text || !!entry?.photos?.length;
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [has ? s.journal : s.journalEmpty, pressed && { opacity: 0.85 }]}>
+      {has ? (
+        <>
+          {!!entry?.photos?.length && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+              {entry.photos.map((p) => (
+                <Image key={p} source={{ uri: p }} style={s.journalPhoto} />
+              ))}
+            </ScrollView>
+          )}
+          {!!entry?.text && (
+            <Text style={s.journalText} numberOfLines={4}>
+              {entry.text}
+            </Text>
+          )}
+        </>
+      ) : (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Icon name="images-outline" size={16} color={C.sub} />
+          <Text style={[s.hint, { fontWeight: '800' }]}>{t('addMemory')}</Text>
+        </View>
+      )}
+    </Pressable>
   );
 }
 
@@ -1268,6 +1431,26 @@ function WelcomeSheet({ visible, settings, onDone }: { visible: boolean; setting
 }
 
 /* ---------------- お試し用の旅行 ---------------- */
+function pastSample(st: Settings): Trip {
+  const ja = st.lang === 'ja';
+  const a = shiftDate(todayStr(), -40);
+  return {
+    id: uid(),
+    name: ja ? '京都 週末旅' : 'Kyoto weekend',
+    emoji: '#0B7285',
+    members: [{ id: 'me', name: st.myName || t('me') }],
+    bookings: [
+      { id: uid(), type: 'train', title: ja ? 'のぞみ 21号' : 'Nozomi 21', start: a, startTime: '08:00', endTime: '10:15', from: ja ? '東京' : 'Tokyo', to: ja ? '京都' : 'Kyoto', price: 14170, currency: 'JPY', createdAt: 1 },
+      { id: uid(), type: 'hotel', title: ja ? '町家ステイ 祇園' : 'Machiya Stay Gion', start: a, startTime: '15:00', end: shiftDate(a, 2), endTime: '10:00', price: 38000, currency: 'JPY', createdAt: 2 },
+    ],
+    checklist: [],
+    journal: {
+      [a]: { text: ja ? '朝の新幹線で富士山がきれいに見えた。夜は先斗町で湯豆腐。' : 'Saw Mt Fuji from the train. Yudofu in Pontocho at night.' },
+      [shiftDate(a, 1)]: { text: ja ? '伏見稲荷を早朝に。人が少なくて最高だった。' : 'Fushimi Inari at dawn — almost empty, magical.' },
+    },
+    createdAt: Date.now() - 1,
+  };
+}
 function sampleTrip(st: Settings): Trip {
   const base = shiftDate(todayStr(), 20);
   const d = (n: number) => shiftDate(base, n);
@@ -1397,5 +1580,15 @@ const s = StyleSheet.create({
   infoRow: { flexDirection: 'row', paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: C.line, gap: 10 },
   infoK: { width: 100, fontSize: 12, fontWeight: '700', color: C.sub },
   infoV: { flex: 1, fontSize: 14, fontWeight: '800', color: C.ink },
+  year: { fontSize: 20, fontWeight: '900', color: C.ink, marginBottom: 10, marginTop: 4, letterSpacing: -0.3 },
+  memCard: { width: 210, height: 260, borderRadius: 22, overflow: 'hidden', backgroundColor: C.ink, marginBottom: 16 },
+  memShade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 110, backgroundColor: 'rgba(0,0,0,0.38)' },
+  memName: { color: '#fff', fontSize: 19, fontWeight: '900', letterSpacing: -0.3 },
+  memSub: { color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '700', marginTop: 3 },
+  memThumb: { width: 96, height: 96, borderRadius: 14, backgroundColor: C.chip },
+  journal: { marginLeft: 52, marginTop: 2, backgroundColor: C.card, borderRadius: 18, padding: 12, gap: 10, borderWidth: 1, borderColor: C.line },
+  journalEmpty: { marginLeft: 52, marginTop: 2, borderRadius: 16, paddingVertical: 12, paddingHorizontal: 14, borderWidth: 1, borderColor: C.line, borderStyle: 'dashed' },
+  journalPhoto: { width: 120, height: 120, borderRadius: 12, backgroundColor: C.chip },
+  journalText: { fontSize: 14, color: C.ink, fontWeight: '600', lineHeight: 21 },
   photoBig: { width: 150, height: 230, borderRadius: 14, backgroundColor: '#eee' },
 });

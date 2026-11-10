@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "旅のしおり",
+    "name": "Tripfold",
     "slug": "tabi-shiori",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -8,9 +8,14 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.fukuda.tabishiori",
+      "bundleIdentifier": "com.fukuda.tripfold",
       "config": {
         "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "CFBundleDevelopmentRegion": "ja",
+        "CFBundleAllowMixedLocalizations": true,
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "web": {
@@ -29,7 +34,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "予約のスクショを読み取るために写真ライブラリを使います。"
+          "photosPermission": "予約のスクショや旅行の写真を選ぶために写真ライブラリを使います。"
         }
       ]
     ],
