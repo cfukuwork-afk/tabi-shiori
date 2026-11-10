@@ -36,6 +36,24 @@
         {
           "photosPermission": "予約のスクショや旅行の写真を選ぶために写真ライブラリを使います。"
         }
+      ],
+      [
+        "expo-notifications",
+        {}
+      ],
+      [
+        "expo-share-intent",
+        {
+          "iosActivationRules": {
+            "NSExtensionActivationSupportsText": true,
+            "NSExtensionActivationSupportsWebURLWithMaxCount": 1,
+            "NSExtensionActivationSupportsImageWithMaxCount": 1
+          },
+          "androidIntentFilters": [
+            "text/*",
+            "image/*"
+          ]
+        }
       ]
     ],
     "owner": "chihayax",
@@ -46,6 +64,7 @@
     },
     "updates": {
       "url": "https://u.expo.dev/51d9cc15-7dc4-4e72-9e57-3693dd68a114"
-    }
+    },
+    "scheme": "tripfold"
   }
 }

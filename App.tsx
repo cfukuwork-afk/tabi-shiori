@@ -3,9 +3,13 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useMemo, useState } from 'react';
+import { useShareIntent } from 'expo-share-intent';
+import { requireOptionalNativeModule } from 'expo-modules-core';
 import {
   Image,
   KeyboardAvoidingView,
+  Linking,
+  Share,
   Modal,
   Platform,
   Pressable,
@@ -20,6 +24,9 @@ import {
   Booking,
   BookingType,
   COVERS,
+  EXP_CATS,
+  Expense,
+  ExpenseCat,
   coverOf,
   monogram,
   isPast,
@@ -56,6 +63,30 @@ import { parseBooking } from './src/parse';
 import { CURRENCIES, findCurrency } from './src/currencies';
 import { C, cleanNum, shadow } from './src/theme';
 import { ocrAvailable, recognizeReceipt } from './modules/receipt-ocr';
+import { askPermission, rescheduleAll } from './src/notify';
+
+const SHARE_NATIVE = !!requireOptionalNativeModule('ExpoShareIntentModule');
+const openMap = (q: string) => Linking.openURL(`https://maps.apple.com/?q=${encodeURIComponent(q)}`);
+const catName = (c: ExpenseCat) => t(('cat' + c[0].toUpperCase() + c.slice(1)) as any);
+
+/** しおりを文字にして共有（LINE・メールなど） */
+function itineraryText(trip: Trip) {
+  const { start, end } = tripRange(trip);
+  const lines = [`【${trip.name}】 ${start ? prettyDate(start) : ''}${end && end !== start ? ' – ' + prettyDate(end) : ''}`, ''];
+  timeline(trip).forEach(({ date, items }) => {
+    lines.push(`■ ${start ? t('dayN', { n: daysBetween(start, date) + 1 }) + ' ' : ''}${prettyDate(date)}`);
+    items.forEach((it) => {
+      const b = it.booking;
+      const edge = it.edge === 'start' ? (b.type === 'hotel' ? t('checkin') : t('pickup')) : it.edge === 'end' ? (b.type === 'hotel' ? t('checkout') : t('dropoff')) : '';
+      lines.push(`${it.time ?? '--:--'}  ${typeName(b.type)}｜${b.title || ''}${edge ? `（${edge}）` : ''}`);
+      if (it.edge !== 'end' && (b.from || b.to)) lines.push(`        ${b.from ?? ''}${b.to ? ' → ' + b.to : ''}`);
+      if (b.code) lines.push(`        ${t('code')}: ${b.code}`);
+    });
+    lines.push('');
+  });
+  lines.push('— Tripfold');
+  return lines.join('\n');
+}
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 const Icon = ({ name, size = 18, color = C.ink }: { name: string; size?: number; color?: string }) => (
@@ -101,8 +132,20 @@ function Main() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [newTrip, setNewTrip] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [adding, setAdding] = useState<{ tripId: string; edit?: Booking } | null>(null);
+  const [adding, setAdding] = useState<{ tripId: string; edit?: Booking; initial?: { text?: string; image?: string } } | null>(null);
   const [detail, setDetail] = useState<{ tripId: string; id: string } | null>(null);
+  const [incoming, setIncoming] = useState<{ text?: string; image?: string } | null>(null);
+  const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntent({ disabled: !SHARE_NATIVE });
+  useEffect(() => {
+    if (!hasShareIntent) return;
+    const img = shareIntent.files?.find((f) => f.mimeType?.startsWith('image'))?.path;
+    const text = shareIntent.text ?? undefined;
+    if (img || text) setIncoming({ text, image: img });
+    resetShareIntent();
+  }, [hasShareIntent]);
+  useEffect(() => {
+    if (ready) rescheduleAll(trips, settings.notify);
+  }, [trips, settings.notify, settings.lang, ready]);
 
   setLang(settings.lang);
 
@@ -126,6 +169,7 @@ function Main() {
     });
   const updateTrip = (id: string, fn: (t: Trip) => Trip) => updateTrips((all) => all.map((x) => (x.id === id ? fn(x) : x)));
   const changeSettings = async (s: Settings) => {
+    if (s.notify && !settings.notify) askPermission();
     setSettings(s);
     saveSettings(s);
     if (s.home !== rate.base) {
@@ -156,6 +200,7 @@ function Main() {
             setOpenId(null);
           }}
           onAdd={() => setAdding({ tripId: trip.id })}
+          onShare={() => Share.share({ message: itineraryText(trip) })}
           onOpen={(b) => setDetail({ tripId: trip.id, id: b.id })}
         />
       ) : (
@@ -191,8 +236,35 @@ function Main() {
         }}
       />
 
-      {adding && (
+      {incoming && !adding && (
+        <PickTripSheet
+          trips={trips.filter((x) => !isPast(x))}
+          onClose={() => setIncoming(null)}
+          onPick={(id) => {
+            if (id) {
+              setAdding({ tripId: id, initial: incoming });
+            } else {
+              const tr: Trip = {
+                id: uid(),
+                name: t('newTrip'),
+                emoji: COVERS[Math.floor(Math.random() * COVERS.length)],
+                members: [{ id: 'me', name: settings.myName || t('me') }],
+                bookings: [],
+                checklist: t('defaultPack').split(',').map((x) => ({ id: uid(), text: x, done: false })),
+                createdAt: Date.now(),
+              };
+              updateTrips((all) => [tr, ...all]);
+              setOpenId(tr.id);
+              setAdding({ tripId: tr.id, initial: incoming });
+            }
+            setIncoming(null);
+          }}
+        />
+      )}
+
+      {adding && trips.some((x) => x.id === adding.tripId) && (
         <AddBookingSheet
+          initial={adding.initial}
           trip={trips.find((x) => x.id === adding.tripId)!}
           edit={adding.edit}
           home={settings.home}
@@ -231,6 +303,7 @@ function Main() {
         settings={settings}
         onDone={(s, sample) => {
           changeSettings({ ...s, onboarded: true });
+          askPermission();
           if (sample) updateTrips((all) => [sampleTrip(s), pastSample(s), ...all]);
         }}
       />
@@ -494,7 +567,9 @@ function TripScreen({
   onDelete,
   onAdd,
   onOpen,
+  onShare,
 }: {
+  onShare: () => void;
   trip: Trip;
   rate: RateInfo;
   settings: Settings;
@@ -536,6 +611,9 @@ function TripScreen({
             {total > 0 ? `  ・  ${fmtMoney(Math.round(total), rate.base)}` : ''}
           </Text>
         </View>
+        <Pressable onPress={onShare} hitSlop={12} style={s.back}>
+          <Icon name="share-outline" size={19} />
+        </Pressable>
       </View>
       <View style={s.tabs}>
         {(['plan', 'bookings', 'money', 'pack'] as Tab[]).map((k) => (
@@ -784,7 +862,14 @@ function MoneyTab({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onChan
           </Text>
         )}
         <Text style={{ color: '#B9A9B7', fontSize: 11, marginTop: 6 }}>{t('rateNote')}</Text>
+        <BudgetBar trip={trip} total={total} home={rate.base} onChange={onChange} />
       </View>
+
+      <Text style={s.sec}>{t('spending').toUpperCase()}</Text>
+      <ExpenseBox trip={trip} rate={rate} onChange={onChange} />
+
+      <Text style={s.sec}>{t('convert').toUpperCase()}</Text>
+      <Converter trip={trip} rate={rate} />
 
       {byType.length > 0 && (
         <>
@@ -871,6 +956,157 @@ function MoneyTab({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onChan
   );
 }
 
+function BudgetBar({ trip, total, home, onChange }: { trip: Trip; total: number; home: string; onChange: (fn: (t: Trip) => Trip) => void }) {
+  const [edit, setEdit] = useState(false);
+  const [v, setV] = useState(trip.budget ? String(trip.budget) : '');
+  const b = trip.budget ?? 0;
+  const ratio = b ? Math.min(1, total / b) : 0;
+  const over = b > 0 && total > b;
+  return (
+    <View style={{ marginTop: 14 }}>
+      {edit ? (
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TextInput
+            style={[s.input, { flex: 1, backgroundColor: '#24272E', borderColor: '#33363E', color: '#fff' }]}
+            value={v}
+            onChangeText={(x) => setV(cleanNum(x, 0))}
+            keyboardType="number-pad"
+            placeholder={`${t('budget')} (${home})`}
+            placeholderTextColor="#8C9099"
+            autoFocus
+          />
+          <Pressable
+            style={[s.smallBtn, { backgroundColor: C.pink }]}
+            onPress={() => {
+              onChange((tr) => ({ ...tr, budget: v ? parseFloat(v) : undefined }));
+              setEdit(false);
+            }}
+          >
+            <Icon name="checkmark" size={20} color="#fff" />
+          </Pressable>
+        </View>
+      ) : b ? (
+        <Pressable onPress={() => setEdit(true)}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <Text style={{ color: '#B9BCC4', fontSize: 12, fontWeight: '700' }}>
+              {t('budget')} {fmtMoney(b, home)}
+            </Text>
+            <Text style={{ color: over ? C.pink : '#7FE0BE', fontSize: 12, fontWeight: '800' }}>
+              {over ? `${fmtMoney(Math.round(total - b), home)} ${t('over')}` : `${fmtMoney(Math.round(b - total), home)} ${t('left')}`}
+            </Text>
+          </View>
+          <View style={{ height: 6, borderRadius: 3, backgroundColor: '#2C2F36', marginTop: 8, overflow: 'hidden' }}>
+            <View style={{ height: 6, width: `${ratio * 100}%`, backgroundColor: over ? C.pink : '#7FE0BE' }} />
+          </View>
+        </Pressable>
+      ) : (
+        <Pressable onPress={() => setEdit(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Icon name="add-circle-outline" size={16} color="#B9BCC4" />
+          <Text style={{ color: '#B9BCC4', fontSize: 13, fontWeight: '800' }}>{t('budgetSet')}</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+function ExpenseBox({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onChange: (fn: (t: Trip) => Trip) => void }) {
+  const last = trip.expenses?.[0]?.currency;
+  const [title, setTitle] = useState('');
+  const [amt, setAmt] = useState('');
+  const [cur, setCur] = useState(last ?? trip.bookings.find((b) => b.currency && b.currency !== rate.base)?.currency ?? rate.base);
+  const [cat, setCat] = useState<ExpenseCat>('meal');
+  const [payer, setPayer] = useState(trip.members[0]?.id);
+  const c = findCurrency(cur);
+  const list = trip.expenses ?? [];
+  const sum = list.reduce((a, e) => a + toHome(e.amount, e.currency, rate), 0);
+  const add = () => {
+    const v = parseFloat(amt);
+    if (!v) return;
+    const e: Expense = { id: uid(), title: title.trim() || catName(cat), cat, amount: v, currency: cur, date: todayStr(), paidBy: payer };
+    onChange((tr) => ({ ...tr, expenses: [e, ...(tr.expenses ?? [])] }));
+    setTitle('');
+    setAmt('');
+  };
+  return (
+    <View style={s.card}>
+      <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+        {EXP_CATS.map((x) => (
+          <Pressable key={x.id} onPress={() => setCat(x.id)} style={[s.typeChip, cat === x.id && { backgroundColor: C.ink, borderColor: C.ink }]}>
+            <Icon name={x.icon} size={14} color={cat === x.id ? '#fff' : C.sub} />
+            <Text style={[s.chipText, cat === x.id ? { color: '#fff' } : { color: C.sub }]}>{catName(x.id)}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <TextInput style={[s.input, { marginTop: 10 }]} value={title} onChangeText={setTitle} placeholder={t('expTitle')} placeholderTextColor={C.sub} />
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+        <TextInput style={[s.input, { flex: 1 }]} value={amt} onChangeText={(x) => setAmt(cleanNum(x, c.decimals))} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={C.sub} />
+        <CurrencyPicker value={cur} onChange={setCur} />
+        <Pressable style={[s.smallBtn, !amt && { opacity: 0.35 }]} onPress={add} disabled={!amt}>
+          <Icon name="add" size={20} color="#fff" />
+        </Pressable>
+      </View>
+      {trip.members.length > 1 && (
+        <View style={{ flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <Text style={s.hint}>{t('paidBy')}</Text>
+          {trip.members.map((m) => (
+            <Pressable key={m.id} onPress={() => setPayer(m.id)} style={[s.typeChip, payer === m.id && { borderColor: C.ink }]}>
+              <Text style={s.chipText}>{m.name}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+      <View style={{ height: 1, backgroundColor: C.line, marginVertical: 12 }} />
+      {list.length === 0 ? (
+        <Text style={s.hint}>{t('noExp')}</Text>
+      ) : (
+        <>
+          {list.slice(0, 30).map((e) => (
+            <Pressable key={e.id} onLongPress={() => onChange((tr) => ({ ...tr, expenses: (tr.expenses ?? []).filter((x) => x.id !== e.id) }))} style={s.expRow}>
+              <View style={s.expIcon}>
+                <Icon name={EXP_CATS.find((x) => x.id === e.cat)?.icon ?? 'ellipsis-horizontal'} size={15} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.tlTitle} numberOfLines={1}>
+                  {e.title}
+                </Text>
+                <Text style={s.hint}>
+                  {prettyDate(e.date)}
+                  {trip.members.length > 1 ? ` · ${trip.members.find((m) => m.id === e.paidBy)?.name ?? ''}` : ''}
+                </Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={s.price}>{fmtMoney(e.amount, e.currency)}</Text>
+                {e.currency !== rate.base && <Text style={s.hint}>≈ {fmtMoney(Math.round(toHome(e.amount, e.currency, rate)), rate.base)}</Text>}
+              </View>
+            </Pressable>
+          ))}
+          <View style={[s.rowBetween, { marginTop: 6 }]}>
+            <Text style={s.hint}>{t('expensesTotal')}</Text>
+            <Text style={s.price}>{fmtMoney(Math.round(sum), rate.base)}</Text>
+          </View>
+        </>
+      )}
+    </View>
+  );
+}
+
+function Converter({ trip, rate }: { trip: Trip; rate: RateInfo }) {
+  const [cur, setCur] = useState(trip.bookings.find((b) => b.currency && b.currency !== rate.base)?.currency ?? (rate.base === 'JPY' ? 'USD' : 'JPY'));
+  const [v, setV] = useState('10');
+  const c = findCurrency(cur);
+  const n = parseFloat(v) || 0;
+  return (
+    <View style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 10 }]}>
+      <TextInput style={[s.input, { flex: 1, fontSize: 18 }]} value={v} onChangeText={(x) => setV(cleanNum(x, c.decimals))} keyboardType="decimal-pad" />
+      <CurrencyPicker value={cur} onChange={setCur} />
+      <Icon name="arrow-forward" size={16} color={C.sub} />
+      <Text style={[s.price, { fontSize: 18, minWidth: 90, textAlign: 'right' }]} numberOfLines={1} adjustsFontSizeToFit>
+        {fmtMoney(Math.round(toHome(n, cur, rate)), rate.base)}
+      </Text>
+    </View>
+  );
+}
+
 function PackTab({ trip, onChange }: { trip: Trip; onChange: (fn: (t: Trip) => Trip) => void }) {
   const [text, setText] = useState('');
   const done = trip.checklist.filter((c) => c.done).length;
@@ -930,6 +1166,30 @@ function Sheet({ visible, onClose, children, tall }: { visible: boolean; onClose
   );
 }
 
+function PickTripSheet({ trips, onClose, onPick }: { trips: Trip[]; onClose: () => void; onPick: (id: string | null) => void }) {
+  return (
+    <Sheet visible onClose={onClose}>
+      <Text style={s.kicker}>{t('shared').toUpperCase()}</Text>
+      <Text style={s.sheetTitle}>{t('pickTrip')}</Text>
+      {trips.map((tr) => (
+        <Pressable key={tr.id} style={s.option} onPress={() => onPick(tr.id)}>
+          <Cover trip={tr} size={40} />
+          <Text style={[s.tlTitle, { flex: 1 }]} numberOfLines={1}>
+            {tr.name}
+          </Text>
+          <Icon name="chevron-forward" size={18} color={C.sub} />
+        </Pressable>
+      ))}
+      <Pressable style={s.option} onPress={() => onPick(null)}>
+        <View style={s.optIcon}>
+          <Icon name="add" size={22} />
+        </View>
+        <Text style={[s.tlTitle, { flex: 1 }]}>{t('newTrip')}</Text>
+      </Pressable>
+    </Sheet>
+  );
+}
+
 function NewTripSheet({ visible, onClose, onCreate }: { visible: boolean; onClose: () => void; onCreate: (name: string, color: string, cover?: string) => void }) {
   const [name, setName] = useState('');
   const [color, setColor] = useState(COVERS[0]);
@@ -980,7 +1240,9 @@ function AddBookingSheet({
   home,
   onClose,
   onSave,
+  initial,
 }: {
+  initial?: { text?: string; image?: string };
   trip: Trip;
   edit?: Booking;
   home: string;
@@ -1005,7 +1267,9 @@ function AddBookingSheet({
   const pickShot = async () => {
     const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
     if (r.canceled || !r.assets?.[0]) return;
-    const uri = r.assets[0].uri;
+    readImage(r.assets[0].uri);
+  };
+  const readImage = async (uri: string) => {
     if (!ocrAvailable) {
       set({ photos: [...(b.photos ?? []), uri] });
       setNote(t('ocrNA'));
@@ -1037,6 +1301,11 @@ function AddBookingSheet({
     if (!r.canceled && r.assets?.[0]) set({ photos: [...(b.photos ?? []), r.assets[0].uri] });
   };
   const cur = findCurrency(b.currency || home);
+  useEffect(() => {
+    if (!initial) return;
+    if (initial.image) readImage(initial.image);
+    else if (initial.text) applyParsed(initial.text);
+  }, []);
 
   return (
     <Sheet visible onClose={onClose} tall={mode === 'form'}>
@@ -1341,8 +1610,8 @@ function BookingDetail({
             />
           )}
           {!isDate(b.end) && b.endTime && <Info k={t('time')} v={`→ ${b.endTime}`} />}
-          {!!b.from && <Info k={t('from')} v={b.from} />}
-          {!!b.to && <Info k={t('to')} v={b.to} />}
+          {!!b.from && <Info k={t('from')} v={b.from} onMap />}
+          {!!b.to && <Info k={t('to')} v={b.to} onMap />}
           {!!b.seat && <Info k={t('seat')} v={b.seat} />}
           {!!b.price && (
             <Info
@@ -1384,12 +1653,17 @@ function BookingDetail({
   );
 }
 
-const Info = ({ k, v }: { k: string; v: string }) => (
-  <View style={s.infoRow}>
+const Info = ({ k, v, onMap }: { k: string; v: string; onMap?: boolean }) => (
+  <View style={[s.infoRow, { alignItems: 'center' }]}>
     <Text style={s.infoK}>{k}</Text>
     <Text style={s.infoV} selectable>
       {v}
     </Text>
+    {onMap && (
+      <Pressable onPress={() => openMap(v)} hitSlop={8} style={s.mapBtn}>
+        <Icon name="navigate" size={14} color="#fff" />
+      </Pressable>
+    )}
   </View>
 );
 
@@ -1417,6 +1691,14 @@ function SettingsBody({ settings, onChange }: { settings: Settings; onChange: (s
       <Text style={s.label}>{t('homeCur')}</Text>
       <View style={{ flexDirection: 'row' }}>
         <CurrencyPicker value={settings.home} onChange={(c) => onChange({ ...settings, home: c })} />
+      </View>
+      <Text style={s.label}>{t('notify')}</Text>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        {[true, false].map((v) => (
+          <Pressable key={String(v)} onPress={() => onChange({ ...settings, notify: v })} style={[s.typeChip, settings.notify === v && { backgroundColor: C.ink, borderColor: C.ink }]}>
+            <Text style={[s.chipText, settings.notify === v && { color: '#fff' }]}>{v ? 'ON' : 'OFF'}</Text>
+          </Pressable>
+        ))}
       </View>
       <Text style={s.label}>{t('myName')}</Text>
       <TextInput style={s.input} value={settings.myName} onChangeText={(v) => onChange({ ...settings, myName: v })} placeholder={t('me')} placeholderTextColor={C.sub} />
@@ -1567,7 +1849,7 @@ const s = StyleSheet.create({
   grabber: { width: 40, height: 5, borderRadius: 3, backgroundColor: '#D6D2CB' },
   closeBtn: { position: 'absolute', right: -6, top: 0, width: 42, height: 42, borderRadius: 21, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' },
   sheetTitle: { fontSize: 24, fontWeight: '900', color: C.ink, marginBottom: 14, letterSpacing: -0.5 },
-  input: { backgroundColor: C.card, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, color: C.ink, fontWeight: '700', borderWidth: 1, borderColor: C.line },
+  input: { minWidth: 0, backgroundColor: C.card, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, color: C.ink, fontWeight: '700', borderWidth: 1, borderColor: C.line },
   label: { fontSize: 11, fontWeight: '800', color: C.sub, marginTop: 14, marginBottom: 6, letterSpacing: 0.6 },
   primary: { backgroundColor: C.ink, borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 20 },
   primaryText: { color: '#fff', fontWeight: '800', fontSize: 16 },
@@ -1599,6 +1881,9 @@ const s = StyleSheet.create({
   infoK: { width: 100, fontSize: 12, fontWeight: '700', color: C.sub },
   infoV: { flex: 1, fontSize: 14, fontWeight: '800', color: C.ink },
   camBadge: { position: 'absolute', right: -6, bottom: -6, width: 28, height: 28, borderRadius: 14, backgroundColor: C.ink, borderWidth: 2, borderColor: C.bg, alignItems: 'center', justifyContent: 'center' },
+  mapBtn: { width: 30, height: 30, borderRadius: 15, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center' },
+  expRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
+  expIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: C.chip, alignItems: 'center', justifyContent: 'center' },
   year: { fontSize: 20, fontWeight: '900', color: C.ink, marginBottom: 10, marginTop: 4, letterSpacing: -0.3 },
   memCard: { width: 210, height: 260, borderRadius: 22, overflow: 'hidden', backgroundColor: C.ink, marginBottom: 16 },
   memShade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 110, backgroundColor: 'rgba(0,0,0,0.38)' },

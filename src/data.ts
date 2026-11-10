@@ -52,6 +52,17 @@ export type Booking = {
 
 export type Member = { id: string; name: string };
 
+export type ExpenseCat = 'meal' | 'move' | 'shop' | 'sight' | 'etc';
+export const EXP_CATS: { id: ExpenseCat; icon: string }[] = [
+  { id: 'meal', icon: 'restaurant-outline' },
+  { id: 'move', icon: 'subway-outline' },
+  { id: 'shop', icon: 'bag-handle-outline' },
+  { id: 'sight', icon: 'camera-outline' },
+  { id: 'etc', icon: 'ellipsis-horizontal' },
+];
+/** 旅行中の出費 */
+export type Expense = { id: string; title: string; cat: ExpenseCat; amount: number; currency: string; date: string; paidBy?: string; splitWith?: string[] };
+
 export type Trip = {
   id: string;
   name: string;
@@ -62,11 +73,13 @@ export type Trip = {
   bookings: Booking[];
   checklist: { id: string; text: string; done: boolean }[];
   cover?: string; // 表紙の写真（端末内のURI）
+  budget?: number; // 旅行の予算（母国通貨）
+  expenses?: Expense[]; // 旅行中の出費（食事・お土産など）
   journal?: Record<string, { text?: string; photos?: string[] }>; // 日ごとの思い出
   createdAt: number;
 };
 
-export type Settings = { home: string; myName: string; lang: 'ja' | 'en'; onboarded: boolean };
+export type Settings = { home: string; myName: string; lang: 'ja' | 'en'; onboarded: boolean; notify: boolean };
 
 export type RateInfo = { base: string; rates: Record<string, number>; updatedAt: number };
 
@@ -99,7 +112,7 @@ const detectLang = (): 'ja' | 'en' => {
   }
 };
 
-export const DEFAULT_SETTINGS: Settings = { home: 'JPY', myName: '', lang: detectLang(), onboarded: false };
+export const DEFAULT_SETTINGS: Settings = { home: 'JPY', myName: '', lang: detectLang(), onboarded: false, notify: true };
 export const loadTrips = () => readJSON<Trip[]>(K_TRIPS, []);
 export const saveTrips = (v: Trip[]) => writeJSON(K_TRIPS, v);
 export const loadSettings = async () => ({ ...DEFAULT_SETTINGS, ...(await readJSON<Partial<Settings>>(K_SETTINGS, {})) });
@@ -221,7 +234,10 @@ export function nextUp(trips: Trip[], now = todayStr()): { trip: Trip; item: Tim
 
 /** 費用の合計（母国通貨） */
 export function tripTotal(t: Trip, r: RateInfo) {
-  return t.bookings.reduce((s, b) => s + (b.price ? toHome(b.price, b.currency || r.base, r) : 0), 0);
+  return (
+    t.bookings.reduce((s, b) => s + (b.price ? toHome(b.price, b.currency || r.base, r) : 0), 0) +
+    (t.expenses ?? []).reduce((s, e) => s + toHome(e.amount, e.currency, r), 0)
+  );
 }
 
 /** 割り勘：だれがいくら払って、だれが誰にいくら渡せばいいか（母国通貨） */
@@ -230,7 +246,11 @@ export function settle(t: Trip, r: RateInfo) {
   const paid: Record<string, number> = {};
   const owe: Record<string, number> = {};
   ids.forEach((i) => ((paid[i] = 0), (owe[i] = 0)));
-  t.bookings.forEach((b) => {
+  const items = [
+    ...t.bookings.map((b) => ({ price: b.price, currency: b.currency, paidBy: b.paidBy, splitWith: b.splitWith })),
+    ...(t.expenses ?? []).map((e) => ({ price: e.amount, currency: e.currency, paidBy: e.paidBy, splitWith: e.splitWith })),
+  ];
+  items.forEach((b) => {
     if (!b.price) return;
     const v = toHome(b.price, b.currency || r.base, r);
     const payer = b.paidBy && ids.includes(b.paidBy) ? b.paidBy : ids[0];
