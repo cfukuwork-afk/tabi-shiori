@@ -37,6 +37,8 @@ export const CURRENCIES: Currency[] = [
   { code: 'MXN', name: 'メキシコ ペソ', flag: '🇲🇽', symbol: 'MX$', decimals: 2 },
   { code: 'BRL', name: 'ブラジル レアル', flag: '🇧🇷', symbol: 'R$', decimals: 2 },
   { code: 'ARS', name: 'アルゼンチン ペソ', flag: '🇦🇷', symbol: 'AR$', decimals: 2 },
+  { code: 'QAR', name: 'カタール リヤル', flag: '🇶🇦', symbol: 'QAR ', decimals: 2 },
+  { code: 'SAR', name: 'サウジ リヤル', flag: '🇸🇦', symbol: 'SAR ', decimals: 2 },
   { code: 'CLP', name: 'チリ ペソ', flag: '🇨🇱', symbol: 'CLP$', decimals: 0 },
 ];
 
@@ -48,7 +50,7 @@ export const findCurrency = (code: string): Currency =>
  * 起動時にネットから最新レートを取れればそちらで上書きされる。
  */
 export const FALLBACK_PER_USD: Record<string, number> = {
-  USD: 1, JPY: 150, GBP: 0.77, EUR: 0.88, AUD: 1.52, CAD: 1.38, NZD: 1.68, KRW: 1380, CNY: 7.2,
+  USD: 1, QAR: 3.64, SAR: 3.75, JPY: 150, GBP: 0.77, EUR: 0.88, AUD: 1.52, CAD: 1.38, NZD: 1.68, KRW: 1380, CNY: 7.2,
   TWD: 31, HKD: 7.8, SGD: 1.32, THB: 33, PHP: 57, MYR: 4.3, IDR: 16300, VND: 26000, INR: 85,
   CHF: 0.82, SEK: 9.6, NOK: 10.2, DKK: 6.6, ISK: 125, PLN: 3.8, CZK: 22, HUF: 360, TRY: 40,
   AED: 3.67, ILS: 3.6, ZAR: 18, MXN: 18.5, BRL: 5.5, ARS: 1200, CLP: 950,

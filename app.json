@@ -15,7 +15,8 @@
       "infoPlist": {
         "CFBundleDevelopmentRegion": "ja",
         "CFBundleAllowMixedLocalizations": true,
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryUsageDescription": "予約のスクショや旅行の写真を選ぶために写真ライブラリを使います。"
       }
     },
     "web": {
@@ -24,9 +25,9 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#FFF7EE"
+      "backgroundColor": "#15171C"
     },
-    "backgroundColor": "#FFF7EE",
+    "backgroundColor": "#F4F3EF",
     "runtimeVersion": {
       "policy": "sdkVersion"
     },

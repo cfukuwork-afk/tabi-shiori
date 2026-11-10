@@ -2,7 +2,7 @@ import { StatusBar } from 'expo-status-bar';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useShareIntent } from 'expo-share-intent';
 import { requireOptionalNativeModule } from 'expo-modules-core';
 import {
@@ -544,8 +544,8 @@ function TripCard({ trip, rate, onPress }: { trip: Trip; rate: RateInfo; onPress
           {start ? `${prettyDate(start)}${end && end !== start ? ' – ' + prettyDate(end) : ''}` : t('undated')}
         </Text>
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 7, alignItems: 'center' }}>
-          <Text style={[s.status, st.tone === 'pink' ? { color: C.pink } : st.tone === 'mint' ? { color: C.mint } : {}]}>● {st.label}</Text>
-          <View style={{ flexDirection: 'row', gap: 4 }}>
+          <Text style={[s.status, st.tone === 'pink' ? { color: C.pink } : st.tone === 'mint' ? { color: C.mint } : {}, { flexShrink: 0 }]} numberOfLines={1}>● {st.label}</Text>
+          <View style={{ flexDirection: 'row', gap: 4, flexShrink: 1, overflow: 'hidden' }}>
             {TYPES.filter((ty) => trip.bookings.some((b) => b.type === ty.id)).map((ty) => (
               <Icon key={ty.id} name={ty.icon + '-outline'} size={13} color={C.sub} />
             ))}
@@ -611,8 +611,8 @@ function NextCard({ next, onPress }: { next: NonNullable<ReturnType<typeof nextU
         <View style={[s.notch, { right: -30 }]} />
       </View>
       <View style={s.passGrid}>
-        <PassCell k={t('date')} v={prettyDate(next.date)} />
-        <PassCell k={t('time')} v={next.item.time ?? '—'} />
+        <PassCell k={t('date')} v={prettyDate(next.date)} flex={1.5} />
+        <PassCell k={t('time')} v={next.item.time ?? '—'} flex={0.8} />
         {!!b.seat && <PassCell k={t('seat')} v={b.seat} />}
       </View>
       {!!b.code && (
@@ -633,10 +633,10 @@ const cityFont = (a: string, b: string) => {
   const n = Math.max(a.length, b.length);
   return n <= 4 ? 34 : n <= 6 ? 26 : 20;
 };
-const PassCell = ({ k, v }: { k: string; v: string }) => (
-  <View style={{ flex: 1 }}>
+const PassCell = ({ k, v, flex = 1 }: { k: string; v: string; flex?: number }) => (
+  <View style={{ flex }}>
     <Text style={s.passK}>{k}</Text>
-    <Text style={s.passV} numberOfLines={1}>
+    <Text style={s.passV} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
       {v}
     </Text>
   </View>
@@ -672,6 +672,8 @@ function TripScreen({
   onOpen: (b: Booking) => void;
 }) {
   const [tab, setTab] = useState<Tab>('plan');
+  const scrollRef = useRef<any>(null);
+  useEffect(() => scrollRef.current?.scrollTo({ y: 0, animated: false }), [tab]);
   const [journalDay, setJournalDay] = useState<string | null>(null);
   const [sure, setSure] = useState(false);
   const { start, end } = tripRange(trip);
@@ -718,6 +720,7 @@ function TripScreen({
         ))}
       </View>
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={{ padding: 20, paddingBottom: 140 }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
@@ -1092,6 +1095,7 @@ function BudgetBar({ trip, total, home, onChange }: { trip: Trip; total: number;
             placeholder={`${t('budget')} (${home})`}
             placeholderTextColor="#8C9099"
             autoFocus
+            onBlur={() => onChange((tr) => ({ ...tr, budget: v ? parseFloat(v) : undefined }))}
           />
           <Pressable
             style={[s.smallBtn, { backgroundColor: C.pink }]}
@@ -1273,7 +1277,20 @@ function PackTab({ trip, onChange }: { trip: Trip; onChange: (fn: (t: Trip) => T
           </Pressable>
         ))}
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-          <TextInput style={[s.input, { flex: 1 }]} value={text} onChangeText={setText} placeholderTextColor={C.sub} />
+          <TextInput
+            style={[s.input, { flex: 1 }]}
+            value={text}
+            onChangeText={setText}
+            placeholder={t('packPh')}
+            placeholderTextColor={C.sub}
+            returnKeyType="done"
+            submitBehavior="submit"
+            onSubmitEditing={() => {
+              if (!text.trim()) return;
+              onChange((tr) => ({ ...tr, checklist: [...tr.checklist, { id: uid(), text: text.trim(), done: false }] }));
+              setText('');
+            }}
+          />
           <Pressable
             style={s.smallBtn}
             onPress={() => {

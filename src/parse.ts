@@ -4,7 +4,15 @@ import { Booking, BookingType } from './data';
 const MONTHS: Record<string, number> = {
   jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12,
   january: 1, february: 2, march: 3, april: 4, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
+  // フランス語・スペイン語・ドイツ語・イタリア語・ポルトガル語
+  janvier: 1, février: 2, fevrier: 2, mars: 3, avril: 4, mai: 5, juin: 6, juillet: 7, août: 8, aout: 8, septembre: 9, octobre: 10, novembre: 11, décembre: 12, decembre: 12,
+  enero: 1, febrero: 2, marzo: 3, abril: 4, mayo: 5, junio: 6, julio: 7, agosto: 8, septiembre: 9, setiembre: 9, octubre: 10, noviembre: 11, diciembre: 12,
+  januar: 1, februar: 2, märz: 3, maerz: 3, juni: 6, juli: 7, oktober: 10, dezember: 12,
+  gennaio: 1, febbraio: 2, aprile: 4, maggio: 5, giugno: 6, luglio: 7, settembre: 9, ottobre: 10, dicembre: 12,
+  janeiro: 1, fevereiro: 2, março: 3, maio: 5, junho: 6, julho: 7, setembro: 9, outubro: 10, dezembro: 12,
+  okt: 10, dez: 12, mär: 3, mrz: 3, déc: 12, févr: 2, avr: 4, juil: 7, ene: 1, dic: 12, ago: 8, set: 9, out: 10, mag: 5, giu: 6, lug: 7, ott: 10,
 };
+const MON_RE = '(' + Object.keys(MONTHS).sort((a, b) => b.length - a.length).join('|') + ')';
 const pad = (n: number) => String(n).padStart(2, '0');
 
 type Found = { date: string; index: number; line: string };
@@ -23,13 +31,13 @@ export function findDates(text: string, today = new Date()): Found[] {
     const line = text.slice(text.lastIndexOf('\n', index) + 1, text.indexOf('\n', index) === -1 ? undefined : text.indexOf('\n', index));
     out.push({ date: `${yy}-${pad(m)}-${pad(d)}`, index, line });
   };
-  const mon = '(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)';
+  const mon = MON_RE + '(?![a-zà-ÿ])';
   let m: RegExpExecArray | null;
   const r1 = /(20\d{2})[\/\-.年]\s?(\d{1,2})[\/\-.月]\s?(\d{1,2})日?/g; // 2026-02-14 / 2026年2月14日
   while ((m = r1.exec(text))) add(+m[1], +m[2], +m[3], m.index);
-  const r2 = new RegExp(`(\\d{1,2})(?:st|nd|rd|th)?[\\s\\-]+${mon}\\.?,?[\\s\\-]*(20\\d{2}|\\d{2})?`, 'gi'); // 14 Feb 2026
+  const r2 = new RegExp(`(?<![\\d:])(\\d{1,2})(?:st|nd|rd|th|er|º)?\\.?(?:[\\s\\-]|de\\s)*${mon}\\.?,?(?:[\\s\\-]|de\\s)*(20\\d{2}|\\d{2}(?!\\d|:))?`, 'gi'); // 14 Feb 2026 / 24JUN26 / 15 de diciembre de 2026
   while ((m = r2.exec(text))) add(m[3] ? +m[3] : null, MONTHS[m[2].toLowerCase()], +m[1], m.index);
-  const r3 = new RegExp(`${mon}\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?,?\\s*(20\\d{2})?`, 'gi'); // Feb 14, 2026
+  const r3 = new RegExp(`(?<![a-zà-ÿ])${mon}\\.?\\s+(\\d{1,2})(?!\\d|:)(?:st|nd|rd|th)?,?\\s*(20\\d{2})?`, 'gi'); // Feb 14, 2026
   while ((m = r3.exec(text))) add(m[3] ? +m[3] : null, MONTHS[m[1].toLowerCase()], +m[2], m.index);
   const r4 = /(?<![\d\/])(\d{1,2})月\s?(\d{1,2})日/g; // 2月14日（年なし）
   while ((m = r4.exec(text))) {
@@ -37,7 +45,11 @@ export function findDates(text: string, today = new Date()): Found[] {
     add(null, +m[1], +m[2], m.index);
   }
   const r5 = /(?<![\d\/.])(\d{1,2})[\/.](\d{1,2})[\/.](20\d{2})/g; // 14/02/2026・14.02.2026（ヨーロッパ式）
-  while ((m = r5.exec(text))) add(+m[3], +m[1] > 12 ? +m[2] : +m[2], +m[1] > 12 ? +m[1] : +m[1], m.index);
+  while ((m = r5.exec(text))) {
+    // ふつうは 日/月/年。2つ目が13以上なら アメリカ式の 月/日/年
+    const us = +m[2] > 12 && +m[1] <= 12;
+    add(+m[3], us ? +m[1] : +m[2], us ? +m[2] : +m[1], m.index);
+  }
   // 同じ位置の重複を消して、出てきた順に
   const seen = new Set<string>();
   return out
@@ -63,18 +75,28 @@ const findTimes = (s: string) => {
   return out;
 };
 
-const SYMBOLS: [RegExp, string][] = [
-  [/£|GBP/, 'GBP'], [/€|EUR/, 'EUR'], [/¥|円|JPY/, 'JPY'], [/US\$|\$|USD/, 'USD'], [/₩|KRW|원/, 'KRW'], [/A\$|AUD/, 'AUD'],
-  [/C\$|CAD/, 'CAD'], [/CHF/, 'CHF'], [/HK\$|HKD/, 'HKD'], [/S\$|SGD/, 'SGD'], [/฿|THB/, 'THB'], [/NT\$|TWD/, 'TWD'], [/CNY|RMB|元/, 'CNY'],
+// 通貨の書き方 → 通貨コード（長いものから順に調べる）
+const CUR_SIGNS: [string, string][] = [
+  ['NZ$', 'NZD'], ['A$', 'AUD'], ['AU$', 'AUD'], ['C$', 'CAD'], ['CA$', 'CAD'], ['HK$', 'HKD'], ['S$', 'SGD'], ['NT$', 'TWD'], ['US$', 'USD'],
+  ['R$', 'BRL'], ['MX$', 'MXN'], ['$', 'USD'], ['£', 'GBP'], ['€', 'EUR'], ['¥', 'JPY'], ['円', 'JPY'], ['₩', 'KRW'], ['원', 'KRW'], ['฿', 'THB'],
+  ['₹', 'INR'], ['Rs.', 'INR'], ['₺', 'TRY'], ['₫', 'VND'], ['₱', 'PHP'], ['zł', 'PLN'], ['Kč', 'CZK'], ['Ft', 'HUF'], ['RM', 'MYR'], ['Rp', 'IDR'],
+  ['元', 'CNY'], ['RMB', 'CNY'], ['ユーロ', 'EUR'], ['ドル', 'USD'], ['ポンド', 'GBP'], ['ウォン', 'KRW'], ['バーツ', 'THB'],
 ];
-
-const CUR_RE = '(£|€|¥|US\\$|A\\$|C\\$|HK\\$|S\\$|NT\\$|\\$|₩|฿|JPY|GBP|EUR|USD|KRW|AUD|CAD|CHF|THB|SGD|HKD|TWD|CNY)';
-const SUF_RE = '(円|€|£|JPY|GBP|EUR|USD|KRW|AUD|CAD|CHF|THB|SGD|HKD|TWD|CNY|원|ユーロ|ドル|ポンド)';
-const SUF_MAP: Record<string, string> = { ユーロ: 'EUR', ドル: 'USD', ポンド: 'GBP' };
+const ISO = ['JPY','GBP','EUR','USD','KRW','AUD','CAD','NZD','CNY','TWD','HKD','SGD','THB','PHP','MYR','IDR','VND','INR','CHF','SEK','NOK','DKK','ISK','PLN','CZK','HUF','TRY','AED','QAR','SAR','ILS','ZAR','MXN','BRL','ARS','CLP'];
+const esc = (x: string) => x.replace(/[$.]/g, (c) => '\\' + c);
+const SIGN_RE = [...CUR_SIGNS.map(([k]) => k)].sort((x, y) => y.length - x.length).map(esc).join('|');
+const CUR_RE = `(${ISO.join('|')}|${SIGN_RE})`;
+const SUF_RE = `(${ISO.join('|')}|${SIGN_RE.replace(/\|\\\$(?=\||$)/, '')}|kr)`;
+const curCode = (x?: string, num?: string) => {
+  if (!x) return undefined;
+  if (ISO.includes(x)) return x;
+  if (x === 'kr') return 'SEK';
+  return CUR_SIGNS.find(([k]) => k === x)?.[1];
+};
 
 /** "1.234,56" "1,234.56" "59,00" "12,980" を数字に */
 export function toNumber(raw: string): number {
-  const s = raw.replace(/[\s，]/g, (c) => (c === '，' ? ',' : ''));
+  const s = raw.replace(/[\s\u202f，]/g, (c) => (c === '，' ? ',' : ''));
   const lastSep = Math.max(s.lastIndexOf('.'), s.lastIndexOf(','));
   if (lastSep < 0) return parseFloat(s);
   const tail = s.length - lastSep - 1;
@@ -91,8 +113,8 @@ const PENALTY = /(per night|\/\s?night|1泊あたり|1泊|avg|average|daily rate
 
 /** 合計金額らしいもの：「お支払い金額」＞「合計」＞「料金」の順、1泊あたり・割引・手数料の行は避ける */
 function findPrice(text: string): { price?: number; currency?: string } {
-  const num = '(\\d{1,3}(?:[.,，]\\d{3})+(?:[.,]\\d{1,2})?|\\d+(?:[.,]\\d{1,2})?)';
-  const re = new RegExp(`(-|−)?${CUR_RE}?\\s?${num}\\s?${SUF_RE}?`, 'g');
+  const num = '(\\d{1,3}(?:[.,，  \u202f]\\d{3})+(?:[.,]\\d{1,2})?|\\d+(?:[.,]\\d{1,2})?)';
+  const re = new RegExp(`(-|−)?(?<![A-Za-z])${CUR_RE}?\\s?${num}\\s?${SUF_RE}?(?![A-Za-z])`, 'g');
   const lines = text.split(/\n/);
   let best: { v: number; cur?: string; score: number } | null = null;
   lines.forEach((line, i) => {
@@ -106,8 +128,9 @@ function findPrice(text: string): { price?: number; currency?: string } {
       const cur = m[2] || m[4];
       if (!cur) continue; // 通貨のない数字は予約番号や日付かもしれない
       const v = toNumber(m[3]);
-      if (!v || v > 10_000_000) continue;
-      const code = SUF_MAP[cur] ?? SYMBOLS.find(([r]) => r.test(cur))?.[1];
+      if (!v || v > 10_000_000_000) continue;
+      // 「$1,045.23 CAD」のように両方あるときは後ろのコードを優先
+      const code = (m[4] && m[2] === '$' ? curCode(m[4]) : undefined) ?? curCode(m[2]) ?? curCode(m[4]);
       // かっこの中（概算の円換算など）は少し下げる
       const inParen = /[（(][^）)]*$/.test(line.slice(0, m.index)) ? 1 : 0;
       const score = label - pen - inParen + Math.log10(v + 1) / 20 + i / 10000;
@@ -147,10 +170,16 @@ const firstMatch = (text: string, re: RegExp) => {
 
 /** 予約番号（「予約番号」「Confirmation」「Booking reference」「PNR」の後ろ） */
 function findCode(text: string) {
-  return firstMatch(
-    text,
-    /(?:予約番号|予約コード|確認番号|予約確認番号|確認コード|予約ID|booking id|order (?:reference|number|no\.?)|itinerary(?: number| no\.?)?|référence(?: de dossier)?|confirmation(?: number| code| no\.?)?|booking (?:reference|ref\.?|number|no\.?|code)|reservation (?:number|code|no\.?)|pnr|record locator)\s*[:：#]*\s*((?=[A-Z\-.]*\d)[A-Z0-9][A-Z0-9\-.]{3,18}[A-Z0-9])/i,
-  );
+  const label =
+    '(?:予約番号|予約コード|確認番号|予約確認番号|確認コード|予約ID|예약번호|예약 번호|訂位代號|訂位代号|预订编号|預訂編號|订单号|buchungscode|buchungsnummer|auftragsnummer|référence(?: de (?:réservation|dossier))?|code de réservation|localizador|código de reserva|clave de reservación|codice di prenotazione|booking id|order (?:reference|number|no\\.?)|itinerary(?: number| no\\.?| #)?|confirmation(?: number| code| no\\.?)?|booking (?:reference|ref\\.?|number|no\\.?|code)|reservation (?:number|code|no\\.?)|pnr|record locator)';
+  const re = new RegExp(label + '\\s*(?:\\([^)\\n]{1,12}\\))?\\s*[:：#]*\\s*([A-Za-z0-9][A-Za-z0-9\\-.]{3,18}[A-Za-z0-9])', 'gi');
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    const c = m[1];
+    if (/\d/.test(c) || /^[A-Z]{5,8}$/.test(c)) return c;
+    re.lastIndex = m.index + 1; // 違ったら次のラベルを探す
+  }
+  return undefined;
 }
 
 /** テキスト → 予約の下書き（読み取れたところだけ） */
