@@ -9,14 +9,38 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.fukuda.tabishiori",
-      "config": { "usesNonExemptEncryption": false }
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
-    "web": { "favicon": "./assets/favicon.png" },
-    "splash": { "image": "./assets/splash-icon.png", "resizeMode": "contain", "backgroundColor": "#FFF7EE" },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFF7EE"
+    },
     "backgroundColor": "#FFF7EE",
-    "runtimeVersion": { "policy": "sdkVersion" },
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
     "plugins": [
-      ["expo-image-picker", { "photosPermission": "予約のスクショを読み取るために写真ライブラリを使います。" }]
-    ]
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "予約のスクショを読み取るために写真ライブラリを使います。"
+        }
+      ]
+    ],
+    "owner": "chihayax",
+    "extra": {
+      "eas": {
+        "projectId": "51d9cc15-7dc4-4e72-9e57-3693dd68a114"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/51d9cc15-7dc4-4e72-9e57-3693dd68a114"
+    }
   }
 }
