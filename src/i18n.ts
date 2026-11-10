@@ -5,7 +5,13 @@ export const setLang = (l: Lang) => (current = l);
 export const getLang = () => current;
 
 const ja = {
-  appName: '旅のしおり',
+  appName: 'Tripfold',
+  date: '日付',
+  gMorning: 'おはようございます',
+  gDay: 'こんにちは',
+  gEvening: 'こんばんは',
+  deleteTrip: 'この旅行を削除',
+  paste: '貼り付け',
   nextUp: '次の予定',
   noNext: 'これからの予定はまだありません',
   trips: '旅行',
@@ -27,7 +33,7 @@ const ja = {
   tabBookings: '予約',
   tabMoney: 'お金',
   tabPack: '持ち物',
-  addBooking: '＋ 予約を追加',
+  addBooking: '予約を追加',
   dayN: '{n}日目',
   checkin: 'チェックイン',
   checkout: 'チェックアウト',
@@ -95,7 +101,13 @@ const ja = {
 };
 type Dict = typeof ja;
 const en: Dict = {
-  appName: 'Trip Notes',
+  appName: 'Tripfold',
+  date: 'Date',
+  gMorning: 'GOOD MORNING',
+  gDay: 'HELLO',
+  gEvening: 'GOOD EVENING',
+  deleteTrip: 'Delete this trip',
+  paste: 'Paste',
   nextUp: 'Next up',
   noNext: 'Nothing coming up yet',
   trips: 'Trips',
@@ -117,7 +129,7 @@ const en: Dict = {
   tabBookings: 'Bookings',
   tabMoney: 'Money',
   tabPack: 'Packing',
-  addBooking: '+ Add booking',
+  addBooking: 'Add booking',
   dayN: 'Day {n}',
   checkin: 'Check-in',
   checkout: 'Check-out',

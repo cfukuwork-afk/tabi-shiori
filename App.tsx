@@ -1,4 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useMemo, useState } from 'react';
@@ -18,6 +19,9 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import {
   Booking,
   BookingType,
+  COVERS,
+  coverOf,
+  monogram,
   DEFAULT_SETTINGS,
   RateInfo,
   Settings,
@@ -50,7 +54,25 @@ import { CURRENCIES, findCurrency } from './src/currencies';
 import { C, cleanNum, shadow } from './src/theme';
 import { ocrAvailable, recognizeReceipt } from './modules/receipt-ocr';
 
-const TRIP_EMOJI = ['✈️', '🗼', '🏝', '🏔', '🎡', '🏰', '🌸', '🍜', '🗽', '🐨'];
+type IconName = React.ComponentProps<typeof Ionicons>['name'];
+const Icon = ({ name, size = 18, color = C.ink }: { name: string; size?: number; color?: string }) => (
+  <Ionicons name={name as IconName} size={size} color={color} />
+);
+/** 種類のアイコン（四角の中にアイコン） */
+const TypeBadge = ({ type, size = 38 }: { type: BookingType; size?: number }) => {
+  const ty = typeOf(type);
+  return (
+    <View style={{ width: size, height: size, borderRadius: size * 0.32, backgroundColor: ty.soft, alignItems: 'center', justifyContent: 'center' }}>
+      <Icon name={ty.icon + '-outline'} size={size * 0.48} color={ty.color} />
+    </View>
+  );
+};
+/** 旅行の表紙（色＋頭文字） */
+const Cover = ({ trip, size = 52 }: { trip: { name: string; emoji: string }; size?: number }) => (
+  <View style={{ width: size, height: size, borderRadius: size * 0.3, backgroundColor: coverOf(trip), alignItems: 'center', justifyContent: 'center' }}>
+    <Text style={{ color: '#fff', fontWeight: '900', fontSize: size * 0.34, letterSpacing: 0.5 }}>{monogram(trip.name)}</Text>
+  </View>
+);
 
 export default function App() {
   return (
@@ -140,11 +162,11 @@ function Main() {
       <NewTripSheet
         visible={newTrip}
         onClose={() => setNewTrip(false)}
-        onCreate={(name, emoji) => {
+        onCreate={(name, color) => {
           const tr: Trip = {
             id: uid(),
             name,
-            emoji,
+            emoji: color,
             members: [{ id: 'me', name: settings.myName || t('me') }],
             bookings: [],
             checklist: t('defaultPack')
@@ -234,20 +256,18 @@ function Home({
     });
   }, [trips]);
   return (
-    <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 120 }}>
+    <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 120 }}>
       <View style={s.headRow}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <View style={s.logo}>
-            <Text style={{ fontSize: 24 }}>🧳</Text>
-          </View>
+        <View>
+          <Text style={s.kicker}>{greeting()}</Text>
           <Text style={s.appTitle}>{t('appName')}</Text>
         </View>
         <Pressable onPress={onSettings} hitSlop={12} style={s.gear}>
-          <Text style={{ fontSize: 20 }}>⚙️</Text>
+          <Icon name="settings-outline" size={20} />
         </Pressable>
       </View>
 
-      <Text style={s.sec}>{t('nextUp')}</Text>
+      <Text style={s.sec}>{t('nextUp').toUpperCase()}</Text>
       {next ? (
         <NextCard next={next} onPress={() => onOpenBooking(next.trip.id, next.item.booking.id)} />
       ) : (
@@ -256,16 +276,17 @@ function Home({
         </View>
       )}
 
-      <View style={[s.headRow, { marginTop: 22 }]}>
-        <Text style={[s.sec, { marginTop: 0 }]}>{t('trips')}</Text>
-        <Pressable onPress={onNew} style={s.smallBtn}>
-          <Text style={s.smallBtnText}>＋ {t('newTrip')}</Text>
+      <View style={[s.headRow, { marginTop: 30, marginBottom: 10 }]}>
+        <Text style={[s.sec, { marginTop: 0, marginBottom: 0 }]}>{t('trips').toUpperCase()}</Text>
+        <Pressable onPress={onNew} style={s.ghostBtn} hitSlop={8}>
+          <Icon name="add" size={18} />
+          <Text style={s.ghostBtnText}>{t('newTrip')}</Text>
         </Pressable>
       </View>
       {sorted.length === 0 && (
         <View style={[s.card, { alignItems: 'center', paddingVertical: 28 }]}>
-          <Text style={{ fontSize: 40 }}>🗺</Text>
-          <Text style={[s.hint, { textAlign: 'center', marginTop: 8 }]}>{t('noTrips')}</Text>
+          <Icon name="map-outline" size={34} color={C.sub} />
+          <Text style={[s.hint, { textAlign: 'center', marginTop: 10 }]}>{t('noTrips')}</Text>
         </View>
       )}
       {sorted.map((tr) => (
@@ -291,28 +312,27 @@ function TripCard({ trip, rate, onPress }: { trip: Trip; rate: RateInfo; onPress
   const total = tripTotal(trip, rate);
   return (
     <Pressable style={({ pressed }) => [s.tripCard, pressed && { opacity: 0.85 }]} onPress={onPress}>
-      <View style={s.tripEmoji}>
-        <Text style={{ fontSize: 30 }}>{trip.emoji}</Text>
-      </View>
+      <Cover trip={trip} />
       <View style={{ flex: 1 }}>
         <Text style={s.tripName} numberOfLines={1}>
           {trip.name}
         </Text>
         <Text style={s.hint}>
-          {start ? `${prettyDate(start)}${end && end !== start ? ' 〜 ' + prettyDate(end) : ''}` : t('undated')}
+          {start ? `${prettyDate(start)}${end && end !== start ? ' – ' + prettyDate(end) : ''}` : t('undated')}
         </Text>
-        <View style={{ flexDirection: 'row', gap: 6, marginTop: 6, alignItems: 'center' }}>
-          <View style={[s.pill, st.tone === 'pink' ? { backgroundColor: C.pinkSoft } : st.tone === 'mint' ? { backgroundColor: C.mintSoft } : {}]}>
-            <Text style={[s.pillText, st.tone === 'pink' ? { color: C.pink } : st.tone === 'mint' ? { color: C.mint } : {}]}>{st.label}</Text>
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 7, alignItems: 'center' }}>
+          <Text style={[s.status, st.tone === 'pink' ? { color: C.pink } : st.tone === 'mint' ? { color: C.mint } : {}]}>● {st.label}</Text>
+          <View style={{ flexDirection: 'row', gap: 4 }}>
+            {TYPES.filter((ty) => trip.bookings.some((b) => b.type === ty.id)).map((ty) => (
+              <Icon key={ty.id} name={ty.icon + '-outline'} size={13} color={C.sub} />
+            ))}
           </View>
-          <Text style={s.hint}>
-            {TYPES.filter((ty) => trip.bookings.some((b) => b.type === ty.id))
-              .map((ty) => ty.emoji)
-              .join(' ')}
-          </Text>
         </View>
       </View>
-      {total > 0 && <Text style={s.tripTotal}>{fmtMoney(Math.round(total), rate.base)}</Text>}
+      <View style={{ alignItems: 'flex-end', gap: 6 }}>
+        {total > 0 && <Text style={s.tripTotal}>{fmtMoney(Math.round(total), rate.base)}</Text>}
+        <Icon name="chevron-forward" size={16} color={C.sub} />
+      </View>
     </Pressable>
   );
 }
@@ -320,40 +340,88 @@ function TripCard({ trip, rate, onPress }: { trip: Trip; rate: RateInfo; onPress
 function NextCard({ next, onPress }: { next: NonNullable<ReturnType<typeof nextUp>>; onPress: () => void }) {
   const b = next.item.booking;
   const ty = typeOf(b.type);
-  const today = todayStr();
-  const n = daysBetween(today, next.date);
+  const n = daysBetween(todayStr(), next.date);
   const edgeLabel =
     next.item.edge === 'start' ? (b.type === 'hotel' ? t('checkin') : t('pickup')) : next.item.edge === 'end' ? (b.type === 'hotel' ? t('checkout') : t('dropoff')) : '';
+  const route = (b.type === 'flight' || b.type === 'train' || b.type === 'bus') && b.from && b.to;
+  const short = (x: string) => (/^[A-Z]{3}$/.test(x) ? x : x.split(/[ ,(]/)[0]);
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [s.nextCard, { backgroundColor: ty.color }, pressed && { opacity: 0.9 }]}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text style={s.nextWhen}>
-          {n === 0 ? t('today') : t('daysLeft', { n })} ・ {prettyDate(next.date)} {next.item.time ?? ''}
-        </Text>
-        <Text style={s.nextTrip} numberOfLines={1}>
-          {next.trip.emoji} {next.trip.name}
-        </Text>
+    <Pressable onPress={onPress} style={({ pressed }) => [s.pass, pressed && { opacity: 0.92 }]}>
+      <View style={s.passTop}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Icon name={ty.icon} size={16} color="#fff" />
+          <Text style={s.passKicker}>
+            {typeName(b.type).toUpperCase()}
+            {edgeLabel ? ` · ${edgeLabel}` : ''}
+          </Text>
+        </View>
+        <Text style={s.passWhen}>{n === 0 ? t('today') : t('daysLeft', { n })}</Text>
       </View>
-      <Text style={s.nextTitle} numberOfLines={1}>
-        {ty.emoji} {b.title || typeName(b.type)} {edgeLabel ? `・${edgeLabel}` : ''}
-      </Text>
-      {(b.from || b.to) && (
-        <Text style={s.nextRoute} numberOfLines={1}>
-          {b.from}
-          {b.to ? `  →  ${b.to}` : ''}
+      {route ? (
+        <View style={s.passRoute}>
+          <Text style={[s.passCity, { fontSize: cityFont(short(b.from!), short(b.to!)) }]} numberOfLines={1} adjustsFontSizeToFit>
+            {short(b.from!)}
+          </Text>
+          <View style={s.passLine}>
+            <View style={s.passDash} />
+            <Icon name={ty.icon} size={16} color={C.pink} />
+            <View style={s.passDash} />
+          </View>
+          <Text style={[s.passCity, { textAlign: 'right', fontSize: cityFont(short(b.from!), short(b.to!)) }]} numberOfLines={1} adjustsFontSizeToFit>
+            {short(b.to!)}
+          </Text>
+        </View>
+      ) : (
+        <Text style={s.passTitle} numberOfLines={2}>
+          {b.title || typeName(b.type)}
         </Text>
       )}
+      {route && !!b.title && <Text style={s.passSub}>{b.title}</Text>}
+      {!route && !!b.from && (
+        <Text style={s.passSub} numberOfLines={1}>
+          {b.from}
+        </Text>
+      )}
+      <View style={s.perf}>
+        <View style={[s.notch, { left: -30 }]} />
+        <View style={s.perfLine} />
+        <View style={[s.notch, { right: -30 }]} />
+      </View>
+      <View style={s.passGrid}>
+        <PassCell k={t('date')} v={prettyDate(next.date)} />
+        <PassCell k={t('time')} v={next.item.time ?? '—'} />
+        {!!b.seat && <PassCell k={t('seat')} v={b.seat} />}
+      </View>
       {!!b.code && (
-        <View style={s.nextCodeBox}>
-          <Text style={s.nextCodeLabel}>{t('code')}</Text>
-          <Text style={s.nextCode} selectable>
+        <View style={{ marginTop: 14 }}>
+          <Text style={s.passK}>{t('code')}</Text>
+          <Text style={s.passCode} selectable>
             {b.code}
           </Text>
         </View>
       )}
+      <Text style={s.passTrip} numberOfLines={1}>
+        {next.trip.name}
+      </Text>
     </Pressable>
   );
 }
+const cityFont = (a: string, b: string) => {
+  const n = Math.max(a.length, b.length);
+  return n <= 4 ? 34 : n <= 6 ? 26 : 20;
+};
+const PassCell = ({ k, v }: { k: string; v: string }) => (
+  <View style={{ flex: 1 }}>
+    <Text style={s.passK}>{k}</Text>
+    <Text style={s.passV} numberOfLines={1}>
+      {v}
+    </Text>
+  </View>
+);
+const greeting = () => {
+  const h = new Date().getHours();
+  return h < 11 ? t('gMorning') : h < 18 ? t('gDay') : t('gEvening');
+};
 
 /* ---------------- 旅行の画面 ---------------- */
 type Tab = 'plan' | 'bookings' | 'money' | 'pack';
@@ -384,11 +452,12 @@ function TripScreen({
     <View style={{ flex: 1 }}>
       <View style={s.tripHead}>
         <Pressable onPress={onBack} hitSlop={14} style={s.back}>
-          <Text style={{ fontSize: 22, color: C.ink }}>‹</Text>
+          <Icon name="chevron-back" size={20} />
         </Pressable>
+        <Cover trip={trip} size={40} />
         <View style={{ flex: 1 }}>
           <Text style={s.tripHeadName} numberOfLines={1}>
-            {trip.emoji} {trip.name}
+            {trip.name}
           </Text>
           <Text style={s.hint}>
             {start ? `${prettyDate(start)}${end && end !== start ? ' 〜 ' + prettyDate(end) : ''}` : t('undated')}
@@ -398,24 +467,26 @@ function TripScreen({
       </View>
       <View style={s.tabs}>
         {(['plan', 'bookings', 'money', 'pack'] as Tab[]).map((k) => (
-          <Pressable key={k} onPress={() => setTab(k)} style={[s.tab, tab === k && s.tabOn]}>
+          <Pressable key={k} onPress={() => setTab(k)} style={s.tab}>
             <Text style={[s.tabText, tab === k && { color: C.ink }]}>
               {k === 'plan' ? t('tabPlan') : k === 'bookings' ? t('tabBookings') : k === 'money' ? t('tabMoney') : t('tabPack')}
             </Text>
+            <View style={[s.tabBar, tab === k && { backgroundColor: C.ink }]} />
           </Pressable>
         ))}
       </View>
-      <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 140 }} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 140 }} keyboardShouldPersistTaps="handled">
         {tab === 'plan' && <PlanTab trip={trip} onOpen={onOpen} />}
         {tab === 'bookings' && <BookingsTab trip={trip} rate={rate} onOpen={onOpen} />}
         {tab === 'money' && <MoneyTab trip={trip} rate={rate} onChange={onChange} />}
         {tab === 'pack' && <PackTab trip={trip} onChange={onChange} />}
         <Pressable onPress={() => (sure ? onDelete() : setSure(true))} style={{ alignSelf: 'center', marginTop: 30 }}>
-          <Text style={{ color: sure ? C.pink : C.sub, fontWeight: '700' }}>{sure ? t('deleteSure') : `🗑 ${t('delete')}`}</Text>
+          <Text style={{ color: sure ? C.pink : C.sub, fontWeight: '700' }}>{sure ? t('deleteSure') : t('deleteTrip')}</Text>
         </Pressable>
       </ScrollView>
       {(tab === 'plan' || tab === 'bookings') && (
         <Pressable style={({ pressed }) => [s.fab, pressed && { transform: [{ scale: 0.97 }] }]} onPress={onAdd}>
+          <Icon name="add" size={20} color="#fff" />
           <Text style={s.fabText}>{t('addBooking')}</Text>
         </Pressable>
       )}
@@ -429,48 +500,53 @@ function PlanTab({ trip, onOpen }: { trip: Trip; onOpen: (b: Booking) => void })
   if (!days.length)
     return (
       <View style={[s.card, { alignItems: 'center', paddingVertical: 30 }]}>
-        <Text style={{ fontSize: 40 }}>📮</Text>
-        <Text style={[s.hint, { textAlign: 'center', marginTop: 8 }]}>{t('noBookings')}</Text>
+        <Icon name="document-text-outline" size={34} color={C.sub} />
+        <Text style={[s.hint, { textAlign: 'center', marginTop: 10, lineHeight: 19 }]}>{t('noBookings')}</Text>
       </View>
     );
   return (
     <>
       {days.map(({ date, items }) => (
-        <View key={date} style={{ marginBottom: 14 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
-            <Text style={s.dayN}>{start ? t('dayN', { n: daysBetween(start, date) + 1 }) : ''}</Text>
+        <View key={date} style={{ marginBottom: 22 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10, marginBottom: 10 }}>
+            {!!start && <Text style={s.dayN}>{t('dayN', { n: daysBetween(start, date) + 1 })}</Text>}
             <Text style={s.dayDate}>{prettyDate(date)}</Text>
           </View>
-          <View style={s.card}>
-            {items.map((it, i) => {
-              const b = it.booking;
-              const ty = typeOf(b.type);
-              const edge =
-                it.edge === 'start' ? (b.type === 'hotel' ? t('checkin') : t('pickup')) : it.edge === 'end' ? (b.type === 'hotel' ? t('checkout') : t('dropoff')) : '';
-              return (
-                <Pressable key={b.id + it.edge} onPress={() => onOpen(b)} style={[s.tlRow, i > 0 && s.tlLine]}>
+          {items.map((it, i) => {
+            const b = it.booking;
+            const ty = typeOf(b.type);
+            const edge =
+              it.edge === 'start' ? (b.type === 'hotel' ? t('checkin') : t('pickup')) : it.edge === 'end' ? (b.type === 'hotel' ? t('checkout') : t('dropoff')) : '';
+            const last = i === items.length - 1;
+            return (
+              <View key={b.id + it.edge} style={{ flexDirection: 'row' }}>
+                <View style={{ width: 52 }}>
                   <Text style={s.tlTime}>{it.time ?? '—'}</Text>
-                  <View style={[s.tlDot, { backgroundColor: ty.soft }]}>
-                    <Text style={{ fontSize: 18 }}>{ty.emoji}</Text>
-                  </View>
+                </View>
+                <View style={{ alignItems: 'center', width: 18 }}>
+                  <View style={[s.tlDotSmall, { borderColor: ty.color }]} />
+                  {!last && <View style={s.tlRail} />}
+                </View>
+                <Pressable onPress={() => onOpen(b)} style={({ pressed }) => [s.tlCard, pressed && { opacity: 0.85 }]}>
+                  <TypeBadge type={b.type} size={34} />
                   <View style={{ flex: 1 }}>
                     <Text style={s.tlTitle} numberOfLines={1}>
                       {b.title || typeName(b.type)}
-                      {edge ? <Text style={{ color: ty.color }}>{`  ${edge}`}</Text> : null}
                     </Text>
+                    {!!edge && <Text style={[s.tlEdge, { color: ty.color }]}>{edge}</Text>}
                     {(b.from || b.to) && it.edge !== 'end' ? (
                       <Text style={s.hint} numberOfLines={1}>
                         {b.from}
-                        {b.to && b.type !== 'car' ? ` → ${b.to}` : ''}
+                        {b.to && b.type !== 'car' ? `  →  ${b.to}` : ''}
                       </Text>
                     ) : null}
-                    {!!b.code && <Text style={s.tlCode}># {b.code}</Text>}
+                    {!!b.code && <Text style={s.tlCode}>{b.code}</Text>}
                   </View>
-                  {!!b.photos?.length && <Text style={{ fontSize: 14 }}>🖼</Text>}
+                  {!!b.photos?.length && <Icon name="image-outline" size={16} color={C.sub} />}
                 </Pressable>
-              );
-            })}
-          </View>
+              </View>
+            );
+          })}
         </View>
       ))}
     </>
@@ -483,9 +559,10 @@ function BookingsTab({ trip, rate, onOpen }: { trip: Trip; rate: RateInfo; onOpe
     <>
       {TYPES.filter((ty) => trip.bookings.some((b) => b.type === ty.id)).map((ty) => (
         <View key={ty.id} style={{ marginBottom: 14 }}>
-          <Text style={s.sec}>
-            {ty.emoji} {typeName(ty.id)}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 18, marginBottom: 8 }}>
+            <Icon name={ty.icon + '-outline'} size={16} color={ty.color} />
+            <Text style={[s.sec, { marginTop: 0, marginBottom: 0 }]}>{typeName(ty.id).toUpperCase()}</Text>
+          </View>
           <View style={s.card}>
             {trip.bookings
               .filter((b) => b.type === ty.id)
@@ -500,7 +577,7 @@ function BookingsTab({ trip, rate, onOpen }: { trip: Trip; rate: RateInfo; onOpe
                       {isDate(b.start) ? prettyDate(b.start) : ''} {b.startTime ?? ''}
                       {isDate(b.end) && b.end !== b.start ? ` 〜 ${prettyDate(b.end!)}` : ''}
                     </Text>
-                    {!!b.code && <Text style={s.tlCode}># {b.code}</Text>}
+                    {!!b.code && <Text style={s.tlCode}>{b.code}</Text>}
                   </View>
                   {!!b.price && (
                     <View style={{ alignItems: 'flex-end' }}>
@@ -544,14 +621,15 @@ function MoneyTab({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onChan
 
       {byType.length > 0 && (
         <>
-          <Text style={s.sec}>{t('byType')}</Text>
+          <Text style={s.sec}>{t('byType').toUpperCase()}</Text>
           <View style={s.card}>
             {byType.map(({ ty, v }) => (
               <View key={ty.id} style={{ marginVertical: 5 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text style={s.tlTitle}>
-                    {ty.emoji} {typeName(ty.id)}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Icon name={ty.icon + '-outline'} size={15} color={ty.color} />
+                    <Text style={s.tlTitle}>{typeName(ty.id)}</Text>
+                  </View>
                   <Text style={s.price}>{fmtMoney(Math.round(v), rate.base)}</Text>
                 </View>
                 <View style={s.barBg}>
@@ -563,7 +641,7 @@ function MoneyTab({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onChan
         </>
       )}
 
-      <Text style={s.sec}>{t('members')}</Text>
+      <Text style={s.sec}>{t('members').toUpperCase()}</Text>
       <View style={s.card}>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {trip.members.map((m) => (
@@ -574,9 +652,10 @@ function MoneyTab({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onChan
               }
               style={s.chip}
             >
-              <Text style={s.chipText}>
-                {m.id === 'me' ? '🙂' : '👤'} {m.name}
-              </Text>
+              <View style={s.avatar}>
+                <Text style={s.avatarText}>{m.name.slice(0, 1).toUpperCase()}</Text>
+              </View>
+              <Text style={s.chipText}>{m.name}</Text>
             </Pressable>
           ))}
         </View>
@@ -597,7 +676,7 @@ function MoneyTab({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onChan
 
       {trip.members.length > 1 && (
         <>
-          <Text style={s.sec}>{t('settle')}</Text>
+          <Text style={s.sec}>{t('settle').toUpperCase()}</Text>
           <View style={s.card}>
             {trip.members.map((m) => (
               <View key={m.id} style={s.rowBetween}>
@@ -641,7 +720,7 @@ function PackTab({ trip, onChange }: { trip: Trip; onChange: (fn: (t: Trip) => T
             onPress={() => onChange((tr) => ({ ...tr, checklist: tr.checklist.map((x) => (x.id === c.id ? { ...x, done: !x.done } : x)) }))}
             onLongPress={() => onChange((tr) => ({ ...tr, checklist: tr.checklist.filter((x) => x.id !== c.id) }))}
           >
-            <View style={[s.check, c.done && { backgroundColor: C.mint, borderColor: C.mint }]}>{c.done && <Text style={{ color: '#fff', fontWeight: '900' }}>✓</Text>}</View>
+            <View style={[s.check, c.done && { backgroundColor: C.ink, borderColor: C.ink }]}>{c.done && <Icon name="checkmark" size={15} color="#fff" />}</View>
             <Text style={[s.tlTitle, c.done && { color: C.sub, textDecorationLine: 'line-through' }]}>{c.text}</Text>
           </Pressable>
         ))}
@@ -674,7 +753,7 @@ function Sheet({ visible, onClose, children, tall }: { visible: boolean; onClose
           <View style={s.sheetTop}>
             <View style={s.grabber} />
             <Pressable onPressIn={onClose} hitSlop={18} style={s.closeBtn}>
-              <Text style={{ fontSize: 16, fontWeight: '900', color: C.ink }}>✕</Text>
+              <Icon name="close" size={18} />
             </Pressable>
           </View>
           {children}
@@ -684,25 +763,26 @@ function Sheet({ visible, onClose, children, tall }: { visible: boolean; onClose
   );
 }
 
-function NewTripSheet({ visible, onClose, onCreate }: { visible: boolean; onClose: () => void; onCreate: (name: string, emoji: string) => void }) {
+function NewTripSheet({ visible, onClose, onCreate }: { visible: boolean; onClose: () => void; onCreate: (name: string, color: string) => void }) {
   const [name, setName] = useState('');
-  const [emoji, setEmoji] = useState(TRIP_EMOJI[0]);
+  const [color, setColor] = useState(COVERS[0]);
   return (
     <Sheet visible={visible} onClose={onClose}>
       <Text style={s.sheetTitle}>{t('newTrip')}</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-        {TRIP_EMOJI.map((e) => (
-          <Pressable key={e} onPress={() => setEmoji(e)} style={[s.emojiBtn, emoji === e && { borderColor: C.pink, backgroundColor: C.pinkSoft }]}>
-            <Text style={{ fontSize: 24 }}>{e}</Text>
-          </Pressable>
-        ))}
+      <View style={{ alignItems: 'center', marginBottom: 16 }}>
+        <Cover trip={{ name: name || '··', emoji: color }} size={84} />
       </View>
       <TextInput style={s.input} value={name} onChangeText={setName} placeholder={t('tripName')} placeholderTextColor={C.sub} />
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 14, justifyContent: 'center' }}>
+        {COVERS.map((c) => (
+          <Pressable key={c} onPress={() => setColor(c)} style={[s.swatch, { backgroundColor: c }, color === c && s.swatchOn]} />
+        ))}
+      </View>
       <Pressable
-        style={[s.primary, !name.trim() && { opacity: 0.4 }]}
+        style={[s.primary, !name.trim() && { opacity: 0.35 }]}
         disabled={!name.trim()}
         onPress={() => {
-          onCreate(name.trim(), emoji);
+          onCreate(name.trim(), color);
           setName('');
         }}
       >
@@ -782,9 +862,9 @@ function AddBookingSheet({
       {mode === 'choose' && (
         <>
           <Text style={s.sheetTitle}>{t('howAdd')}</Text>
-          <AddOption emoji="📷" title={t('fromShot')} sub={busy ? t('ocrBusy') : t('fromShotSub')} onPress={pickShot} />
-          <AddOption emoji="📋" title={t('fromText')} sub={t('fromTextSub')} onPress={() => setMode('text')} />
-          <AddOption emoji="✏️" title={t('manual')} sub={t('manualSub')} onPress={() => setMode('form')} />
+          <AddOption icon="scan-outline" title={t('fromShot')} sub={busy ? t('ocrBusy') : t('fromShotSub')} onPress={pickShot} />
+          <AddOption icon="mail-open-outline" title={t('fromText')} sub={t('fromTextSub')} onPress={() => setMode('text')} />
+          <AddOption icon="create-outline" title={t('manual')} sub={t('manualSub')} onPress={() => setMode('form')} />
         </>
       )}
       {mode === 'text' && (
@@ -806,7 +886,8 @@ function AddBookingSheet({
                 if (c) setText(c);
               }}
             >
-              <Text style={s.secondaryText}>📋 {t('copy') === 'Copy' ? 'Paste' : '貼り付け'}</Text>
+              <Icon name="clipboard-outline" size={17} />
+              <Text style={s.secondaryText}>{t('paste')}</Text>
             </Pressable>
             <Pressable style={[s.primary, { flex: 1, marginTop: 0 }, !text.trim() && { opacity: 0.4 }]} disabled={!text.trim()} onPress={() => applyParsed(text)}>
               <Text style={s.primaryText}>{t('read')}</Text>
@@ -825,9 +906,8 @@ function AddBookingSheet({
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
             {TYPES.map((ty) => (
               <Pressable key={ty.id} onPress={() => set({ type: ty.id as BookingType })} style={[s.typeChip, b.type === ty.id && { backgroundColor: ty.soft, borderColor: ty.color }]}>
-                <Text style={[s.chipText, b.type === ty.id && { color: C.ink }]}>
-                  {ty.emoji} {typeName(ty.id)}
-                </Text>
+                <Icon name={ty.icon + '-outline'} size={14} color={b.type === ty.id ? ty.color : C.sub} />
+                <Text style={[s.chipText, b.type !== ty.id && { color: C.sub }]}>{typeName(ty.id)}</Text>
               </Pressable>
             ))}
           </View>
@@ -916,15 +996,17 @@ function AddBookingSheet({
   );
 }
 
-function AddOption({ emoji, title, sub, onPress }: { emoji: string; title: string; sub: string; onPress: () => void }) {
+function AddOption({ icon, title, sub, onPress }: { icon: string; title: string; sub: string; onPress: () => void }) {
   return (
     <Pressable style={({ pressed }) => [s.option, pressed && { opacity: 0.8 }]} onPress={onPress}>
-      <Text style={{ fontSize: 28 }}>{emoji}</Text>
+      <View style={s.optIcon}>
+        <Icon name={icon} size={22} />
+      </View>
       <View style={{ flex: 1 }}>
         <Text style={s.tlTitle}>{title}</Text>
         <Text style={s.hint}>{sub}</Text>
       </View>
-      <Text style={{ color: C.sub, fontSize: 18 }}>›</Text>
+      <Icon name="chevron-forward" size={18} color={C.sub} />
     </Pressable>
   );
 }
@@ -965,7 +1047,7 @@ function DateField({ label, value, onChange, optional }: { label: string; value:
       <Text style={s.label}>{label}</Text>
       <View style={s.dateRow}>
         <Pressable onPress={() => onChange(shiftDate(isDate(value) ? value : todayStr(), -1))} style={s.dateBtn} hitSlop={6}>
-          <Text style={s.dateBtnText}>‹</Text>
+          <Icon name="chevron-back" size={16} color={C.ink} />
         </Pressable>
         <TextInput
           style={s.dateInput}
@@ -976,7 +1058,7 @@ function DateField({ label, value, onChange, optional }: { label: string; value:
           maxLength={10}
         />
         <Pressable onPress={() => onChange(shiftDate(isDate(value) ? value : todayStr(), 1))} style={s.dateBtn} hitSlop={6}>
-          <Text style={s.dateBtnText}>›</Text>
+          <Icon name="chevron-forward" size={16} color={C.ink} />
         </Pressable>
       </View>
       {isDate(value) && <Text style={[s.hint, { marginTop: 2, textAlign: 'center' }]}>{prettyDate(value)}</Text>}
@@ -990,9 +1072,7 @@ function CurrencyPicker({ value, onChange }: { value: string; onChange: (c: stri
   return (
     <>
       <Pressable style={s.curBtn} onPress={() => setOpen(true)}>
-        <Text style={s.chipText}>
-          {c.flag} {c.code}
-        </Text>
+        <Text style={s.chipText}>{c.code}</Text>
       </Pressable>
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <Pressable style={s.curWrap} onPress={() => setOpen(false)}>
@@ -1007,9 +1087,7 @@ function CurrencyPicker({ value, onChange }: { value: string; onChange: (c: stri
                     setOpen(false);
                   }}
                 >
-                  <Text style={s.tlTitle}>
-                    {x.flag} {x.code}
-                  </Text>
+                  <Text style={s.tlTitle}>{x.code}</Text>
                   <Text style={s.hint}>{x.symbol}</Text>
                 </Pressable>
               ))}
@@ -1045,11 +1123,11 @@ function BookingDetail({
   return (
     <Sheet visible onClose={onClose} tall>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 30 }}>
-        <View style={[s.detailHead, { backgroundColor: ty.soft }]}>
-          <Text style={{ fontSize: 34 }}>{ty.emoji}</Text>
+        <View style={s.detailHead}>
+          <TypeBadge type={b.type} size={48} />
           <View style={{ flex: 1 }}>
-            <Text style={[s.hint, { color: ty.color, fontWeight: '800' }]}>
-              {typeName(b.type)} ・ {trip.emoji} {trip.name}
+            <Text style={[s.kicker, { color: ty.color }]}>
+              {typeName(b.type).toUpperCase()} · {trip.name}
             </Text>
             <Text style={s.detailTitle}>{b.title || typeName(b.type)}</Text>
           </View>
@@ -1067,7 +1145,10 @@ function BookingDetail({
             <Text style={s.codeBigText} selectable>
               {b.code}
             </Text>
-            <Text style={[s.hint, { color: C.pink, fontWeight: '800' }]}>{copied ? t('copied') : t('copy')}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <Icon name={copied ? 'checkmark' : 'copy-outline'} size={14} color={C.pink} />
+              <Text style={[s.hint, { color: C.pink, fontWeight: '800' }]}>{copied ? t('copied') : t('copy')}</Text>
+            </View>
           </Pressable>
         )}
         <View style={s.card}>
@@ -1104,10 +1185,12 @@ function BookingDetail({
         )}
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
           <Pressable style={[s.secondary, { flex: 1 }]} onPress={onEdit}>
-            <Text style={s.secondaryText}>✏️ {t('edit')}</Text>
+            <Icon name="create-outline" size={17} />
+            <Text style={s.secondaryText}>{t('edit')}</Text>
           </Pressable>
           <Pressable style={[s.secondary, { flex: 1 }]} onPress={() => (sure ? onDelete() : setSure(true))}>
-            <Text style={[s.secondaryText, sure && { color: C.pink }]}>{sure ? t('deleteSure') : `🗑 ${t('delete')}`}</Text>
+            <Icon name="trash-outline" size={17} color={sure ? C.pink : C.ink} />
+            <Text style={[s.secondaryText, sure && { color: C.pink }]}>{sure ? t('deleteSure') : t('delete')}</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -1165,10 +1248,10 @@ function WelcomeSheet({ visible, settings, onDone }: { visible: boolean; setting
   return (
     <Modal visible={visible} animationType="fade">
       <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 28, backgroundColor: C.bg }}>
-        <View style={[s.logo, { width: 90, height: 90, borderRadius: 30, alignSelf: 'center' }]}>
-          <Text style={{ fontSize: 50 }}>🧳</Text>
+        <View style={s.logoBig}>
+          <Icon name="airplane" size={40} color="#fff" />
         </View>
-        <Text style={[s.appTitle, { textAlign: 'center', fontSize: 28, marginTop: 14 }]}>{t('appName')}</Text>
+        <Text style={[s.appTitle, { textAlign: 'center', fontSize: 34, marginTop: 18 }]}>{t('appName')}</Text>
         <Text style={[s.hint, { textAlign: 'center', fontSize: 15, lineHeight: 23, marginTop: 10 }]}>{t('welcomeText')}</Text>
         <View style={{ marginTop: 20 }}>
           <SettingsBody settings={st} onChange={setSt} />
@@ -1177,7 +1260,7 @@ function WelcomeSheet({ visible, settings, onDone }: { visible: boolean; setting
           <Text style={s.primaryText}>{t('start')}</Text>
         </Pressable>
         <Pressable style={[s.secondary, { marginTop: 10 }]} onPress={() => onDone(st, true)}>
-          <Text style={s.secondaryText}>✨ {t('sample')}</Text>
+          <Text style={s.secondaryText}>{t('sample')}</Text>
         </Pressable>
       </ScrollView>
     </Modal>
@@ -1192,7 +1275,7 @@ function sampleTrip(st: Settings): Trip {
   return {
     id: uid(),
     name: ja ? 'パリ 3泊' : 'Paris, 3 nights',
-    emoji: '🗼',
+    emoji: '#FF5B3A',
     members: [
       { id: 'me', name: st.myName || t('me') },
       { id: 'm2', name: ja ? 'ゆき' : 'Yuki' },
@@ -1214,86 +1297,105 @@ function sampleTrip(st: Settings): Trip {
 
 const s = StyleSheet.create({
   headRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  logo: { width: 44, height: 44, borderRadius: 15, backgroundColor: C.pinkSoft, alignItems: 'center', justifyContent: 'center' },
-  appTitle: { fontSize: 22, fontWeight: '900', color: C.ink },
-  gear: { width: 42, height: 42, borderRadius: 21, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center', ...shadow },
-  sec: { fontSize: 15, fontWeight: '900', color: C.ink, marginTop: 18, marginBottom: 8 },
-  card: { backgroundColor: C.card, borderRadius: 22, padding: 16, ...shadow },
-  hint: { fontSize: 12, color: C.sub, fontWeight: '600' },
-  smallBtn: { backgroundColor: C.ink, borderRadius: 14, paddingHorizontal: 16, minWidth: 48, alignItems: 'center', paddingVertical: 10, justifyContent: 'center' },
-  smallBtnText: { color: '#fff', fontWeight: '800', fontSize: 13 },
-  tripCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.card, borderRadius: 22, padding: 14, marginBottom: 10, ...shadow },
-  tripEmoji: { width: 56, height: 56, borderRadius: 18, backgroundColor: '#FFF1E2', alignItems: 'center', justifyContent: 'center' },
-  tripName: { fontSize: 17, fontWeight: '900', color: C.ink },
-  tripTotal: { fontSize: 14, fontWeight: '900', color: C.ink },
-  pill: { backgroundColor: '#F1EAF0', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
-  pillText: { fontSize: 11, fontWeight: '800', color: C.sub },
-  nextCard: { borderRadius: 26, padding: 18, ...shadow },
-  nextWhen: { color: '#fff', fontWeight: '800', fontSize: 13, opacity: 0.95 },
-  nextTrip: { color: '#fff', fontWeight: '700', fontSize: 12, opacity: 0.85, maxWidth: '45%' },
-  nextTitle: { color: '#fff', fontWeight: '900', fontSize: 22, marginTop: 6 },
-  nextRoute: { color: '#fff', fontWeight: '700', fontSize: 14, marginTop: 4, opacity: 0.95 },
-  nextCodeBox: { backgroundColor: 'rgba(255,255,255,0.22)', borderRadius: 14, padding: 10, marginTop: 12 },
-  nextCodeLabel: { color: '#fff', fontSize: 11, fontWeight: '800', opacity: 0.9 },
-  nextCode: { color: '#fff', fontSize: 24, fontWeight: '900', letterSpacing: 1.5 },
-  tripHead: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingTop: 8, paddingBottom: 6 },
-  back: { width: 40, height: 40, borderRadius: 20, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center', ...shadow },
-  tripHeadName: { fontSize: 20, fontWeight: '900', color: C.ink },
-  tabs: { flexDirection: 'row', marginHorizontal: 18, marginTop: 8, backgroundColor: '#F1E7DF', borderRadius: 16, padding: 4 },
-  tab: { flex: 1, paddingVertical: 9, borderRadius: 12, alignItems: 'center' },
-  tabOn: { backgroundColor: C.card, ...shadow },
-  tabText: { fontWeight: '800', color: C.sub, fontSize: 13 },
-  dayN: { fontSize: 18, fontWeight: '900', color: C.pink },
-  dayDate: { fontSize: 14, fontWeight: '800', color: C.ink },
-  tlRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
+  kicker: { fontSize: 11, fontWeight: '800', color: C.sub, letterSpacing: 1.2 },
+  appTitle: { fontSize: 30, fontWeight: '900', color: C.ink, letterSpacing: -0.8 },
+  logoBig: { width: 88, height: 88, borderRadius: 28, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center', alignSelf: 'center' },
+  gear: { width: 44, height: 44, borderRadius: 22, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.line },
+  sec: { fontSize: 11, fontWeight: '800', color: C.sub, letterSpacing: 1.4, marginTop: 26, marginBottom: 10 },
+  card: { backgroundColor: C.card, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: C.line },
+  hint: { fontSize: 12.5, color: C.sub, fontWeight: '600' },
+  ghostBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: C.line, backgroundColor: C.card },
+  ghostBtnText: { fontWeight: '800', fontSize: 13, color: C.ink },
+  smallBtn: { backgroundColor: C.ink, borderRadius: 14, paddingHorizontal: 16, minWidth: 48, alignItems: 'center', justifyContent: 'center' },
+  smallBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  tripCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: C.card, borderRadius: 20, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: C.line },
+  tripName: { fontSize: 17, fontWeight: '800', color: C.ink, letterSpacing: -0.2 },
+  tripTotal: { fontSize: 14, fontWeight: '800', color: C.ink, fontVariant: ['tabular-nums'] },
+  status: { fontSize: 11.5, fontWeight: '800', color: C.sub },
+  // 搭乗券風のカード
+  pass: { backgroundColor: C.ink, borderRadius: 26, padding: 20, overflow: 'hidden' },
+  passTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  passKicker: { color: '#fff', fontWeight: '800', fontSize: 11, letterSpacing: 1.3 },
+  passWhen: { color: C.pink, fontWeight: '800', fontSize: 12 },
+  passRoute: { flexDirection: 'row', alignItems: 'center', marginTop: 18, gap: 10 },
+  passCity: { flex: 1, color: '#fff', fontSize: 34, fontWeight: '900', letterSpacing: -0.5 },
+  passLine: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 0.8 },
+  passDash: { flex: 1, height: 1, borderTopWidth: 1, borderColor: 'rgba(255,255,255,0.3)', borderStyle: 'dashed' },
+  passTitle: { color: '#fff', fontSize: 26, fontWeight: '900', marginTop: 16, letterSpacing: -0.4 },
+  passSub: { color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: '700', marginTop: 4 },
+  perf: { height: 26, justifyContent: 'center', marginVertical: 10, marginHorizontal: -20 },
+  perfLine: { marginHorizontal: 24, borderTopWidth: 1.5, borderColor: 'rgba(255,255,255,0.18)', borderStyle: 'dashed' },
+  notch: { position: 'absolute', width: 40, height: 26, borderRadius: 13, backgroundColor: C.bg },
+  passGrid: { flexDirection: 'row', gap: 12 },
+  passK: { color: 'rgba(255,255,255,0.5)', fontSize: 10.5, fontWeight: '800', letterSpacing: 1 },
+  passV: { color: '#fff', fontSize: 16, fontWeight: '800', marginTop: 3 },
+  passCode: { color: '#fff', fontSize: 28, fontWeight: '900', letterSpacing: 3, marginTop: 2, fontVariant: ['tabular-nums'] },
+  passTrip: { color: 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: '700', marginTop: 14 },
+  tripHead: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 18, paddingTop: 8, paddingBottom: 4 },
+  back: { width: 40, height: 40, borderRadius: 20, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.line },
+  tripHeadName: { fontSize: 20, fontWeight: '900', color: C.ink, letterSpacing: -0.4 },
+  tabs: { flexDirection: 'row', marginHorizontal: 20, marginTop: 12, borderBottomWidth: 1, borderBottomColor: C.line },
+  tab: { flex: 1, paddingTop: 10, alignItems: 'center' },
+  tabBar: { height: 2.5, width: '60%', marginTop: 9, borderRadius: 2, backgroundColor: 'transparent' },
+  tabText: { fontWeight: '800', color: C.sub, fontSize: 14 },
+  dayN: { fontSize: 22, fontWeight: '900', color: C.ink, letterSpacing: -0.5 },
+  dayDate: { fontSize: 13, fontWeight: '700', color: C.sub },
+  tlRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11 },
   tlLine: { borderTopWidth: 1, borderTopColor: C.line },
-  tlTime: { width: 44, fontWeight: '800', color: C.ink, fontSize: 13 },
-  tlDot: { width: 38, height: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  tlTime: { fontWeight: '800', color: C.ink, fontSize: 13, marginTop: 14, fontVariant: ['tabular-nums'] },
+  tlDotSmall: { width: 10, height: 10, borderRadius: 5, borderWidth: 2.5, backgroundColor: C.bg, marginTop: 17 },
+  tlRail: { flex: 1, width: 1.5, backgroundColor: C.line, marginTop: 2 },
+  tlCard: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.card, borderRadius: 18, padding: 12, marginLeft: 8, marginBottom: 10, borderWidth: 1, borderColor: C.line },
   tlTitle: { fontSize: 15, fontWeight: '800', color: C.ink },
-  tlCode: { fontSize: 12, fontWeight: '800', color: C.pink, marginTop: 2 },
-  price: { fontSize: 14, fontWeight: '900', color: C.ink },
-  barBg: { height: 8, borderRadius: 4, backgroundColor: '#F4EDE7', marginTop: 5, overflow: 'hidden' },
-  bar: { height: 8, borderRadius: 4 },
-  chip: { backgroundColor: '#F6EFEA', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8 },
+  tlEdge: { fontSize: 11.5, fontWeight: '800', marginTop: 1 },
+  tlCode: { fontSize: 12, fontWeight: '800', color: C.ink, marginTop: 4, letterSpacing: 1, opacity: 0.55 },
+  price: { fontSize: 14, fontWeight: '800', color: C.ink, fontVariant: ['tabular-nums'] },
+  barBg: { height: 6, borderRadius: 3, backgroundColor: C.chip, marginTop: 6, overflow: 'hidden' },
+  bar: { height: 6, borderRadius: 3 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.chip, borderRadius: 20, paddingLeft: 4, paddingRight: 12, paddingVertical: 4 },
   chipText: { fontWeight: '800', color: C.ink, fontSize: 13 },
-  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
-  check: { width: 24, height: 24, borderRadius: 8, borderWidth: 2, borderColor: '#DCCFC6', alignItems: 'center', justifyContent: 'center' },
-  fab: { position: 'absolute', bottom: 34, alignSelf: 'center', backgroundColor: C.pink, borderRadius: 26, paddingHorizontal: 28, paddingVertical: 16, ...shadow },
-  fabText: { color: '#fff', fontWeight: '900', fontSize: 16 },
-  sheetWrap: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(61,44,62,0.35)' },
+  avatar: { width: 26, height: 26, borderRadius: 13, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: '#fff', fontWeight: '900', fontSize: 12 },
+  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 5 },
+  check: { width: 24, height: 24, borderRadius: 7, borderWidth: 1.5, borderColor: '#CFCAC2', alignItems: 'center', justifyContent: 'center' },
+  fab: { position: 'absolute', bottom: 34, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.ink, borderRadius: 30, paddingHorizontal: 24, paddingVertical: 16, ...shadow, shadowOpacity: 0.2 },
+  fabText: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  sheetWrap: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(21,23,28,0.35)' },
   sheet: { backgroundColor: C.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingTop: 10 },
   sheetTop: { height: 40, alignItems: 'center', justifyContent: 'center' },
-  grabber: { width: 44, height: 5, borderRadius: 3, backgroundColor: '#DCCFC6' },
-  closeBtn: { position: 'absolute', right: -6, top: 0, width: 42, height: 42, borderRadius: 21, backgroundColor: '#F1E7DF', alignItems: 'center', justifyContent: 'center' },
-  sheetTitle: { fontSize: 20, fontWeight: '900', color: C.ink, marginBottom: 12 },
-  input: { backgroundColor: C.card, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: C.ink, fontWeight: '700', borderWidth: 1, borderColor: C.line },
-  label: { fontSize: 12, fontWeight: '800', color: C.sub, marginTop: 12, marginBottom: 6 },
-  primary: { backgroundColor: C.pink, borderRadius: 18, paddingVertical: 15, alignItems: 'center', marginTop: 18 },
-  primaryText: { color: '#fff', fontWeight: '900', fontSize: 16 },
-  secondary: { backgroundColor: C.card, borderRadius: 18, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: C.line },
+  grabber: { width: 40, height: 5, borderRadius: 3, backgroundColor: '#D6D2CB' },
+  closeBtn: { position: 'absolute', right: -6, top: 0, width: 42, height: 42, borderRadius: 21, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' },
+  sheetTitle: { fontSize: 24, fontWeight: '900', color: C.ink, marginBottom: 14, letterSpacing: -0.5 },
+  input: { backgroundColor: C.card, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, color: C.ink, fontWeight: '700', borderWidth: 1, borderColor: C.line },
+  label: { fontSize: 11, fontWeight: '800', color: C.sub, marginTop: 14, marginBottom: 6, letterSpacing: 0.6 },
+  primary: { backgroundColor: C.ink, borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 20 },
+  primaryText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  secondary: { flexDirection: 'row', justifyContent: 'center', gap: 6, backgroundColor: C.card, borderRadius: 16, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: C.line },
   secondaryText: { color: C.ink, fontWeight: '800', fontSize: 14 },
-  emojiBtn: { width: 48, height: 48, borderRadius: 16, borderWidth: 2, borderColor: 'transparent', backgroundColor: C.card, alignItems: 'center', justifyContent: 'center' },
-  option: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: C.card, borderRadius: 20, padding: 16, marginBottom: 10, ...shadow },
-  note: { backgroundColor: C.mintSoft, borderRadius: 14, padding: 10, marginBottom: 10 },
-  noteText: { color: '#2F8F72', fontWeight: '800', fontSize: 13 },
-  typeChip: { borderRadius: 14, borderWidth: 1.5, borderColor: C.line, backgroundColor: C.card, paddingHorizontal: 10, paddingVertical: 7 },
+  swatch: { width: 34, height: 34, borderRadius: 17 },
+  swatchOn: { borderWidth: 3, borderColor: C.bg, outlineWidth: 2, outlineColor: C.ink, transform: [{ scale: 1.1 }] } as any,
+  option: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: C.card, borderRadius: 18, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: C.line },
+  optIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: C.chip, alignItems: 'center', justifyContent: 'center' },
+  note: { backgroundColor: C.mintSoft, borderRadius: 14, padding: 12, marginBottom: 12 },
+  noteText: { color: '#17795A', fontWeight: '800', fontSize: 13 },
+  typeChip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 20, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, paddingHorizontal: 11, paddingVertical: 7 },
   two: { flexDirection: 'row', gap: 8 },
   dateRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.line },
-  dateBtn: { paddingHorizontal: 6, paddingVertical: 10 },
-  dateBtnText: { fontSize: 18, fontWeight: '900', color: C.pink },
+  dateBtn: { paddingHorizontal: 8, paddingVertical: 12 },
+  dateBtnText: { fontSize: 18, fontWeight: '900', color: C.ink },
   dateInput: { flex: 1, minWidth: 0, textAlign: 'center', fontSize: 13, fontWeight: '800', color: C.ink, paddingVertical: 10 },
-  curBtn: { backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.line, paddingHorizontal: 14, justifyContent: 'center', minHeight: 46 },
-  curWrap: { flex: 1, backgroundColor: 'rgba(61,44,62,0.35)', justifyContent: 'center', padding: 40 },
+  curBtn: { backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.line, paddingHorizontal: 16, justifyContent: 'center', minHeight: 48 },
+  curWrap: { flex: 1, backgroundColor: 'rgba(21,23,28,0.35)', justifyContent: 'center', padding: 40 },
   curList: { backgroundColor: C.bg, borderRadius: 22, maxHeight: '70%', padding: 8 },
   curRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderRadius: 12 },
   thumb: { width: 76, height: 110, borderRadius: 12, backgroundColor: '#eee' },
   thumbAdd: { alignItems: 'center', justifyContent: 'center', backgroundColor: C.card, borderWidth: 1, borderColor: C.line, borderStyle: 'dashed' },
-  detailHead: { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: 22, padding: 16, marginBottom: 12 },
-  detailTitle: { fontSize: 22, fontWeight: '900', color: C.ink },
-  codeBig: { backgroundColor: C.card, borderRadius: 22, padding: 16, alignItems: 'center', marginBottom: 12, borderWidth: 2, borderColor: C.pinkSoft, borderStyle: 'dashed' },
-  codeBigText: { fontSize: 30, fontWeight: '900', color: C.ink, letterSpacing: 2, marginVertical: 4 },
-  infoRow: { flexDirection: 'row', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.line, gap: 10 },
-  infoK: { width: 96, fontSize: 12, fontWeight: '800', color: C.sub },
+  detailHead: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 },
+  detailTitle: { fontSize: 24, fontWeight: '900', color: C.ink, letterSpacing: -0.5, marginTop: 2 },
+  codeBig: { backgroundColor: C.card, borderRadius: 20, padding: 18, alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: C.line },
+  codeBigText: { fontSize: 32, fontWeight: '900', color: C.ink, letterSpacing: 3, marginVertical: 6 },
+  infoRow: { flexDirection: 'row', paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: C.line, gap: 10 },
+  infoK: { width: 100, fontSize: 12, fontWeight: '700', color: C.sub },
   infoV: { flex: 1, fontSize: 14, fontWeight: '800', color: C.ink },
   photoBig: { width: 150, height: 230, borderRadius: 14, backgroundColor: '#eee' },
 });

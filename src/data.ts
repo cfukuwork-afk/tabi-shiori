@@ -4,16 +4,28 @@ import { FALLBACK_PER_USD, findCurrency } from './currencies';
 
 export type BookingType = 'flight' | 'train' | 'bus' | 'hotel' | 'car' | 'ticket' | 'food' | 'other';
 
-export const TYPES: { id: BookingType; emoji: string; color: string; soft: string }[] = [
-  { id: 'flight', emoji: '✈️', color: '#6C9BFF', soft: '#E4EDFF' },
-  { id: 'train', emoji: '🚄', color: '#5CC9A7', soft: '#DDF6EE' },
-  { id: 'bus', emoji: '🚌', color: '#8BC34A', soft: '#EAF5DB' },
-  { id: 'hotel', emoji: '🏨', color: '#B48CFF', soft: '#EFE6FF' },
-  { id: 'car', emoji: '🚗', color: '#FF9F5A', soft: '#FFEBDD' },
-  { id: 'ticket', emoji: '🎫', color: '#FF7FA3', soft: '#FFE3EC' },
-  { id: 'food', emoji: '🍽', color: '#E8B04A', soft: '#FFF2D6' },
-  { id: 'other', emoji: '📌', color: '#9A8A99', soft: '#F1EAF0' },
+export const TYPES: { id: BookingType; icon: string; color: string; soft: string }[] = [
+  { id: 'flight', icon: 'airplane', color: '#3B5BDB', soft: '#EDF0FB' },
+  { id: 'train', icon: 'train', color: '#1F9D74', soft: '#E6F4EF' },
+  { id: 'bus', icon: 'bus', color: '#5C7F3A', soft: '#EEF3E8' },
+  { id: 'hotel', icon: 'bed', color: '#7048E8', soft: '#F0ECFC' },
+  { id: 'car', icon: 'car-sport', color: '#E8590C', soft: '#FCEEE6' },
+  { id: 'ticket', icon: 'ticket', color: '#D6336C', soft: '#FBEAF0' },
+  { id: 'food', icon: 'restaurant', color: '#B07D00', soft: '#F8F1DF' },
+  { id: 'other', icon: 'bookmark', color: '#6C727C', soft: '#EFEFEF' },
 ];
+/** 旅行の表紙の色（emoji 欄に色コードを入れて使う） */
+export const COVERS = ['#15171C', '#FF5B3A', '#3B5BDB', '#1F9D74', '#7048E8', '#D6336C', '#E8590C', '#0B7285', '#B07D00', '#495057'];
+export const coverOf = (t: { emoji: string }) => (t.emoji?.startsWith('#') ? t.emoji : COVERS[0]);
+export const monogram = (name: string) => {
+  const w = name.trim();
+  if (!w) return '··';
+  if (/^[A-Za-z]/.test(w)) {
+    const parts = w.split(/\s+/).filter(Boolean);
+    return (parts.length > 1 ? parts[0][0] + parts[1][0] : w.slice(0, 2)).toUpperCase();
+  }
+  return w.replace(/[0-9０-９\s月年泊日]/g, '').slice(0, 2) || w.slice(0, 2);
+};
 export const typeOf = (t: BookingType) => TYPES.find((x) => x.id === t) ?? TYPES[TYPES.length - 1];
 
 /** 予約1件（航空券・ホテル・レンタカーなど） */

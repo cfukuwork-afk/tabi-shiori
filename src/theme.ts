@@ -1,23 +1,24 @@
-// 色・影・共通の小さな関数
+// 色・影・共通の小さな関数（落ち着いた紙の白＋墨色＋ひとつだけのアクセント）
 export const C = {
-  bg: '#FFF7EE',
+  bg: '#F4F3EF',
   card: '#FFFFFF',
-  ink: '#3D2C3E',
-  sub: '#9A8A99',
-  pink: '#FF7FA3',
-  pinkSoft: '#FFE3EC',
-  mint: '#5CC9A7',
-  mintSoft: '#DDF6EE',
-  yellow: '#FFD36E',
-  line: '#F2E6DD',
+  ink: '#15171C',
+  sub: '#8C9099',
+  pink: '#FF5B3A', // アクセント
+  pinkSoft: '#FFE9E3',
+  mint: '#1F9D74',
+  mintSoft: '#E3F3EC',
+  yellow: '#F2C94C',
+  line: '#E8E5DF',
+  chip: '#F1EFEA',
 };
 
 export const shadow = {
-  shadowColor: '#C9A99B',
-  shadowOpacity: 0.18,
-  shadowRadius: 14,
-  shadowOffset: { width: 0, height: 6 },
-  elevation: 3,
+  shadowColor: '#1B1B1B',
+  shadowOpacity: 0.06,
+  shadowRadius: 18,
+  shadowOffset: { width: 0, height: 8 },
+  elevation: 2,
 };
 
 export const cleanNum = (t: string, decimals: number) => {
