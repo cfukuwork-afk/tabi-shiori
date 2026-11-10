@@ -172,11 +172,12 @@ function Main() {
       <NewTripSheet
         visible={newTrip}
         onClose={() => setNewTrip(false)}
-        onCreate={(name, color) => {
+        onCreate={(name, color, cover) => {
           const tr: Trip = {
             id: uid(),
             name,
             emoji: color,
+            cover,
             members: [{ id: 'me', name: settings.myName || t('me') }],
             bookings: [],
             checklist: t('defaultPack')
@@ -522,6 +523,9 @@ function TripScreen({
           onLongPress={() => onChange((tr) => ({ ...tr, cover: undefined }))}
         >
           <Cover trip={trip} size={40} />
+          <View style={[s.camBadge, { width: 18, height: 18, right: -4, bottom: -4 }]}>
+            <Icon name="camera" size={10} color="#fff" />
+          </View>
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={s.tripHeadName} numberOfLines={1}>
@@ -926,14 +930,27 @@ function Sheet({ visible, onClose, children, tall }: { visible: boolean; onClose
   );
 }
 
-function NewTripSheet({ visible, onClose, onCreate }: { visible: boolean; onClose: () => void; onCreate: (name: string, color: string) => void }) {
+function NewTripSheet({ visible, onClose, onCreate }: { visible: boolean; onClose: () => void; onCreate: (name: string, color: string, cover?: string) => void }) {
   const [name, setName] = useState('');
   const [color, setColor] = useState(COVERS[0]);
+  const [cover, setCover] = useState<string | undefined>();
   return (
     <Sheet visible={visible} onClose={onClose}>
       <Text style={s.sheetTitle}>{t('newTrip')}</Text>
       <View style={{ alignItems: 'center', marginBottom: 16 }}>
-        <Cover trip={{ name: name || '··', emoji: color }} size={84} />
+        <Pressable
+          onPress={async () => {
+            const uri = await pickImage();
+            if (uri) setCover(uri);
+          }}
+          onLongPress={() => setCover(undefined)}
+        >
+          <Cover trip={{ name: name || '··', emoji: color, cover }} size={96} />
+          <View style={s.camBadge}>
+            <Icon name="camera" size={14} color="#fff" />
+          </View>
+        </Pressable>
+        <Text style={[s.hint, { marginTop: 8 }]}>{t('coverHint')}</Text>
       </View>
       <TextInput style={s.input} value={name} onChangeText={setName} placeholder={t('tripName')} placeholderTextColor={C.sub} />
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 14, justifyContent: 'center' }}>
@@ -945,8 +962,9 @@ function NewTripSheet({ visible, onClose, onCreate }: { visible: boolean; onClos
         style={[s.primary, !name.trim() && { opacity: 0.35 }]}
         disabled={!name.trim()}
         onPress={() => {
-          onCreate(name.trim(), color);
+          onCreate(name.trim(), color, cover);
           setName('');
+          setCover(undefined);
         }}
       >
         <Text style={s.primaryText}>{t('create')}</Text>
@@ -1580,6 +1598,7 @@ const s = StyleSheet.create({
   infoRow: { flexDirection: 'row', paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: C.line, gap: 10 },
   infoK: { width: 100, fontSize: 12, fontWeight: '700', color: C.sub },
   infoV: { flex: 1, fontSize: 14, fontWeight: '800', color: C.ink },
+  camBadge: { position: 'absolute', right: -6, bottom: -6, width: 28, height: 28, borderRadius: 14, backgroundColor: C.ink, borderWidth: 2, borderColor: C.bg, alignItems: 'center', justifyContent: 'center' },
   year: { fontSize: 20, fontWeight: '900', color: C.ink, marginBottom: 10, marginTop: 4, letterSpacing: -0.3 },
   memCard: { width: 210, height: 260, borderRadius: 22, overflow: 'hidden', backgroundColor: C.ink, marginBottom: 16 },
   memShade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 110, backgroundColor: 'rgba(0,0,0,0.38)' },
