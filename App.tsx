@@ -64,6 +64,24 @@ import { CURRENCIES, findCurrency } from './src/currencies';
 import { C, cleanNum, shadow } from './src/theme';
 import { ocrAvailable, recognizeReceipt } from './modules/receipt-ocr';
 import { askPermission, rescheduleAll } from './src/notify';
+import { toMyTime } from './src/airports';
+import { Directory, File as FSFile, Paths } from 'expo-file-system';
+import * as ExpoLinking from 'expo-linking';
+
+/** 選んだ写真をアプリの中にコピー（元の写真を消しても、圏外でも見られるように） */
+function keepImage(uri: string) {
+  if (Platform.OS === 'web') return uri;
+  try {
+    const dir = new Directory(Paths.document, 'photos');
+    if (!dir.exists) dir.create();
+    const ext = (uri.split('?')[0].split('.').pop() || 'jpg').slice(0, 4);
+    const dest = new FSFile(dir, `p${Date.now()}${Math.random().toString(36).slice(2, 6)}.${ext}`);
+    new FSFile(uri).copy(dest);
+    return dest.uri;
+  } catch {
+    return uri;
+  }
+}
 
 const SHARE_NATIVE = !!requireOptionalNativeModule('ExpoShareIntentModule');
 const openMap = (q: string) => Linking.openURL(`https://maps.apple.com/?q=${encodeURIComponent(q)}`);
@@ -112,7 +130,7 @@ const Cover = ({ trip, size = 52 }: { trip: { name: string; emoji: string; cover
   );
 const pickImage = async () => {
   const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
-  return !r.canceled && r.assets?.[0] ? r.assets[0].uri : null;
+  return !r.canceled && r.assets?.[0] ? keepImage(r.assets[0].uri) : null;
 };
 
 export default function App() {
@@ -135,6 +153,14 @@ function Main() {
   const [adding, setAdding] = useState<{ tripId: string; edit?: Booking; initial?: { text?: string; image?: string } } | null>(null);
   const [detail, setDetail] = useState<{ tripId: string; id: string } | null>(null);
   const [incoming, setIncoming] = useState<{ text?: string; image?: string } | null>(null);
+  const [settleIn, setSettleIn] = useState<{ n: string; c: string; p: { f: string; t: string; a: number }[] } | null>(null);
+  const url = ExpoLinking.useURL();
+  useEffect(() => {
+    if (!url || !url.includes('settle?d=')) return;
+    try {
+      setSettleIn(JSON.parse(decodeURIComponent(url.split('settle?d=')[1])));
+    } catch {}
+  }, [url]);
   const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntent({ disabled: !SHARE_NATIVE });
   useEffect(() => {
     if (!hasShareIntent) return;
@@ -296,6 +322,23 @@ function Main() {
         />
       )}
 
+      {settleIn && (
+        <Sheet visible onClose={() => setSettleIn(null)}>
+          <Text style={s.kicker}>{t('settle').toUpperCase()}</Text>
+          <Text style={s.sheetTitle}>{settleIn.n}</Text>
+          <View style={s.card}>
+            {settleIn.p.map((p, i) => (
+              <View key={i} style={[s.rowBetween, { paddingVertical: 8 }]}>
+                <Text style={s.tlTitle}>
+                  {p.f} → {p.t}
+                </Text>
+                <Text style={[s.price, { color: C.pink }]}>{fmtMoney(p.a, settleIn.c)}</Text>
+              </View>
+            ))}
+          </View>
+        </Sheet>
+      )}
+
       <SettingsSheet visible={showSettings} settings={settings} onClose={() => setShowSettings(false)} onChange={changeSettings} />
 
       <WelcomeSheet
@@ -379,6 +422,7 @@ function Home({
           <TripCard key={tr.id} trip={tr} rate={rate} onPress={() => onOpen(tr.id)} />
         ))}
       <Memories trips={sorted.filter((tr) => isPast(tr))} onOpen={onOpen} />
+      <YearSummary trips={trips} rate={rate} />
     </ScrollView>
   );
 }
@@ -391,6 +435,51 @@ function statusOf(tr: Trip) {
   if (start <= today) return { label: t('onTrip'), tone: 'mint' as const };
   const n = daysBetween(today, start);
   return { label: n === 0 ? t('today') : t('daysLeft', { n }), tone: 'pink' as const };
+}
+
+function YearSummary({ trips, rate }: { trips: Trip[]; rate: RateInfo }) {
+  const y = todayStr().slice(0, 4);
+  const mine = trips.filter((tr) => (tripRange(tr).start ?? '').startsWith(y));
+  if (!mine.length) return null;
+  const nights = mine.reduce(
+    (a, tr) => a + tr.bookings.filter((b) => b.type === 'hotel' && isDate(b.end)).reduce((x, b) => x + Math.max(0, daysBetween(b.start, b.end!)), 0),
+    0,
+  );
+  const places = new Set<string>();
+  mine.forEach((tr) => tr.bookings.forEach((b) => b.to && b.type !== 'car' && places.add(b.to.split(/[ ,(]/)[0])));
+  const flights = mine.reduce((a, tr) => a + tr.bookings.filter((b) => b.type === 'flight').length, 0);
+  const total = mine.reduce((a, tr) => a + tripTotal(tr, rate), 0);
+  const msg = `${t('yearTitle', { y })}\n✈ ${t('ysTrips')} ${mine.length} / ${t('ysNights')} ${nights} / ${t('ysPlaces')} ${places.size} / ${t('ysFlights')} ${flights}\n— Tripfold`;
+  return (
+    <>
+      <Text style={[s.sec, { marginTop: 14 }]}>{t('yearTitle', { y }).toUpperCase()}</Text>
+      <View style={s.yearCard}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+          {[
+            [t('ysTrips'), mine.length],
+            [t('ysNights'), nights],
+            [t('ysPlaces'), places.size],
+            [t('ysFlights'), flights],
+          ].map(([k, v]) => (
+            <View key={String(k)} style={{ width: '50%', paddingVertical: 8 }}>
+              <Text style={s.yearNum}>{v}</Text>
+              <Text style={s.passK}>{String(k).toUpperCase()}</Text>
+            </View>
+          ))}
+        </View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+          <View>
+            <Text style={s.passK}>{t('total').toUpperCase()}</Text>
+            <Text style={[s.passV, { fontSize: 20 }]}>{fmtMoney(Math.round(total), rate.base)}</Text>
+          </View>
+          <Pressable onPress={() => Share.share({ message: msg })} style={s.yearShare}>
+            <Icon name="share-outline" size={16} color={C.ink} />
+            <Text style={[s.chipText, { color: C.ink }]}>{t('share')}</Text>
+          </Pressable>
+        </View>
+      </View>
+    </>
+  );
 }
 
 function Memories({ trips, onOpen }: { trips: Trip[]; onOpen: (id: string) => void }) {
@@ -692,7 +781,7 @@ function JournalSheet({
             style={[s.memThumb, s.thumbAdd]}
             onPress={async () => {
               const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8, allowsMultipleSelection: true });
-              if (!r.canceled) setPhotos([...photos, ...r.assets.map((a) => a.uri)]);
+              if (!r.canceled) setPhotos([...photos, ...r.assets.map((a) => keepImage(a.uri))]);
             }}
           >
             <Icon name="add" size={22} color={C.sub} />
@@ -942,12 +1031,27 @@ function MoneyTab({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onChan
             {st.pay.length === 0 ? (
               <Text style={s.hint}>{t('settleNone')}</Text>
             ) : (
-              st.pay.map((p, i) => (
+              [
+                <Pressable
+                  key="send"
+                  style={[s.secondary, { marginBottom: 8 }]}
+                  onPress={() => {
+                    const data = { n: trip.name, c: rate.base, p: st.pay.map((p) => ({ f: nameOf(p.from), t: nameOf(p.to), a: Math.round(p.amount) })) };
+                    const link = `tripfold://settle?d=${encodeURIComponent(JSON.stringify(data))}`;
+                    const lines = st.pay.map((p) => `・${nameOf(p.from)} → ${nameOf(p.to)}  ${fmtMoney(Math.round(p.amount), rate.base)}`);
+                    Share.share({ message: `【${trip.name}】${t('settle')}\n${lines.join('\n')}\n\n${t('openInApp')}\n${link}` });
+                  }}
+                >
+                  <Icon name="paper-plane-outline" size={17} />
+                  <Text style={s.secondaryText}>{t('sendSettle')}</Text>
+                </Pressable>,
+                ...st.pay.map((p, i) => (
                 <View key={i} style={[s.rowBetween, { paddingVertical: 6 }]}>
                   <Text style={s.tlTitle}>{t('pays', { a: nameOf(p.from), b: nameOf(p.to) })}</Text>
                   <Text style={[s.price, { color: C.pink }]}>{fmtMoney(Math.round(p.amount), rate.base)}</Text>
                 </View>
-              ))
+              )),
+              ]
             )}
           </View>
         </>
@@ -1107,11 +1211,38 @@ function Converter({ trip, rate }: { trip: Trip; rate: RateInfo }) {
   );
 }
 
+const PACK_SETS = [
+  { id: 'abroad', icon: 'earth-outline', name: 'psAbroad', key: 'packAbroad' },
+  { id: 'biz', icon: 'briefcase-outline', name: 'psBiz', key: 'packBiz' },
+  { id: 'beach', icon: 'sunny-outline', name: 'psBeach', key: 'packBeach' },
+  { id: 'cold', icon: 'snow-outline', name: 'psCold', key: 'packCold' },
+  { id: 'camp', icon: 'bonfire-outline', name: 'psCamp', key: 'packCamp' },
+  { id: 'baby', icon: 'happy-outline', name: 'psKids', key: 'packKids' },
+] as const;
+
 function PackTab({ trip, onChange }: { trip: Trip; onChange: (fn: (t: Trip) => Trip) => void }) {
   const [text, setText] = useState('');
   const done = trip.checklist.filter((c) => c.done).length;
   return (
     <>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 10 }}>
+        {PACK_SETS.map((ps) => (
+          <Pressable
+            key={ps.id}
+            style={s.typeChip}
+            onPress={() =>
+              onChange((tr) => {
+                const have = new Set(tr.checklist.map((c) => c.text));
+                const add = t(ps.key).split(',').filter((x) => !have.has(x));
+                return { ...tr, checklist: [...tr.checklist, ...add.map((x) => ({ id: uid(), text: x, done: false }))] };
+              })
+            }
+          >
+            <Icon name={ps.icon} size={14} color={C.sub} />
+            <Text style={s.chipText}>{t(ps.name)}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
       <Text style={s.hint}>
         {t('packHint')} ・ {done}/{trip.checklist.length}
       </Text>
@@ -1267,7 +1398,7 @@ function AddBookingSheet({
   const pickShot = async () => {
     const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
     if (r.canceled || !r.assets?.[0]) return;
-    readImage(r.assets[0].uri);
+    readImage(keepImage(r.assets[0].uri));
   };
   const readImage = async (uri: string) => {
     if (!ocrAvailable) {
@@ -1298,12 +1429,12 @@ function AddBookingSheet({
   };
   const addPhoto = async () => {
     const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
-    if (!r.canceled && r.assets?.[0]) set({ photos: [...(b.photos ?? []), r.assets[0].uri] });
+    if (!r.canceled && r.assets?.[0]) set({ photos: [...(b.photos ?? []), keepImage(r.assets[0].uri)] });
   };
   const cur = findCurrency(b.currency || home);
   useEffect(() => {
     if (!initial) return;
-    if (initial.image) readImage(initial.image);
+    if (initial.image) readImage(keepImage(initial.image));
     else if (initial.text) applyParsed(initial.text);
   }, []);
 
@@ -1612,6 +1743,17 @@ function BookingDetail({
           {!isDate(b.end) && b.endTime && <Info k={t('time')} v={`→ ${b.endTime}`} />}
           {!!b.from && <Info k={t('from')} v={b.from} onMap />}
           {!!b.to && <Info k={t('to')} v={b.to} onMap />}
+          {b.type === 'flight' && (() => {
+            const dep = toMyTime(b.from, b.start, b.startTime);
+            const arr = toMyTime(b.to, b.end ?? b.start, b.endTime);
+            const fmtD = (h: number) => (h === 0 ? '' : `  (${t('tzDiff')} ${h > 0 ? '+' : ''}${h}h)`);
+            return (
+              <>
+                {dep && dep.diffH !== 0 && <Info k={t('depMine')} v={`${dep.time}${fmtD(dep.diffH)}`} />}
+                {arr && arr.diffH !== 0 && <Info k={t('arrMine')} v={`${arr.time}${fmtD(arr.diffH)}`} />}
+              </>
+            );
+          })()}
           {!!b.seat && <Info k={t('seat')} v={b.seat} />}
           {!!b.price && (
             <Info
@@ -1884,6 +2026,9 @@ const s = StyleSheet.create({
   mapBtn: { width: 30, height: 30, borderRadius: 15, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center' },
   expRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
   expIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: C.chip, alignItems: 'center', justifyContent: 'center' },
+  yearCard: { backgroundColor: C.ink, borderRadius: 24, padding: 18 },
+  yearNum: { color: '#fff', fontSize: 34, fontWeight: '900', letterSpacing: -1 },
+  yearShare: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#fff', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 9 },
   year: { fontSize: 20, fontWeight: '900', color: C.ink, marginBottom: 10, marginTop: 4, letterSpacing: -0.3 },
   memCard: { width: 210, height: 260, borderRadius: 22, overflow: 'hidden', backgroundColor: C.ink, marginBottom: 16 },
   memShade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 110, backgroundColor: 'rgba(0,0,0,0.38)' },
