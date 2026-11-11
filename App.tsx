@@ -292,10 +292,10 @@ function Main() {
       const [tr0, st] = await Promise.all([loadTrips(), loadSettings(), loadPhotoMap()]);
       let tr = tr0;
       // 【確認用・一時的】Expo Go にお試し旅行を1回だけ入れる（TestFlight に出す前に消す）
-      if (st.onboarded && !(await AsyncStorage.getItem('ts.demo.once.v1'))) {
-        await AsyncStorage.setItem('ts.demo.once.v1', '1');
+      if (st.onboarded && !(await AsyncStorage.getItem('ts.demo.once.v2'))) {
+        await AsyncStorage.setItem('ts.demo.once.v2', '1');
         setLang(st.lang);
-        tr = [sampleTrip(st), pastSample(st), londonSample(st), ...tr];
+        tr = [sampleTrip(st), pastSample(st), londonSample(st), ...tr.filter((x) => x.share || !x.cover?.startsWith('asset:'))];
         saveTrips(tr);
       }
       setTrips(tr);
@@ -3283,8 +3283,9 @@ function pastSample(st: Settings): Trip {
     cover: 'asset:kyoto',
     members: [{ id: 'me', name: st.myName || t('me') }],
     bookings: [
-      { id: uid(), type: 'train', title: ja ? 'のぞみ 21号' : 'Nozomi 21', start: a, startTime: '08:00', endTime: '10:15', from: ja ? '東京' : 'Tokyo', to: ja ? '京都' : 'Kyoto', price: 14170, currency: 'JPY', createdAt: 1 },
-      { id: uid(), type: 'hotel', title: ja ? '町家ステイ 祇園' : 'Machiya Stay Gion', start: a, startTime: '15:00', end: shiftDate(a, 2), endTime: '10:00', price: 38000, currency: 'JPY', createdAt: 2 },
+      { id: uid(), type: 'train', title: ja ? 'のぞみ 21号' : 'Nozomi 21', start: a, startTime: '08:00', endTime: '10:15', from: ja ? '東京駅' : 'Tokyo Station', to: ja ? '京都駅' : 'Kyoto Station', price: 14170, currency: 'JPY', createdAt: 1 },
+      { id: uid(), type: 'hotel', title: ja ? '町家レジデンスイン 祇園南 万花' : 'Machiya Residence Inn Gion-minami Banka', start: a, startTime: '15:00', end: shiftDate(a, 2), endTime: '10:00', from: ja ? '京都府京都市東山区小松町563-7' : '563-7 Komatsucho, Higashiyama-ku, Kyoto', price: 38000, currency: 'JPY', createdAt: 2 },
+      { id: uid(), type: 'plan', title: ja ? '伏見稲荷大社' : 'Fushimi Inari Taisha', start: shiftDate(a, 1), startTime: '07:00', endTime: '09:00', from: ja ? '京都府京都市伏見区深草藪之内町68' : '68 Fukakusa Yabunouchicho, Fushimi-ku, Kyoto', createdAt: 3 },
     ],
     checklist: [],
     journal: {
@@ -3305,8 +3306,8 @@ function londonSample(st: Settings): Trip {
     members: [{ id: 'me', name: st.myName || t('me') }],
     bookings: [
       { id: uid(), type: 'flight', title: 'NH 211', start: a, startTime: '11:40', endTime: '16:35', from: 'HND', to: 'LHR', code: '5Y8K2M', seat: '34K', price: 128400, currency: 'JPY', createdAt: 1 },
-      { id: uid(), type: 'hotel', title: 'The Hoxton, Holborn', start: a, startTime: '15:00', end: shiftDate(a, 3), endTime: '12:00', from: '199-206 High Holborn, London', price: 540, currency: 'GBP', createdAt: 2 },
-      { id: uid(), type: 'plan', title: ja ? '大英博物館' : 'British Museum', start: shiftDate(a, 1), startTime: '10:00', endTime: '13:00', from: 'Great Russell St, London', createdAt: 3 },
+      { id: uid(), type: 'hotel', title: 'The Hoxton, Holborn', start: a, startTime: '15:00', end: shiftDate(a, 3), endTime: '12:00', from: '199-206 High Holborn, London WC1V 7BD', price: 540, currency: 'GBP', createdAt: 2 },
+      { id: uid(), type: 'plan', title: ja ? '大英博物館' : 'British Museum', start: shiftDate(a, 1), startTime: '10:00', endTime: '13:00', from: 'Great Russell St, London WC1B 3DG', createdAt: 3 },
     ],
     checklist: [],
     journal: {
@@ -3330,13 +3331,13 @@ function sampleTrip(st: Settings): Trip {
       { id: 'm2', name: ja ? 'ゆき' : 'Yuki' },
     ],
     bookings: [
-      { id: uid(), type: 'train', title: 'Eurostar', start: d(0), startTime: '08:31', endTime: '11:47', from: 'London St Pancras', to: 'Paris Gare du Nord', code: 'QXK7PL', seat: 'Coach 7 / 63, 64', price: 208, currency: 'GBP', paidBy: 'me', photos: ['asset:ticket'], createdAt: 1 },
-      { id: uid(), type: 'hotel', title: 'Hotel Le Marais', start: d(0), startTime: '15:00', end: d(3), endTime: '11:00', from: '12 Rue de Rivoli, Paris', code: '4821.339.112', price: 420, currency: 'EUR', paidBy: 'm2', createdAt: 2 },
-      { id: uid(), type: 'ticket', title: ja ? 'ルーヴル美術館' : 'Louvre Museum', start: d(1), startTime: '10:00', from: 'Rue de Rivoli, 75001 Paris', code: 'LV-55219', price: 44, currency: 'EUR', paidBy: 'me', createdAt: 3 },
+      { id: uid(), type: 'train', title: 'Eurostar', start: d(0), startTime: '08:31', endTime: '11:47', from: 'London St Pancras International', to: 'Paris Gare du Nord', code: 'QXK7PL', seat: 'Coach 7 / 63, 64', price: 208, currency: 'GBP', paidBy: 'me', photos: ['asset:ticket'], createdAt: 1 },
+      { id: uid(), type: 'hotel', title: 'Hôtel du Petit Moulin', start: d(0), startTime: '15:00', end: d(3), endTime: '11:00', from: '29-31 Rue de Poitou, 75003 Paris', code: '4821.339.112', price: 420, currency: 'EUR', paidBy: 'm2', createdAt: 2 },
+      { id: uid(), type: 'ticket', title: ja ? 'ルーヴル美術館' : 'Louvre Museum', start: d(1), startTime: '10:00', from: 'Musée du Louvre, Rue de Rivoli, 75001 Paris', code: 'LV-55219', price: 44, currency: 'EUR', paidBy: 'me', createdAt: 3 },
       { id: uid(), type: 'food', title: 'Le Comptoir du Relais', start: d(1), startTime: '19:30', from: "9 Carrefour de l'Odéon, 75006 Paris", memo: ja ? '2名・窓側' : 'Table for 2', createdAt: 4 },
-      { id: uid(), type: 'plan', title: ja ? 'セーヌ川クルーズ' : 'Seine river cruise', start: d(1), startTime: '16:00', endTime: '17:00', from: 'Port de la Bourdonnais', createdAt: 7 },
-      { id: uid(), type: 'car', title: 'Europcar', start: d(2), startTime: '09:00', end: d(2), endTime: '18:00', from: 'Paris Gare de Lyon', code: 'EC9921034', price: 89, currency: 'EUR', paidBy: 'm2', createdAt: 5 },
-      { id: uid(), type: 'train', title: 'Eurostar', start: d(3), startTime: '17:13', endTime: '18:30', from: 'Paris Gare du Nord', to: 'London St Pancras', code: 'QXK7PL', price: 196, currency: 'GBP', paidBy: 'me', createdAt: 6 },
+      { id: uid(), type: 'plan', title: ja ? 'セーヌ川クルーズ' : 'Seine river cruise', start: d(1), startTime: '16:00', endTime: '17:00', from: 'Bateaux Parisiens, Port de la Bourdonnais, 75007 Paris', createdAt: 7 },
+      { id: uid(), type: 'car', title: 'Europcar', start: d(2), startTime: '09:00', end: d(2), endTime: '18:00', from: '193 Rue de Bercy, 75012 Paris', to: '193 Rue de Bercy, 75012 Paris', code: 'EC9921034', price: 89, currency: 'EUR', paidBy: 'm2', createdAt: 5 },
+      { id: uid(), type: 'train', title: 'Eurostar', start: d(3), startTime: '17:13', endTime: '18:30', from: 'Paris Gare du Nord', to: 'London St Pancras International', code: 'QXK7PL', price: 196, currency: 'GBP', paidBy: 'me', createdAt: 6 },
     ],
     checklist: t('defaultPack')
       .split(',')
