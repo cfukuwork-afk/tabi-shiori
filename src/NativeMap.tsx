@@ -11,7 +11,7 @@ export default function NativeMap({ points, lines }: { points: MapPoint[]; lines
   const ref = useRef<MapView>(null);
   // 自作のピンは、最初は描き直しを許して表示が終わってから止める（止めたままだと空のピンになることがある）
   const [track, setTrack] = useState(true);
-  const sig = points.map((p) => `${p.lat.toFixed(4)},${p.lng.toFixed(4)}`).join('|');
+  const sig = points.map((p) => `${p.key}:${p.label}:${p.color}:${p.lat.toFixed(4)},${p.lng.toFixed(4)}`).join('|');
   useEffect(() => {
     setTrack(true);
     const off = setTimeout(() => setTrack(false), 1200);

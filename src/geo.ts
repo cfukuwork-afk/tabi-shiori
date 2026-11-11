@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 import { Booking, Trip } from './data';
 import { AIRPORT_TZ } from './airports';
 import { placeQuery } from './maps';
+import { SERVER } from './sync';
 
 export type Geo = { lat: number; lng: number; tz?: string };
 const KEY = 'ts.geo.v1';
@@ -103,4 +104,38 @@ export async function fillTimezones(trip: Trip): Promise<Record<string, string>>
     if (g?.tz) out[b.id] = g.tz;
   }
   return out;
+}
+
+/** 住所らしい（番地・郵便番号・カンマ区切り）か。住所は端末の地図で、名前はサーバーの地図データで探す */
+export const looksLikeAddress = (q: string) => /\d/.test(q) && (/[,、]/.test(q) || /\d+[-‐−]\d+|丁目|番地|〒|\b\d{4,6}\b/.test(q));
+
+/** 名前（お寺・美術館・お店など）で探す。near があればその周り70kmに絞る */
+export async function searchPlace(q: string, near?: { lat: number; lng: number } | null): Promise<Geo | null> {
+  const c = await loadCache();
+  const key = `n:${q}${near ? `@${near.lat.toFixed(1)},${near.lng.toFixed(1)}` : ''}`;
+  if (key in c) return c[key];
+  try {
+    const u = `${SERVER}/v1/geo/search?q=${encodeURIComponent(q)}${near ? `&lat=${near.lat}&lng=${near.lng}` : ''}`;
+    const r = await fetch(u);
+    if (r.status === 404) {
+      c[key] = null;
+      saveCache();
+      return null;
+    }
+    if (!r.ok) return null;
+    const j = await r.json();
+    const g = typeof j?.lat === 'number' ? { lat: j.lat, lng: j.lng } : null;
+    c[key] = g;
+    saveCache();
+    return g;
+  } catch {
+    return null;
+  }
+}
+
+/** 地図の地点を探す：住所は端末の地図、名前は近くに絞って地図データ → だめなら端末の地図 */
+export async function locate(q: string, near?: { lat: number; lng: number } | null, station = false): Promise<Geo | null> {
+  if (looksLikeAddress(q)) return (await geocode(q)) ?? (await searchPlace(q, near));
+  if (station) return (await geocode(q)) ?? (await searchPlace(q, near));
+  return (await searchPlace(q, near)) ?? (await geocode(q));
 }

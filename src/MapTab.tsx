@@ -6,9 +6,9 @@ import { Booking, Trip, timeline, typeOf } from './data';
 import { C } from './theme';
 import { t, prettyDate, typeName } from './i18n';
 import { openMap, placeQuery, routeUrl, tripCity } from './maps';
-import { geocode, Geo } from './geo';
+import { Geo, locate, looksLikeAddress } from './geo';
 import NativeMap from './NativeMap';
-import { estimate, fmtKm } from './eta';
+import { distKm, estimate, fmtKm } from './eta';
 import { openRoute } from './maps';
 
 export type Stop = { key: string; day: string; n: number; time?: string; title: string; sub: string; q: string; b: Booking; color: string };
@@ -54,11 +54,21 @@ export default function MapTab({ trip, onOpen }: { trip: Trip; onOpen: (b: Booki
     let off = false;
     (async () => {
       setBusy(true);
-      for (const s of stops) {
+      const found: Record<string, Geo | null> = { ...geo };
+      // 住所・駅・空港を先に探して、名前だけの予定はその近くに絞って探す（同じ名前の別の場所に飛ばないように）
+      const isMove = (st: Stop) => ['flight', 'train', 'bus'].includes(st.b.type);
+      const order = [...stops.filter((st) => isMove(st) || looksLikeAddress(st.q)), ...stops.filter((st) => !isMove(st) && !looksLikeAddress(st.q))];
+      for (const st of order) {
         if (off) return;
-        if (s.q in geo) continue;
-        const g = await geocode(s.q);
-        if (!off) setGeo((x) => ({ ...x, [s.q]: g }));
+        if (st.q in found) continue;
+        const sameDay = stops.filter((x) => x.day === st.day && found[x.q]).map((x) => found[x.q]!);
+        const any = stops.filter((x) => found[x.q] && !(x.b.type === 'flight')).map((x) => found[x.q]!);
+        const near = sameDay[sameDay.length - 1] ?? any[0] ?? null;
+        let g = await locate(st.q, isMove(st) ? null : near, isMove(st));
+        // 近くの地点から300km以上離れた結果は別の場所とみなして使わない
+        if (g && near && !isMove(st) && distKm(g, near) > 300) g = null;
+        found[st.q] = g;
+        if (!off) setGeo((x) => ({ ...x, [st.q]: g }));
       }
       if (!off) setBusy(false);
     })();
@@ -74,10 +84,20 @@ export default function MapTab({ trip, onOpen }: { trip: Trip; onOpen: (b: Booki
   // 全日程では「日-順番」（例：2-3 = 2日目の3番目）、1日だけのときは順番だけ
   const label = (s: Stop) => (all ? `${dayNo(s.day)}-${s.n}` : String(s.n));
   const pinColor = (s: Stop) => (all ? dayColor(s.day) : C.ink);
-  const points = shown
-    .map((s) => ({ s, g: geo[s.q] }))
-    .filter((x): x is { s: Stop; g: Geo } => !!x.g)
-    .map(({ s, g }) => ({ key: s.key, lat: g.lat, lng: g.lng, label: label(s), color: pinColor(s), title: `${label(s)}  ${s.title}`, onPress: () => onOpen(s.b) }));
+  // 同じ場所（30m以内）のピンは1つにまとめて番号を並べる（重なって見えなくならないように）
+  const points: { key: string; lat: number; lng: number; label: string; color: string; title: string; onPress: () => void }[] = [];
+  shown.forEach((s) => {
+    const g = geo[s.q];
+    if (!g) return;
+    const same = points.find((p) => distKm(p, g) < 0.03);
+    if (same) {
+      same.label += `・${label(s)}`;
+      same.title += ` / ${label(s)}  ${s.title}`;
+      same.key += `+${label(s)}`;
+      return;
+    }
+    points.push({ key: `${s.key}|${label(s)}`, lat: g.lat, lng: g.lng, label: label(s), color: pinColor(s), title: `${label(s)}  ${s.title}`, onPress: () => onOpen(s.b) });
+  });
   // 線は日ごとに引く。全日程では日ごとに色を変える
   const lines = (all ? days : [day]).map((d) => ({
     color: all ? dayColor(d) : C.pink,

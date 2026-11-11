@@ -26,7 +26,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { openMap, openRoute, placeQuery, setMapApp, tripCity } from './src/maps';
-import { bookingTz, arrivalTz, fillTimezones, geocode } from './src/geo';
+import { bookingTz, arrivalTz, fillTimezones, locate } from './src/geo';
 import { estimate, fmtKm } from './src/eta';
 import MapTab, { tripStops } from './src/MapTab';
 import { fetchMeta, firstUrl, platformOf } from './src/wish';
@@ -3110,8 +3110,8 @@ function HowTo({ fromQ, toQ, label }: { fromQ: string; toQ: string; label: strin
   useEffect(() => {
     let off = false;
     (async () => {
-      const a = await geocode(fromQ);
-      const b = a ? await geocode(toQ) : null;
+      const a = await locate(fromQ);
+      const b = a ? await locate(toQ, a) : null;
       if (!off && a && b) setEst(estimate(a, b));
     })();
     return () => {
