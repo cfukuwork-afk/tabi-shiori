@@ -388,7 +388,7 @@ function Main() {
   if (!ready) return <View style={{ flex: 1, backgroundColor: C.bg }} />;
 
   return (
-    <View key={dark ? 'dark' : 'light'} style={{ flex: 1, backgroundColor: C.bg, paddingTop: insets.top }}>
+    <View key={(dark ? 'dark' : 'light') + settings.lang} style={{ flex: 1, backgroundColor: C.bg, paddingTop: insets.top }}>
       <StatusBar style={dark ? 'light' : 'dark'} />
       {trip ? (
         <TripScreen
@@ -2269,18 +2269,26 @@ function FindRow({ title, links }: { title: string; links: FindLink[] }) {
 /* ---------------- シートの共通部分 ---------------- */
 function Sheet({ visible, onClose, children, tall }: { visible: boolean; onClose: () => void; children: React.ReactNode; tall?: boolean }) {
   const insets = useSafeAreaInsets();
+  const winH = useWindowDimensions().height;
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.sheetWrap}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[s.sheet, tall && { height: '92%' }, { paddingBottom: insets.bottom + 12 }]}>
+        <View style={[s.sheet, tall && { height: '92%' }, { paddingBottom: insets.bottom + 12, maxHeight: winH - insets.top - 12 }]}>
           <View style={s.sheetTop}>
             <View style={s.grabber} />
             <Pressable onPressIn={onClose} hitSlop={18} style={s.closeBtn}>
               <Icon name="close" size={18} />
             </Pressable>
           </View>
-          {children}
+          {tall ? (
+            children
+          ) : (
+            // 中身が長いとき（設定など）は画面の上にはみ出さずにスクロールする
+            <ScrollView style={{ flexGrow: 0 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              {children}
+            </ScrollView>
+          )}
         </View>
       </KeyboardAvoidingView>
     </Modal>
