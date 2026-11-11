@@ -51,7 +51,7 @@ export type Booking = {
   tz?: string; createdAt: number;
 };
 
-export type Member = { id: string; name: string };
+export type Member = { id: string; name: string; u?: number };
 
 export type ExpenseCat = 'meal' | 'move' | 'shop' | 'sight' | 'etc';
 export const EXP_CATS: { id: ExpenseCat; icon: string }[] = [
@@ -62,10 +62,10 @@ export const EXP_CATS: { id: ExpenseCat; icon: string }[] = [
   { id: 'etc', icon: 'ellipsis-horizontal' },
 ];
 /** 旅行中の出費 */
-export type Expense = { id: string; title: string; cat: ExpenseCat; amount: number; currency: string; date: string; paidBy?: string; splitWith?: string[] };
+export type Expense = { id: string; title: string; cat: ExpenseCat; amount: number; currency: string; date: string; paidBy?: string; splitWith?: string[]; u?: number };
 
 /** 行きたい場所（SNSで見つけた所など） */
-export type Wish = { id: string; title: string; url?: string; memo?: string; image?: string; photos?: string[]; createdAt: number };
+export type Wish = { id: string; title: string; url?: string; memo?: string; image?: string; photos?: string[]; u?: number; createdAt: number };
 
 export type Trip = {
   id: string;
@@ -75,12 +75,17 @@ export type Trip = {
   end?: string;
   members: Member[];
   bookings: Booking[];
-  checklist: { id: string; text: string; done: boolean }[];
+  checklist: { id: string; text: string; done: boolean; u?: number }[];
   cover?: string; // 表紙の写真（端末内のURI）
   budget?: number; // 旅行の予算（母国通貨）
   expenses?: Expense[]; // 旅行中の出費（食事・お土産など）
-  journal?: Record<string, { text?: string; photos?: string[] }>; // 日ごとの思い出
+  journal?: Record<string, { text?: string; photos?: string[]; u?: number }>; // 日ごとの思い出
   wishes?: Wish[];
+  // 共有（共同編集）用。share と myId はこの端末だけのもの
+  share?: { code: string; rev: number; dirty?: boolean; syncedAt?: number };
+  myId?: string; // 共有した旅行で「自分」はどのメンバーか
+  tomb?: Record<string, number>; // 消した項目（id → 消した時刻）
+  metaU?: number; // 名前・表紙・予算を変えた時刻
   createdAt: number;
 };
 

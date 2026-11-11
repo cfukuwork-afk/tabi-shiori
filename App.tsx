@@ -19,6 +19,8 @@ import {
   TextInput,
   View,
   useWindowDimensions,
+  AppState,
+  ActivityIndicator,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,6 +28,8 @@ import { openMap, openRoute, placeQuery, setMapApp, tripCity } from './src/maps'
 import { bookingTz, arrivalTz, fillTimezones } from './src/geo';
 import MapTab, { tripStops } from './src/MapTab';
 import { fetchMeta, firstUrl, platformOf } from './src/wish';
+import { stamp, mergeTrip } from './src/merge';
+import { fetchShared, loadPhotoMap, localPhoto, normCode, prettyCode, startShare, syncTrip } from './src/sync';
 import {
   Booking,
   BookingType,
@@ -129,7 +133,7 @@ const BUNDLED: Record<string, any> = {
   'asset:croissant': require('./assets/covers/croissant.jpg'),
   'asset:ticket': require('./assets/covers/ticket.jpg'),
 };
-const imgSrc = (u: string) => BUNDLED[u] ?? { uri: u };
+const imgSrc = (u: string) => BUNDLED[u] ?? { uri: localPhoto(u) };
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 const Icon = ({ name, size = 18, color = C.ink }: { name: string; size?: number; color?: string }) => (
@@ -179,6 +183,8 @@ function Main() {
   const [detail, setDetail] = useState<{ tripId: string; id: string } | null>(null);
   const [incoming, setIncoming] = useState<{ text?: string; image?: string } | null>(null);
   const [wishIn, setWishIn] = useState<{ tripId: string; url: string } | null>(null);
+  const [sharing, setSharing] = useState<string | null>(null);
+  const [joining, setJoining] = useState<string | null>(null); // 共有コード（空文字なら入力から）
   // SNSのリンクだけが送られてきたときは「行きたい場所」に入れる（予約メールではない）
   const linkOnly = (x: { text?: string; image?: string } | null) => {
     const u = firstUrl(x?.text);
@@ -189,6 +195,10 @@ function Main() {
   const [settleIn, setSettleIn] = useState<{ n: string; c: string; p: { f: string; t: string; a: number }[] } | null>(null);
   const url = ExpoLinking.useURL();
   useEffect(() => {
+    if (url && url.includes('join?c=')) {
+      setJoining(normCode(url.split('join?c=')[1] ?? ''));
+      return;
+    }
     if (!url || !url.includes('settle?d=')) return;
     try {
       setSettleIn(JSON.parse(decodeURIComponent(url.split('settle?d=')[1])));
@@ -211,7 +221,7 @@ function Main() {
 
   useEffect(() => {
     (async () => {
-      const [tr0, st] = await Promise.all([loadTrips(), loadSettings()]);
+      const [tr0, st] = await Promise.all([loadTrips(), loadSettings(), loadPhotoMap()]);
       let tr = tr0;
       // 【確認用・一時的】Expo Go にお試し旅行を1回だけ入れる（TestFlight に出す前に消す）
       if (st.onboarded && !(await AsyncStorage.getItem('ts.demo.once.v1'))) {
@@ -229,12 +239,68 @@ function Main() {
     })();
   }, []);
 
+  // 手元での変更：変わった項目に時刻をつける（共有した旅行のまとめに使う）
+  const editSeq = useRef<Record<string, number>>({});
   const updateTrips = (fn: (t: Trip[]) => Trip[]) =>
     setTrips((prev) => {
-      const next = fn(prev);
+      const next = fn(prev).map((tr) => {
+        const before = prev.find((x) => x.id === tr.id);
+        if (!before || before === tr) return tr;
+        const st = stamp(before, tr);
+        if (st.share && st !== tr) editSeq.current[tr.id] = (editSeq.current[tr.id] ?? 0) + 1;
+        return st;
+      });
       saveTrips(next);
       return next;
     });
+  // サーバーから来た版を、手元の変更とまとめて入れる（時刻はつけ直さない）
+  const applyRemote = (id: string, remote: Trip, rev: number, seqAtStart: number) =>
+    setTrips((prev) => {
+      const next = prev.map((tr) => {
+        if (tr.id !== id || !tr.share) return tr;
+        const merged = mergeTrip(remote, tr);
+        const stillDirty = (editSeq.current[id] ?? 0) !== seqAtStart;
+        return { ...merged, share: { ...tr.share, rev, dirty: stillDirty, syncedAt: Date.now() } };
+      });
+      saveTrips(next);
+      return next;
+    });
+  const tripsRef = useRef(trips);
+  tripsRef.current = trips;
+  const syncing = useRef(false);
+  const syncAll = async () => {
+    if (syncing.current) return;
+    syncing.current = true;
+    try {
+      for (const tr of tripsRef.current.filter((x) => x.share)) {
+        const seq = editSeq.current[tr.id] ?? 0;
+        try {
+          const r = await syncTrip(tr);
+          if (r) applyRemote(tr.id, r.trip, r.rev, seq);
+        } catch {}
+      }
+    } finally {
+      syncing.current = false;
+    }
+  };
+  // 共有した旅行は、開いている間ずっと数秒ごとに合わせる
+  useEffect(() => {
+    if (!ready) return;
+    syncAll();
+    const iv = setInterval(() => AppState.currentState === 'active' && syncAll(), 8000);
+    const sub = AppState.addEventListener('change', (st) => st === 'active' && syncAll());
+    return () => {
+      clearInterval(iv);
+      sub.remove();
+    };
+  }, [ready]);
+  // 手元で変えたら少し待って送る
+  const dirtyKey = trips.filter((x) => x.share?.dirty).map((x) => x.id + (editSeq.current[x.id] ?? 0)).join('|');
+  useEffect(() => {
+    if (!dirtyKey) return;
+    const tm = setTimeout(syncAll, 1500);
+    return () => clearTimeout(tm);
+  }, [dirtyKey]);
   const updateTrip = (id: string, fn: (t: Trip) => Trip) => updateTrips((all) => all.map((x) => (x.id === id ? fn(x) : x)));
   const changeSettings = async (s: Settings) => {
     if (s.notify && !settings.notify) askPermission();
@@ -269,7 +335,7 @@ function Main() {
           }}
           onAdd={() => setAdding({ tripId: trip.id })}
           onAddPlan={(d, extra) => setAdding({ tripId: trip.id, initial: { planDate: d, ...(extra ?? {}) } })}
-          onShare={() => Share.share({ message: itineraryText(trip) })}
+          onShare={() => setSharing(trip.id)}
           onOpen={(b) => setDetail({ tripId: trip.id, id: b.id })}
         />
       ) : (
@@ -286,6 +352,10 @@ function Main() {
       <NewTripSheet
         visible={newTrip}
         onClose={() => setNewTrip(false)}
+        onJoin={() => {
+          setNewTrip(false);
+          setJoining('');
+        }}
         onCreate={(name, color, cover) => {
           const tr: Trip = {
             id: uid(),
@@ -336,6 +406,36 @@ function Main() {
         />
       )}
 
+      {sharing && trips.some((x) => x.id === sharing) && (
+        <ShareSheet
+          trip={trips.find((x) => x.id === sharing)!}
+          onClose={() => setSharing(null)}
+          onShared={(tr) => setTrips((prev) => { const next = prev.map((x) => (x.id === tr.id ? tr : x)); saveTrips(next); return next; })}
+          onStop={() => {
+            setTrips((prev) => {
+              const next = prev.map((x) => (x.id === sharing ? { ...x, share: undefined } : x));
+              saveTrips(next);
+              return next;
+            });
+          }}
+        />
+      )}
+      {joining !== null && (
+        <JoinSheet
+          initialCode={joining}
+          myName={settings.myName}
+          onClose={() => setJoining(null)}
+          onJoin={(tr) => {
+            setTrips((prev) => {
+              const next = [tr, ...prev.filter((x) => x.id !== tr.id)];
+              saveTrips(next);
+              return next;
+            });
+            setJoining(null);
+            setOpenId(tr.id);
+          }}
+        />
+      )}
       {wishIn && (
         <WishSheet
           initialUrl={wishIn.url}
@@ -949,6 +1049,151 @@ function JournalSheet({
   );
 }
 
+/* ---------------- 共有（一緒に編集） ---------------- */
+function ShareSheet({ trip, onClose, onShared, onStop }: { trip: Trip; onClose: () => void; onShared: (t: Trip) => void; onStop: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [sure, setSure] = useState(false);
+  const code = trip.share?.code;
+  const meId = trip.myId ?? trip.members.find((m) => m.id === 'me')?.id ?? trip.members[0]?.id;
+  const meName = trip.members.find((m) => m.id === meId)?.name ?? '';
+  const generic = (n: string) => !n.trim() || n === '自分' || n.toLowerCase() === 'me';
+  const [myName, setMyName] = useState(generic(meName) ? '' : meName);
+  const invite = code ? t('inviteText', { name: trip.name, code: prettyCode(code), link: `tripfold://join?c=${code}` }) : '';
+  return (
+    <Sheet visible onClose={onClose}>
+      <Text style={s.sheetTitle}>{t('shareTitle')}</Text>
+      <Text style={[s.kicker, { marginBottom: 8 }]}>{t('coEdit').toUpperCase()}</Text>
+      {!code ? (
+        <>
+          <Text style={[s.hint, { lineHeight: 20, marginBottom: 12 }]}>{t('coEditHint')}</Text>
+          <Text style={s.label}>{t('yourNameShown')}</Text>
+          <TextInput style={[s.input, { marginBottom: 12 }]} value={myName} onChangeText={setMyName} placeholder={t('myName')} placeholderTextColor={C.sub} />
+          <Pressable
+            style={[s.primary, { marginTop: 0 }, (busy || !myName.trim()) && { opacity: 0.4 }]}
+            disabled={busy || !myName.trim()}
+            onPress={async () => {
+              setBusy(true);
+              setErr('');
+              try {
+                const named = { ...trip, myId: meId, members: trip.members.map((m) => (m.id === meId ? { ...m, name: myName.trim(), u: Date.now() } : m)) };
+                onShared(await startShare(named));
+              } catch {
+                setErr(t('netErr'));
+              }
+              setBusy(false);
+            }}
+          >
+            {busy ? <ActivityIndicator color="#fff" /> : <Text style={s.primaryText}>{t('makeCode')}</Text>}
+          </Pressable>
+        </>
+      ) : (
+        <View style={[s.card, { alignItems: 'center' }]}>
+          <Text style={s.hint}>{t('shareCode')}</Text>
+          <Text style={s.codeBigText} selectable>
+            {prettyCode(code)}
+          </Text>
+          <Text style={[s.hint, { fontSize: 11, marginTop: 4 }]}>
+            {trip.share?.syncedAt ? `${t('synced')} ${new Date(trip.share.syncedAt).toLocaleTimeString().slice(0, 5)}` : ''}
+            {trip.share?.dirty ? `  ・  ${t('pending')}` : ''}
+          </Text>
+          <Pressable style={[s.primary, { alignSelf: 'stretch' }]} onPress={() => Share.share({ message: invite })}>
+            <Text style={s.primaryText}>{t('sendCode')}</Text>
+          </Pressable>
+          <Pressable onPress={() => (sure ? (onStop(), onClose()) : setSure(true))} style={{ marginTop: 14 }}>
+            <Text style={{ color: sure ? C.pink : C.sub, fontWeight: '700' }}>{sure ? t('stopShareSure') : t('stopShare')}</Text>
+          </Pressable>
+        </View>
+      )}
+      {!!err && <Text style={[s.hint, { color: C.pink, marginTop: 8 }]}>{err}</Text>}
+      <Text style={[s.kicker, { marginTop: 22, marginBottom: 8 }]}>{t('shareText').toUpperCase()}</Text>
+      <Pressable style={[s.secondary]} onPress={() => Share.share({ message: itineraryText(trip) })}>
+        <Icon name="document-text-outline" size={17} />
+        <Text style={s.secondaryText}>{t('sendItinerary')}</Text>
+      </Pressable>
+    </Sheet>
+  );
+}
+
+function JoinSheet({ initialCode, myName, onClose, onJoin }: { initialCode: string; myName: string; onClose: () => void; onJoin: (t: Trip) => void }) {
+  const [code, setCode] = useState(initialCode);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [found, setFound] = useState<{ trip: Trip; rev: number } | null>(null);
+  const [name, setName] = useState(myName);
+  const look = async (c = code) => {
+    const n = normCode(c);
+    if (n.length !== 8) return setErr(t('codeLen'));
+    setBusy(true);
+    setErr('');
+    try {
+      setFound(await fetchShared(n));
+    } catch (e: any) {
+      setErr(e?.status === 404 ? t('codeNotFound') : t('netErr'));
+    }
+    setBusy(false);
+  };
+  useEffect(() => {
+    if (normCode(initialCode).length === 8) look(initialCode);
+  }, []);
+  const join = (myId: string, extra?: { id: string; name: string }) => {
+    const tr = found!.trip;
+    const members = extra ? [...tr.members, { ...extra, u: Date.now() }] : tr.members;
+    onJoin({ ...tr, members, myId, share: { code: normCode(code), rev: found!.rev, dirty: !!extra, syncedAt: Date.now() } });
+  };
+  return (
+    <Sheet visible onClose={onClose}>
+      <Text style={s.sheetTitle}>{t('joinByCode')}</Text>
+      {!found ? (
+        <>
+          <TextInput
+            style={[s.input, { fontSize: 24, fontWeight: '900', letterSpacing: 4, textAlign: 'center' }]}
+            value={code}
+            onChangeText={(v) => setCode(v.toUpperCase())}
+            placeholder="XXXX-XXXX"
+            placeholderTextColor={C.sub}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            onSubmitEditing={() => look()}
+          />
+          <Pressable style={[s.primary, busy && { opacity: 0.5 }]} disabled={busy} onPress={() => look()}>
+            {busy ? <ActivityIndicator color="#fff" /> : <Text style={s.primaryText}>{t('findTrip')}</Text>}
+          </Pressable>
+        </>
+      ) : (
+        <>
+          <View style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
+            <Cover trip={found.trip} size={48} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.tlTitle}>{found.trip.name}</Text>
+              <Text style={s.hint}>{t('nBookings', { n: found.trip.bookings.length })}</Text>
+            </View>
+          </View>
+          <Text style={s.label}>{t('whoAreYou')}</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {found.trip.members.map((m) => (
+              <Pressable key={m.id} onPress={() => join(m.id)} style={s.typeChip}>
+                <Text style={s.chipText}>{m.name}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={s.label}>{t('orAddMe')}</Text>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TextInput style={[s.input, { flex: 1 }]} value={name} onChangeText={setName} placeholder={t('myName')} placeholderTextColor={C.sub} />
+            <Pressable style={[s.smallBtn, !name.trim() && { opacity: 0.35 }]} disabled={!name.trim()} onPress={() => {
+              const id = uid();
+              join(id, { id, name: name.trim() });
+            }}>
+              <Icon name="add" size={20} color="#fff" />
+            </Pressable>
+          </View>
+        </>
+      )}
+      {!!err && <Text style={[s.hint, { color: C.pink, marginTop: 8 }]}>{err}</Text>}
+    </Sheet>
+  );
+}
+
 /* ---------------- 行きたい場所 ---------------- */
 function WishSection({ trip, onChange, onToPlan }: { trip: Trip; onChange: (fn: (t: Trip) => Trip) => void; onToPlan: (w: Wish) => void }) {
   const [edit, setEdit] = useState<Wish | 'new' | null>(null);
@@ -1464,7 +1709,7 @@ function ExpenseBox({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onCh
   const [amt, setAmt] = useState('');
   const [cur, setCur] = useState(last ?? trip.bookings.find((b) => b.currency && b.currency !== rate.base)?.currency ?? rate.base);
   const [cat, setCat] = useState<ExpenseCat>('meal');
-  const [payer, setPayer] = useState(trip.members[0]?.id);
+  const [payer, setPayer] = useState(trip.myId && trip.members.some((m) => m.id === trip.myId) ? trip.myId : trip.members[0]?.id);
   const c = findCurrency(cur);
   const list = trip.expenses ?? [];
   const sum = list.reduce((a, e) => a + toHome(e.amount, e.currency, rate), 0);
@@ -1684,11 +1929,13 @@ function NewTripSheet({
   onClose,
   onCreate,
   edit,
+  onJoin,
 }: {
   visible: boolean;
   onClose: () => void;
   onCreate: (name: string, color: string, cover?: string) => void;
   edit?: Trip;
+  onJoin?: () => void;
 }) {
   const [name, setName] = useState(edit?.name ?? '');
   const [color, setColor] = useState(edit ? coverOf(edit) : COVERS[0]);
@@ -1735,6 +1982,12 @@ function NewTripSheet({
       >
         <Text style={s.primaryText}>{edit ? t('save') : t('create')}</Text>
       </Pressable>
+      {!edit && onJoin && (
+        <Pressable onPress={onJoin} style={{ alignSelf: 'center', marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Icon name="people-outline" size={16} color={C.pink} />
+          <Text style={{ color: C.pink, fontWeight: '800' }}>{t('joinByCode')}</Text>
+        </Pressable>
+      )}
     </Sheet>
   );
 }
@@ -1762,8 +2015,8 @@ function AddBookingSheet({
   const [b, setB] = useState<Booking>(
     edit ??
       (initial?.planDate
-        ? { id: uid(), type: 'plan', title: initial.planTitle ?? '', start: initial.planDate, memo: initial.planMemo, from: initial.planFrom, currency: home, createdAt: Date.now() }
-        : { id: uid(), type: 'flight', title: '', start: tripRange(trip).start ?? todayStr(), currency: home, createdAt: Date.now() }),
+        ? { id: uid(), type: 'plan', title: initial.planTitle ?? '', start: initial.planDate, memo: initial.planMemo, from: initial.planFrom, currency: home, paidBy: trip.myId, createdAt: Date.now() }
+        : { id: uid(), type: 'flight', title: '', start: tripRange(trip).start ?? todayStr(), currency: home, paidBy: trip.myId, createdAt: Date.now() }),
   );
   const set = (p: Partial<Booking>) => setB((x) => ({ ...x, ...p }));
   const applyParsed = (src: string, photo?: string) => {
