@@ -410,7 +410,6 @@ function Main() {
         />
       ) : (
         <Home
-          showInspire={settings.inspire !== false}
           trips={trips}
           rate={rate}
           onOpen={setOpenId}
@@ -612,7 +611,6 @@ function Main() {
 
 /* ---------------- ホーム ---------------- */
 function Home({
-  showInspire,
   trips,
   rate,
   onOpen,
@@ -620,7 +618,6 @@ function Home({
   onSettings,
   onOpenBooking,
 }: {
-  showInspire: boolean;
   trips: Trip[];
   rate: RateInfo;
   onOpen: (id: string) => void;
@@ -681,7 +678,7 @@ function Home({
         .map((tr) => (
           <TripCard key={tr.id} trip={tr} rate={rate} onPress={() => onOpen(tr.id)} />
         ))}
-      {showInspire && <Inspire trips={trips} />}
+      <Inspire trips={trips} />
       <Memories trips={sorted.filter((tr) => isPast(tr))} onOpen={onOpen} />
       <YearSummary trips={trips} rate={rate} />
     </ScrollView>
@@ -2282,7 +2279,9 @@ function Suggest({ trip, city }: { trip: Trip; city?: string }) {
 }
 
 // ホームの「〇〇に行きませんか？」：行ったことのある国に近い地域の、まだ行っていない国を日ごとに選ぶ（100か国・500都市）
+let inspireClosed = false; // × で閉じたら、次にアプリを開くまで出さない
 function Inspire({ trips }: { trips: Trip[] }) {
+  const [closed, setClosed] = useState(inspireClosed);
   const pick = useMemo(() => {
     const been = new Set([...countriesOf(trips, myTz()), TZ_HOME()]);
     const regions = new Set(PLACES.filter((p) => been.has(p[0])).map((p) => p[1]));
@@ -2296,7 +2295,7 @@ function Inspire({ trips }: { trips: Trip[] }) {
     const city = c[2][Math.floor(rnd(c[2].length, 13))];
     return { cc: c[0], city, near: regions.size > 0 && near.has(c[1]) };
   }, [trips]);
-  if (!pick) return null;
+  if (!pick || closed) return null;
   const ja = getLang() === 'ja';
   const name = ja ? pick.city[1] : pick.city[0];
   let country = pick.cc;
@@ -2309,6 +2308,12 @@ function Inspire({ trips }: { trips: Trip[] }) {
         <Text style={{ fontSize: 22 }}>{flag(pick.cc)}</Text>
         <Text style={[s.tlTitle, { flex: 1 }]}>{t('inspireTitle', { city: name })}</Text>
         <Text style={[s.hint, { fontSize: 10, fontWeight: '800' }]}>PR</Text>
+        <Pressable hitSlop={10} onPress={() => {
+          inspireClosed = true;
+          setClosed(true);
+        }}>
+          <Icon name="close" size={16} color={C.sub} />
+        </Pressable>
       </View>
       <Text style={[s.hint, { marginTop: 2 }]}>{`${country}${dot()}${pick.near ? t('inspireNear') : t('inspireSub')}`}</Text>
       <FindRow title={t('inspireFind', { city: name })} links={inspireLinks(pick.city[0])} />
@@ -3310,14 +3315,6 @@ function SettingsBody({ settings, onChange }: { settings: Settings; onChange: (s
         {(['auto', 'light', 'dark'] as const).map((v) => (
           <Pressable key={v} onPress={() => onChange({ ...settings, theme: v })} style={[s.typeChip, (settings.theme ?? 'auto') === v && { backgroundColor: C.ink, borderColor: C.ink }]}>
             <Text style={[s.chipText, (settings.theme ?? 'auto') === v && { color: C.onInk }]}>{v === 'auto' ? t('themeAuto') : v === 'light' ? t('themeLight') : t('themeDark')}</Text>
-          </Pressable>
-        ))}
-      </View>
-      <Text style={s.label}>{t('inspireSetting')}</Text>
-      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-        {([true, false] as const).map((v) => (
-          <Pressable key={String(v)} onPress={() => onChange({ ...settings, inspire: v })} style={[s.typeChip, (settings.inspire !== false) === v && { backgroundColor: C.ink, borderColor: C.ink }]}>
-            <Text style={[s.chipText, (settings.inspire !== false) === v && { color: C.onInk }]}>{v ? 'ON' : 'OFF'}</Text>
           </Pressable>
         ))}
       </View>
