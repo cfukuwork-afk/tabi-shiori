@@ -71,3 +71,43 @@ export function currencyName(code: string): string {
   }
   return EN_NAMES[code] ?? code;
 }
+
+/** 国名で通貨を探すための言葉（日本語・英語） */
+export const CUR_COUNTRIES: Record<string, string> = {
+  JPY: '日本 japan',
+  GBP: 'イギリス 英国 ロンドン スコットランド uk united kingdom britain england scotland london',
+  USD: 'アメリカ 米国 ハワイ グアム usa united states america hawaii guam エクアドル パナマ',
+  EUR: 'ユーロ ヨーロッパ ドイツ フランス イタリア スペイン オランダ ベルギー オーストリア ポルトガル アイルランド フィンランド ギリシャ クロアチア スロバキア スロベニア エストニア ラトビア リトアニア ルクセンブルク マルタ キプロス モナコ euro europe germany france italy spain netherlands belgium austria portugal ireland finland greece croatia paris rome',
+  AUD: 'オーストラリア australia シドニー',
+  CAD: 'カナダ canada',
+  NZD: 'ニュージーランド new zealand',
+  KRW: '韓国 ソウル korea seoul',
+  CNY: '中国 china 上海 北京',
+  TWD: '台湾 taiwan 台北',
+  HKD: '香港 hong kong',
+  SGD: 'シンガポール singapore',
+  THB: 'タイ thailand バンコク',
+  PHP: 'フィリピン philippines セブ',
+  MYR: 'マレーシア malaysia',
+  IDR: 'インドネシア indonesia バリ bali',
+  VND: 'ベトナム vietnam',
+  INR: 'インド india',
+  CHF: 'スイス switzerland リヒテンシュタイン',
+  SEK: 'スウェーデン sweden',
+  NOK: 'ノルウェー norway',
+  DKK: 'デンマーク denmark',
+  ISK: 'アイスランド iceland',
+  PLN: 'ポーランド poland',
+  CZK: 'チェコ czech プラハ',
+  HUF: 'ハンガリー hungary',
+  TRY: 'トルコ turkey türkiye イスタンブール',
+  AED: 'アラブ首長国連邦 ドバイ uae dubai abu dhabi',
+  ILS: 'イスラエル israel',
+  ZAR: '南アフリカ south africa',
+  MXN: 'メキシコ mexico',
+  BRL: 'ブラジル brazil',
+  ARS: 'アルゼンチン argentina',
+  QAR: 'カタール qatar ドーハ',
+  SAR: 'サウジアラビア saudi arabia',
+  CLP: 'チリ chile',
+};

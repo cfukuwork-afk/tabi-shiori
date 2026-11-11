@@ -242,7 +242,7 @@ export function parseBooking(text: string, today = new Date()): Partial<Booking>
     out.title = brand ? brand[1].replace(/\b\w/g, (c) => c.toUpperCase()) : firstMatch(t, /((?:のぞみ|ひかり|こだま|はやぶさ|さくら|みずほ)\s?\d+号)/);
   } else if (type === 'hotel') {
     out.title = firstMatch(t, /^\s*((?:hotel|ホテル|hostel|旅館)[^\n]{0,40}|[^\n]{0,40}(?:hotel|ホテル|inn|hostel|旅館|resort|suites))\s*$/im);
-    out.from = firstMatch(t, /(?:address|住所|所在地)\s*[:：]?\s*([^\n]{5,80})/i);
+    out.from = firstMatch(t, /(?:address|adresse|dirección|indirizzo|住所|所在地)\s*[:：]?\s*([^\n]{5,80})/i);
     const room = firstMatch(t, /(?:room type|部屋タイプ|客室)\s*[:：]?\s*([^\n]{2,40})/i);
     if (room) out.seat = room;
   } else if (type === 'car') {
@@ -250,6 +250,8 @@ export function parseBooking(text: string, today = new Date()): Partial<Booking>
     out.from = firstMatch(t, /(?:pick-?up (?:location|at)|受取(?:場所|店舗)?|貸出(?:場所|店舗)?)\s*[:：]?\s*([^\n]{3,60})/i);
     out.to = firstMatch(t, /(?:drop-?off (?:location|at)|return (?:location|at)|返却(?:場所|店舗)?)\s*[:：]?\s*([^\n]{3,60})/i);
   } else {
+    const addr = firstMatch(t, /(?:address|adresse|dirección|indirizzo|住所|所在地|location|venue|会場|集合場所|meeting point|店舗住所)\s*[:：]\s*([^\n]{4,80})/i);
+    if (addr) out.from = addr;
     // 1行目のそれらしい名前
     const first = t.split('\n').map(cleanLine).find((l) => l.length >= 3 && l.length <= 40 && !/^\d/.test(l));
     if (first) out.title = first;

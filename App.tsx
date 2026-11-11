@@ -18,8 +18,12 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { openMap, placeQuery, setMapApp, tripCity, MapApp } from './src/maps';
+import { bookingTz, arrivalTz, fillTimezones } from './src/geo';
+import MapTab from './src/MapTab';
 import {
   Booking,
   BookingType,
@@ -60,11 +64,11 @@ import {
 } from './src/data';
 import { prettyDate, setLang, t, typeName } from './src/i18n';
 import { parseBooking } from './src/parse';
-import { CURRENCIES, findCurrency } from './src/currencies';
+import { CURRENCIES, CUR_COUNTRIES, findCurrency } from './src/currencies';
 import { C, cleanNum, shadow } from './src/theme';
 import { ocrAvailable, recognizeReceipt } from './modules/receipt-ocr';
 import { askPermission, rescheduleAll } from './src/notify';
-import { toMyTime } from './src/airports';
+import { toMyTime, tzToMyTime, localToDate } from './src/airports';
 import { Directory, File as FSFile, Paths } from 'expo-file-system';
 import * as ExpoLinking from 'expo-linking';
 
@@ -84,7 +88,13 @@ function keepImage(uri: string) {
 }
 
 const SHARE_NATIVE = !!requireOptionalNativeModule('ExpoShareIntentModule');
-const openMap = (q: string) => Linking.openURL(`https://maps.apple.com/?q=${encodeURIComponent(q)}`);
+/** 予約の種類ごとの「場所」欄の名前。2つ目が null なら到着地の欄は出さない */
+const placeLabels = (ty: BookingType): [string, string | null] =>
+  ty === 'flight' ? [t('fromAirport'), t('toAirport')]
+  : ty === 'train' || ty === 'bus' ? [t('fromStation'), t('toStation')]
+  : ty === 'car' ? [t('pickupAt'), t('returnAt')]
+  : ty === 'plan' ? [t('place'), null]
+  : [t('address'), null];
 const catName = (c: ExpenseCat) => t(('cat' + c[0].toUpperCase() + c.slice(1)) as any);
 
 /** しおりを文字にして共有（LINE・メールなど） */
@@ -114,6 +124,7 @@ const BUNDLED: Record<string, any> = {
   'asset:matcha': require('./assets/covers/matcha.jpg'),
   'asset:window': require('./assets/covers/window.jpg'),
   'asset:croissant': require('./assets/covers/croissant.jpg'),
+  'asset:ticket': require('./assets/covers/ticket.jpg'),
 };
 const imgSrc = (u: string) => BUNDLED[u] ?? { uri: u };
 
@@ -185,6 +196,7 @@ function Main() {
   }, [trips, settings.notify, settings.lang, ready]);
 
   setLang(settings.lang);
+  setMapApp(settings.mapApp ?? 'ask');
 
   useEffect(() => {
     (async () => {
@@ -331,6 +343,7 @@ function Main() {
             updateTrip(detailTrip.id, (tr) => ({ ...tr, bookings: tr.bookings.filter((x) => x.id !== detailBooking.id) }));
             setDetail(null);
           }}
+          onUpdate={(nb) => updateTrip(detailTrip.id, (tr) => ({ ...tr, bookings: tr.bookings.map((x) => (x.id === nb.id ? nb : x)) }))}
         />
       )}
 
@@ -383,6 +396,7 @@ function Home({
   onOpenBooking: (tripId: string, id: string) => void;
 }) {
   const next = useMemo(() => nextUp(trips), [trips]);
+  const [tickets, setTickets] = useState<string[] | null>(null);
   const sorted = useMemo(() => {
     const today = todayStr();
     return [...trips].sort((a, b) => {
@@ -396,6 +410,7 @@ function Home({
   }, [trips]);
   return (
     <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 120 }}>
+      {tickets && <TicketViewer photos={tickets} onClose={() => setTickets(null)} />}
       <View style={s.headRow}>
         <View>
           <Text style={s.kicker}>{greeting()}</Text>
@@ -408,7 +423,7 @@ function Home({
 
       <Text style={s.sec}>{t('nextUp').toUpperCase()}</Text>
       {next ? (
-        <NextCard next={next} onPress={() => onOpenBooking(next.trip.id, next.item.booking.id)} />
+        <NextCard next={next} onPress={() => onOpenBooking(next.trip.id, next.item.booking.id)} onTickets={() => setTickets(next.item.booking.photos ?? null)} />
       ) : (
         <View style={[s.card, { alignItems: 'center', paddingVertical: 22 }]}>
           <Text style={s.hint}>{t('noNext')}</Text>
@@ -571,7 +586,49 @@ function TripCard({ trip, rate, onPress }: { trip: Trip; rate: RateInfo; onPress
   );
 }
 
-function NextCard({ next, onPress }: { next: NonNullable<ReturnType<typeof nextUp>>; onPress: () => void }) {
+/** チケット・QRを全画面で見せる（画面を明るくして読み取りやすく） */
+function TicketViewer({ photos, start = 0, onClose }: { photos: string[]; start?: number; onClose: () => void }) {
+  const { width, height } = useWindowDimensions();
+  const [i, setI] = useState(start);
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    let prev: number | null = null;
+    let B: any = null;
+    try {
+      B = require('expo-brightness');
+      B.getBrightnessAsync().then((v: number) => {
+        prev = v;
+        B.setBrightnessAsync(1).catch(() => {});
+      });
+    } catch {}
+    return () => {
+      if (B && prev !== null) B.setBrightnessAsync(prev).catch(() => {});
+    };
+  }, []);
+  return (
+    <Modal visible animationType="fade" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: '#fff' }}>
+        <ScrollView
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          contentOffset={{ x: start * width, y: 0 }}
+          onMomentumScrollEnd={(e) => setI(Math.round(e.nativeEvent.contentOffset.x / width))}
+        >
+          {photos.map((p) => (
+            <Image key={p} source={imgSrc(p)} style={{ width, height }} resizeMode="contain" />
+          ))}
+        </ScrollView>
+        <Pressable onPress={onClose} hitSlop={14} style={s.viewerClose}>
+          <Icon name="close" size={22} color="#fff" />
+        </Pressable>
+        {photos.length > 1 && <Text style={s.viewerCount}>{`${i + 1} / ${photos.length}`}</Text>}
+      </View>
+    </Modal>
+  );
+}
+
+function NextCard({ next, onPress, onTickets }: { next: NonNullable<ReturnType<typeof nextUp>>; onPress: () => void; onTickets?: () => void }) {
   const b = next.item.booking;
   const ty = typeOf(b.type);
   const n = daysBetween(todayStr(), next.date);
@@ -634,9 +691,17 @@ function NextCard({ next, onPress }: { next: NonNullable<ReturnType<typeof nextU
           </Text>
         </View>
       )}
-      <Text style={s.passTrip} numberOfLines={1}>
-        {next.trip.name}
-      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 14 }}>
+        <Text style={[s.passTrip, { flex: 1, marginTop: 0 }]} numberOfLines={1}>
+          {next.trip.name}
+        </Text>
+        {!!b.photos?.length && onTickets && (
+          <Pressable onPress={onTickets} hitSlop={8} style={s.ticketPill}>
+            <Icon name="qr-code" size={14} color={C.ink} />
+            <Text style={s.ticketPillText}>{t('showTicket')}</Text>
+          </Pressable>
+        )}
+      </View>
     </Pressable>
   );
 }
@@ -658,7 +723,7 @@ const greeting = () => {
 };
 
 /* ---------------- 旅行の画面 ---------------- */
-type Tab = 'plan' | 'bookings' | 'money' | 'pack';
+type Tab = 'plan' | 'bookings' | 'map' | 'money' | 'pack';
 function TripScreen({
   trip,
   rate,
@@ -684,6 +749,18 @@ function TripScreen({
 }) {
   const [tab, setTab] = useState<Tab>('plan');
   const scrollRef = useRef<any>(null);
+  const [editing, setEditing] = useState(false);
+  // 予約の現地タイムゾーンを調べて保存（通知や「自分の時間」の表示に使う）
+  useEffect(() => {
+    let off = false;
+    fillTimezones(trip).then((found) => {
+      if (off || !Object.keys(found).length) return;
+      onChange((tr) => ({ ...tr, bookings: tr.bookings.map((b) => (found[b.id] && !b.tz ? { ...b, tz: found[b.id] } : b)) }));
+    });
+    return () => {
+      off = true;
+    };
+  }, [trip.bookings.map((b) => b.id + (b.from ?? '') + (b.tz ?? '')).join('|')]);
   useEffect(() => scrollRef.current?.scrollTo({ y: 0, animated: false }), [tab]);
   const [journalDay, setJournalDay] = useState<string | null>(null);
   const [sure, setSure] = useState(false);
@@ -707,24 +784,27 @@ function TripScreen({
             <Icon name="camera" size={10} color="#fff" />
           </View>
         </Pressable>
-        <View style={{ flex: 1 }}>
-          <Text style={s.tripHeadName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-            {trip.name}
-          </Text>
+        <Pressable style={{ flex: 1 }} onPress={() => setEditing(true)} accessibilityHint={t('tapToRename')}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+            <Text style={[s.tripHeadName, { flexShrink: 1 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+              {trip.name}
+            </Text>
+            <Icon name="pencil" size={13} color={C.sub} />
+          </View>
           <Text style={s.hint}>
             {start ? `${prettyDate(start)}${end && end !== start ? ' 〜 ' + prettyDate(end) : ''}` : t('undated')}
             {total > 0 ? `  ・  ${fmtMoney(Math.round(total), rate.base)}` : ''}
           </Text>
-        </View>
+        </Pressable>
         <Pressable onPress={onShare} hitSlop={12} style={s.back}>
           <Icon name="share-outline" size={19} />
         </Pressable>
       </View>
       <View style={s.tabs}>
-        {(['plan', 'bookings', 'money', 'pack'] as Tab[]).map((k) => (
+        {(['plan', 'bookings', 'map', 'money', 'pack'] as Tab[]).map((k) => (
           <Pressable key={k} onPress={() => setTab(k)} style={s.tab}>
             <Text style={[s.tabText, tab === k && { color: C.ink }]}>
-              {k === 'plan' ? t('tabPlan') : k === 'bookings' ? t('tabBookings') : k === 'money' ? t('tabMoney') : t('tabPack')}
+              {k === 'plan' ? t('tabPlan') : k === 'bookings' ? t('tabBookings') : k === 'map' ? t('tabMap') : k === 'money' ? t('tabMoney') : t('tabPack')}
             </Text>
             <View style={[s.tabBar, tab === k && { backgroundColor: C.ink }]} />
           </Pressable>
@@ -739,6 +819,7 @@ function TripScreen({
       >
         {tab === 'plan' && <PlanTab trip={trip} onOpen={onOpen} onJournal={setJournalDay} onAddPlan={onAddPlan} />}
         {tab === 'bookings' && <BookingsTab trip={trip} rate={rate} onOpen={onOpen} />}
+        {tab === 'map' && <MapTab trip={trip} onOpen={onOpen} />}
         {tab === 'money' && <MoneyTab trip={trip} rate={rate} onChange={onChange} />}
         {tab === 'pack' && <PackTab trip={trip} onChange={onChange} />}
         <Pressable onPress={() => (sure ? onDelete() : setSure(true))} style={{ alignSelf: 'center', marginTop: 30 }}>
@@ -751,6 +832,15 @@ function TripScreen({
           <Text style={s.fabText}>{t('addBooking')}</Text>
         </Pressable>
       )}
+      <NewTripSheet
+        visible={editing}
+        edit={trip}
+        onClose={() => setEditing(false)}
+        onCreate={(name, color, cover) => {
+          onChange((tr) => ({ ...tr, name, emoji: color, cover }));
+          setEditing(false);
+        }}
+      />
       {journalDay && (
         <JournalSheet
           date={journalDay}
@@ -1363,13 +1453,30 @@ function PickTripSheet({ trips, onClose, onPick }: { trips: Trip[]; onClose: () 
   );
 }
 
-function NewTripSheet({ visible, onClose, onCreate }: { visible: boolean; onClose: () => void; onCreate: (name: string, color: string, cover?: string) => void }) {
-  const [name, setName] = useState('');
-  const [color, setColor] = useState(COVERS[0]);
-  const [cover, setCover] = useState<string | undefined>();
+function NewTripSheet({
+  visible,
+  onClose,
+  onCreate,
+  edit,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onCreate: (name: string, color: string, cover?: string) => void;
+  edit?: Trip;
+}) {
+  const [name, setName] = useState(edit?.name ?? '');
+  const [color, setColor] = useState(edit ? coverOf(edit) : COVERS[0]);
+  const [cover, setCover] = useState<string | undefined>(edit?.cover);
+  useEffect(() => {
+    if (visible && edit) {
+      setName(edit.name);
+      setColor(coverOf(edit));
+      setCover(edit.cover);
+    }
+  }, [visible]);
   return (
     <Sheet visible={visible} onClose={onClose}>
-      <Text style={s.sheetTitle}>{t('newTrip')}</Text>
+      <Text style={s.sheetTitle}>{edit ? t('editTrip') : t('newTrip')}</Text>
       <View style={{ alignItems: 'center', marginBottom: 16 }}>
         <Pressable
           onPress={async () => {
@@ -1400,7 +1507,7 @@ function NewTripSheet({ visible, onClose, onCreate }: { visible: boolean; onClos
           setCover(undefined);
         }}
       >
-        <Text style={s.primaryText}>{t('create')}</Text>
+        <Text style={s.primaryText}>{edit ? t('save') : t('create')}</Text>
       </Pressable>
     </Sheet>
   );
@@ -1574,8 +1681,8 @@ function AddBookingSheet({
             <DateField label={t('endDate')} value={b.end ?? ''} onChange={(v) => set({ end: v || undefined })} optional />
             <Field label={t('time')} value={b.endTime ?? ''} onChange={(v) => set({ endTime: v || undefined })} placeholder="11:00" small />
           </View>
-          <Field label={t('from')} value={b.from ?? ''} onChange={(v) => set({ from: v || undefined })} />
-          <Field label={t('to')} value={b.to ?? ''} onChange={(v) => set({ to: v || undefined })} />
+          <Field label={placeLabels(b.type)[0]} value={b.from ?? ''} onChange={(v) => set({ from: v || undefined, tz: undefined })} placeholder={placeLabels(b.type)[1] ? undefined : t('addressPh')} />
+          {(placeLabels(b.type)[1] || !!b.to) && <Field label={placeLabels(b.type)[1] ?? t('to')} value={b.to ?? ''} onChange={(v) => set({ to: v || undefined })} />}
           <View style={s.two}>
             <Field label={t('code')} value={b.code ?? ''} onChange={(v) => set({ code: v || undefined })} />
             <Field label={t('seat')} value={b.seat ?? ''} onChange={(v) => set({ seat: v || undefined })} small />
@@ -1724,7 +1831,12 @@ function DateField({ label, value, onChange, optional }: { label: string; value:
 
 function CurrencyPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
   const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
   const c = findCurrency(value);
+  const qq = q.trim().toLowerCase();
+  const list = qq
+    ? CURRENCIES.filter((x) => `${x.code} ${x.name} ${x.symbol} ${CUR_COUNTRIES[x.code] ?? ''}`.toLowerCase().includes(qq))
+    : CURRENCIES;
   return (
     <>
       <Pressable style={s.curBtn} onPress={() => setOpen(true)}>
@@ -1732,23 +1844,33 @@ function CurrencyPicker({ value, onChange }: { value: string; onChange: (c: stri
       </Pressable>
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <Pressable style={s.curWrap} onPress={() => setOpen(false)}>
-          <View style={s.curList}>
-            <ScrollView>
-              {CURRENCIES.map((x) => (
+          <Pressable style={s.curList} onPress={() => {}}>
+            <TextInput
+              style={[s.input, { marginBottom: 8 }]}
+              value={q}
+              onChangeText={setQ}
+              placeholder={t('searchCur')}
+              placeholderTextColor={C.sub}
+              autoCorrect={false}
+              clearButtonMode="while-editing"
+            />
+            <ScrollView keyboardShouldPersistTaps="handled">
+              {list.map((x) => (
                 <Pressable
                   key={x.code}
                   style={[s.curRow, x.code === value && { backgroundColor: C.pinkSoft }]}
                   onPress={() => {
                     onChange(x.code);
                     setOpen(false);
+                    setQ('');
                   }}
                 >
                   <Text style={s.tlTitle}>{x.code}</Text>
-                  <Text style={s.hint}>{x.symbol}</Text>
+                  <Text style={[s.hint, { flex: 1 }]} numberOfLines={1}>{`${x.symbol.trim()}  ${x.name}`}</Text>
                 </Pressable>
               ))}
             </ScrollView>
-          </View>
+          </Pressable>
         </Pressable>
       </Modal>
     </>
@@ -1763,6 +1885,7 @@ function BookingDetail({
   onClose,
   onEdit,
   onDelete,
+  onUpdate,
 }: {
   trip: Trip;
   b: Booking;
@@ -1770,7 +1893,15 @@ function BookingDetail({
   onClose: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onUpdate: (b: Booking) => void;
 }) {
+  const [viewer, setViewer] = useState<number | null>(null);
+  const attach = async () => {
+    try {
+      const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, quality: 0.9 });
+      if (!r.canceled) onUpdate({ ...b, photos: [...(b.photos ?? []), ...r.assets.map((a) => keepImage(a.uri))] });
+    } catch {}
+  };
   const ty = typeOf(b.type);
   const [copied, setCopied] = useState(false);
   const [sure, setSure] = useState(false);
@@ -1788,6 +1919,20 @@ function BookingDetail({
             <Text style={s.detailTitle}>{b.title || typeName(b.type)}</Text>
           </View>
         </View>
+        <Text style={s.sec}>{t('ticketsSec').toUpperCase()}</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ flexGrow: 0, marginBottom: 14 }}>
+          {(b.photos ?? []).map((p, i) => (
+            <Pressable key={p} onPress={() => setViewer(i)} onLongPress={() => onUpdate({ ...b, photos: b.photos!.filter((x) => x !== p) })}>
+              <Image source={imgSrc(p)} style={s.ticketThumb} />
+            </Pressable>
+          ))}
+          <Pressable onPress={attach} style={s.ticketAdd}>
+            <Icon name="qr-code-outline" size={22} color={C.sub} />
+            <Text style={[s.hint, { fontSize: 11, textAlign: 'center' }]}>{t('attachTicket')}</Text>
+          </Pressable>
+        </ScrollView>
+        {!!b.photos?.length && <Text style={[s.hint, { marginTop: -8, marginBottom: 10, fontSize: 11 }]}>{t('ticketHint')}</Text>}
+        {viewer !== null && b.photos?.length ? <TicketViewer photos={b.photos} start={viewer} onClose={() => setViewer(null)} /> : null}
         {!!b.code && (
           <Pressable
             style={s.codeBig}
@@ -1816,8 +1961,17 @@ function BookingDetail({
             />
           )}
           {!isDate(b.end) && b.endTime && <Info k={t('time')} v={`→ ${b.endTime}`} />}
-          {!!b.from && <Info k={b.type === 'plan' ? t('place') : t('from')} v={b.from} onMap />}
-          {!!b.to && <Info k={t('to')} v={b.to} onMap />}
+          {!!b.from && <Info k={placeLabels(b.type)[0].replace(/（.*）| \(.*\)/, '')} v={b.from} q={placeQuery(b, 'from', tripCity(trip.bookings))} />}
+          {!b.from && ['hotel', 'ticket', 'food', 'plan', 'other'].includes(b.type) && !!b.title && (
+            <Info k={placeLabels(b.type)[0]} v={b.title} q={placeQuery(b, 'from', tripCity(trip.bookings))} />
+          )}
+          {!!b.to && <Info k={(placeLabels(b.type)[1] ?? t('to')).replace(/（.*）| \(.*\)/, '')} v={b.to} q={placeQuery(b, 'to')} />}
+          {b.type !== 'flight' && (() => {
+            const tz = bookingTz(b, trip);
+            const st = tzToMyTime(tz, b.start, b.startTime);
+            if (!st || st.diffH === 0) return null;
+            return <Info k={t('startMine')} v={`${st.time}  (${t('tzDiff')} ${st.diffH > 0 ? '+' : ''}${st.diffH}h)`} />;
+          })()}
           {b.type === 'flight' && (() => {
             const dep = toMyTime(b.from, b.start, b.startTime);
             const arr = toMyTime(b.to, b.end ?? b.start, b.endTime);
@@ -1841,15 +1995,6 @@ function BookingDetail({
           )}
           {!!b.memo && <Info k={t('memo')} v={b.memo} />}
         </View>
-        {!!b.photos?.length && (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-            {b.photos.map((p) => (
-              <Pressable key={p} onPress={() => setZoom(p)}>
-                <Image source={imgSrc(p)} style={s.photoBig} />
-              </Pressable>
-            ))}
-          </View>
-        )}
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
           <Pressable style={[s.secondary, { flex: 1 }]} onPress={onEdit}>
             <Icon name="create-outline" size={17} />
@@ -1870,14 +2015,14 @@ function BookingDetail({
   );
 }
 
-const Info = ({ k, v, onMap }: { k: string; v: string; onMap?: boolean }) => (
+const Info = ({ k, v, q }: { k: string; v: string; q?: string }) => (
   <View style={[s.infoRow, { alignItems: 'center' }]}>
     <Text style={s.infoK}>{k}</Text>
     <Text style={s.infoV} selectable>
       {v}
     </Text>
-    {onMap && (
-      <Pressable onPress={() => openMap(v)} hitSlop={8} style={s.mapBtn}>
+    {!!q && (
+      <Pressable onPress={() => openMap(q)} hitSlop={8} style={s.mapBtn}>
         <Icon name="navigate" size={14} color="#fff" />
       </Pressable>
     )}
@@ -1914,6 +2059,14 @@ function SettingsBody({ settings, onChange }: { settings: Settings; onChange: (s
         {[true, false].map((v) => (
           <Pressable key={String(v)} onPress={() => onChange({ ...settings, notify: v })} style={[s.typeChip, settings.notify === v && { backgroundColor: C.ink, borderColor: C.ink }]}>
             <Text style={[s.chipText, settings.notify === v && { color: '#fff' }]}>{v ? 'ON' : 'OFF'}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <Text style={s.label}>{t('mapApp')}</Text>
+      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+        {(['ask', 'apple', 'google'] as const).map((v) => (
+          <Pressable key={v} onPress={() => onChange({ ...settings, mapApp: v })} style={[s.typeChip, (settings.mapApp ?? 'ask') === v && { backgroundColor: C.ink, borderColor: C.ink }]}>
+            <Text style={[s.chipText, (settings.mapApp ?? 'ask') === v && { color: '#fff' }]}>{v === 'ask' ? t('mapAsk') : v === 'apple' ? 'Apple' : 'Google'}</Text>
           </Pressable>
         ))}
       </View>
@@ -2003,10 +2156,10 @@ function sampleTrip(st: Settings): Trip {
       { id: 'm2', name: ja ? 'ゆき' : 'Yuki' },
     ],
     bookings: [
-      { id: uid(), type: 'train', title: 'Eurostar', start: d(0), startTime: '08:31', endTime: '11:47', from: 'London St Pancras', to: 'Paris Gare du Nord', code: 'QXK7PL', seat: 'Coach 7 / 63, 64', price: 208, currency: 'GBP', paidBy: 'me', createdAt: 1 },
+      { id: uid(), type: 'train', title: 'Eurostar', start: d(0), startTime: '08:31', endTime: '11:47', from: 'London St Pancras', to: 'Paris Gare du Nord', code: 'QXK7PL', seat: 'Coach 7 / 63, 64', price: 208, currency: 'GBP', paidBy: 'me', photos: ['asset:ticket'], createdAt: 1 },
       { id: uid(), type: 'hotel', title: 'Hotel Le Marais', start: d(0), startTime: '15:00', end: d(3), endTime: '11:00', from: '12 Rue de Rivoli, Paris', code: '4821.339.112', price: 420, currency: 'EUR', paidBy: 'm2', createdAt: 2 },
-      { id: uid(), type: 'ticket', title: ja ? 'ルーヴル美術館' : 'Louvre Museum', start: d(1), startTime: '10:00', code: 'LV-55219', price: 44, currency: 'EUR', paidBy: 'me', createdAt: 3 },
-      { id: uid(), type: 'food', title: 'Le Comptoir', start: d(1), startTime: '19:30', memo: ja ? '2名・窓側' : 'Table for 2', createdAt: 4 },
+      { id: uid(), type: 'ticket', title: ja ? 'ルーヴル美術館' : 'Louvre Museum', start: d(1), startTime: '10:00', from: 'Rue de Rivoli, 75001 Paris', code: 'LV-55219', price: 44, currency: 'EUR', paidBy: 'me', createdAt: 3 },
+      { id: uid(), type: 'food', title: 'Le Comptoir du Relais', start: d(1), startTime: '19:30', from: "9 Carrefour de l'Odéon, 75006 Paris", memo: ja ? '2名・窓側' : 'Table for 2', createdAt: 4 },
       { id: uid(), type: 'plan', title: ja ? 'セーヌ川クルーズ' : 'Seine river cruise', start: d(1), startTime: '16:00', endTime: '17:00', from: 'Port de la Bourdonnais', createdAt: 7 },
       { id: uid(), type: 'car', title: 'Europcar', start: d(2), startTime: '09:00', end: d(2), endTime: '18:00', from: 'Paris Gare de Lyon', code: 'EC9921034', price: 89, currency: 'EUR', paidBy: 'm2', createdAt: 5 },
       { id: uid(), type: 'train', title: 'Eurostar', start: d(3), startTime: '17:13', endTime: '18:30', from: 'Paris Gare du Nord', to: 'London St Pancras', code: 'QXK7PL', price: 196, currency: 'GBP', paidBy: 'me', createdAt: 6 },
@@ -2059,6 +2212,12 @@ const s = StyleSheet.create({
   passK: { color: 'rgba(255,255,255,0.5)', fontSize: 10.5, fontWeight: '800', letterSpacing: 1 },
   passV: { color: '#fff', fontSize: 16, fontWeight: '800', marginTop: 3 },
   passCode: { color: '#fff', fontSize: 28, fontWeight: '900', letterSpacing: 3, marginTop: 2, fontVariant: ['tabular-nums'] },
+  ticketPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6 },
+  ticketPillText: { color: C.ink, fontWeight: '800', fontSize: 12 },
+  viewerClose: { position: 'absolute', top: 54, right: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(21,23,28,0.7)', alignItems: 'center', justifyContent: 'center' },
+  viewerCount: { position: 'absolute', bottom: 40, alignSelf: 'center', color: C.sub, fontWeight: '800' },
+  ticketThumb: { width: 96, height: 128, borderRadius: 12, backgroundColor: C.chip, borderWidth: 1, borderColor: C.line },
+  ticketAdd: { width: 96, height: 128, borderRadius: 12, borderWidth: 1, borderStyle: 'dashed', borderColor: C.sub, alignItems: 'center', justifyContent: 'center', gap: 4 },
   passTrip: { color: 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: '700', marginTop: 14 },
   tripHead: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 18, paddingTop: 8, paddingBottom: 4 },
   back: { width: 40, height: 40, borderRadius: 20, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.line },
@@ -2116,9 +2275,9 @@ const s = StyleSheet.create({
   dateBtnText: { fontSize: 18, fontWeight: '900', color: C.ink },
   dateInput: { flex: 1, minWidth: 0, textAlign: 'center', fontSize: 13, fontWeight: '800', color: C.ink, paddingVertical: 10 },
   curBtn: { backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.line, paddingHorizontal: 16, justifyContent: 'center', minHeight: 48 },
-  curWrap: { flex: 1, backgroundColor: 'rgba(21,23,28,0.35)', justifyContent: 'center', padding: 40 },
-  curList: { backgroundColor: C.bg, borderRadius: 22, maxHeight: '70%', padding: 8 },
-  curRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderRadius: 12 },
+  curWrap: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-start', paddingTop: 70, paddingHorizontal: 24 },
+  curList: { backgroundColor: C.bg, borderRadius: 22, maxHeight: '55%', padding: 8 },
+  curRow: { flexDirection: 'row', gap: 12, alignItems: 'center', padding: 12, borderRadius: 12 },
   thumb: { width: 76, height: 110, borderRadius: 12, backgroundColor: '#eee' },
   thumbAdd: { alignItems: 'center', justifyContent: 'center', backgroundColor: C.card, borderWidth: 1, borderColor: C.line, borderStyle: 'dashed' },
   detailHead: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 },

@@ -48,7 +48,7 @@ export type Booking = {
   splitWith?: string[]; // 割り勘する人（空なら全員）
   memo?: string;
   photos?: string[]; // スクショ（端末内のURI）
-  createdAt: number;
+  tz?: string; createdAt: number;
 };
 
 export type Member = { id: string; name: string };
@@ -80,7 +80,7 @@ export type Trip = {
   createdAt: number;
 };
 
-export type Settings = { home: string; myName: string; lang: 'ja' | 'en'; onboarded: boolean; notify: boolean };
+export type Settings = { home: string; myName: string; lang: 'ja' | 'en'; onboarded: boolean; notify: boolean; mapApp?: 'ask' | 'apple' | 'google' };
 
 export type RateInfo = { base: string; rates: Record<string, number>; updatedAt: number };
 
