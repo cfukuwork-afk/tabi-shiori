@@ -49,6 +49,8 @@ export type Booking = {
   memo?: string;
   photos?: string[]; // スクショ（端末内のURI）
   tz?: string; createdAt: number;
+  cancelled?: boolean; // キャンセルのメールで消さずに印をつける
+  u?: number;
 };
 
 export type Member = { id: string; name: string; u?: number };
@@ -62,10 +64,14 @@ export const EXP_CATS: { id: ExpenseCat; icon: string }[] = [
   { id: 'etc', icon: 'ellipsis-horizontal' },
 ];
 /** 旅行中の出費 */
-export type Expense = { id: string; title: string; cat: ExpenseCat; amount: number; currency: string; date: string; paidBy?: string; splitWith?: string[]; u?: number };
+export type Expense = { id: string; title: string; cat: ExpenseCat; amount: number; currency: string; date: string; paidBy?: string; splitWith?: string[]; rate?: number; photo?: string; u?: number };
+/** あとで確認する読み取り（読めなかったメール・画像） */
+export type InboxItem = { id: string; text?: string; image?: string; at: number; u?: number };
+/** 持ち物・お土産 */
+export type CheckItem = { id: string; text: string; done: boolean; kind?: 'gift'; who?: string; photo?: string; u?: number };
 
 /** 行きたい場所（SNSで見つけた所など） */
-export type Wish = { id: string; title: string; url?: string; memo?: string; image?: string; photos?: string[]; u?: number; createdAt: number };
+export type Wish = { id: string; title: string; url?: string; memo?: string; image?: string; photos?: string[]; likes?: string[]; u?: number; createdAt: number };
 
 export type Trip = {
   id: string;
@@ -75,7 +81,8 @@ export type Trip = {
   end?: string;
   members: Member[];
   bookings: Booking[];
-  checklist: { id: string; text: string; done: boolean; u?: number }[];
+  checklist: CheckItem[];
+  inbox?: InboxItem[];
   cover?: string; // 表紙の写真（端末内のURI）
   budget?: number; // 旅行の予算（母国通貨）
   expenses?: Expense[]; // 旅行中の出費（食事・お土産など）
@@ -89,7 +96,7 @@ export type Trip = {
   createdAt: number;
 };
 
-export type Settings = { home: string; myName: string; lang: 'ja' | 'en'; onboarded: boolean; notify: boolean; mapApp?: 'ask' | 'apple' | 'google' };
+export type Settings = { home: string; myName: string; lang: 'ja' | 'en'; onboarded: boolean; notify: boolean; mapApp?: 'ask' | 'apple' | 'google'; theme?: 'auto' | 'light' | 'dark' };
 
 export type RateInfo = { base: string; rates: Record<string, number>; updatedAt: number };
 
@@ -242,11 +249,13 @@ export function nextUp(trips: Trip[], now = todayStr()): { trip: Trip; item: Tim
   return best;
 }
 
-/** 費用の合計（母国通貨） */
+/** 出費を母国通貨に（手で直したレートがあればそれを使う） */
+export const expHome = (e: Expense, r: RateInfo) => (e.rate && e.currency !== r.base ? e.amount * e.rate : toHome(e.amount, e.currency, r));
+/** 費用の合計（母国通貨）。キャンセルした予約は数えない */
 export function tripTotal(t: Trip, r: RateInfo) {
   return (
-    t.bookings.reduce((s, b) => s + (b.price ? toHome(b.price, b.currency || r.base, r) : 0), 0) +
-    (t.expenses ?? []).reduce((s, e) => s + toHome(e.amount, e.currency, r), 0)
+    t.bookings.reduce((s, b) => s + (b.price && !b.cancelled ? toHome(b.price, b.currency || r.base, r) : 0), 0) +
+    (t.expenses ?? []).reduce((s, e) => s + expHome(e, r), 0)
   );
 }
 
@@ -257,12 +266,12 @@ export function settle(t: Trip, r: RateInfo) {
   const owe: Record<string, number> = {};
   ids.forEach((i) => ((paid[i] = 0), (owe[i] = 0)));
   const items = [
-    ...t.bookings.map((b) => ({ price: b.price, currency: b.currency, paidBy: b.paidBy, splitWith: b.splitWith })),
-    ...(t.expenses ?? []).map((e) => ({ price: e.amount, currency: e.currency, paidBy: e.paidBy, splitWith: e.splitWith })),
+    ...t.bookings.filter((b) => !b.cancelled).map((b) => ({ price: b.price, currency: b.currency, paidBy: b.paidBy, splitWith: b.splitWith, home: undefined as number | undefined })),
+    ...(t.expenses ?? []).map((e) => ({ price: e.amount, currency: e.currency, paidBy: e.paidBy, splitWith: e.splitWith, home: expHome(e, r) })),
   ];
   items.forEach((b) => {
     if (!b.price) return;
-    const v = toHome(b.price, b.currency || r.base, r);
+    const v = b.home ?? toHome(b.price, b.currency || r.base, r);
     const payer = b.paidBy && ids.includes(b.paidBy) ? b.paidBy : ids[0];
     const among = (b.splitWith && b.splitWith.length ? b.splitWith : ids).filter((i) => ids.includes(i));
     if (!payer || !among.length) return;

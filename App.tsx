@@ -66,6 +66,7 @@ import {
   toHome,
   tripRange,
   tripTotal,
+  expHome,
   typeOf,
   uid,
 } from './src/data';
@@ -78,6 +79,12 @@ import { askPermission, rescheduleAll } from './src/notify';
 import { toMyTime, tzToMyTime, localToDate } from './src/airports';
 import { Directory, File as FSFile, Paths } from 'expo-file-system';
 import * as ExpoLinking from 'expo-linking';
+import { tripWeather, wxIcon, TripWx } from './src/weather';
+import { exportShioriPdf, exportSettleCsv, exportSettlePdf } from './src/exporters';
+import { exportBackup, importBackup, mergeBackup } from './src/backup';
+import { findPrice } from './src/parse';
+import { SERVER } from './src/sync';
+import { InboxItem } from './src/data';
 
 /** 選んだ写真をアプリの中にコピー（元の写真を消しても、圏外でも見られるように） */
 function keepImage(uri: string) {
@@ -123,6 +130,7 @@ function itineraryText(trip: Trip) {
   return lines.join('\n');
 }
 
+type AddInitial = { text?: string; image?: string; planDate?: string; planTitle?: string; planMemo?: string; planFrom?: string; inboxId?: string };
 /** アプリに入れてある写真（お試し旅行の表紙） */
 const BUNDLED: Record<string, any> = {
   'asset:paris': require('./assets/covers/paris.jpg'),
@@ -157,6 +165,18 @@ const Cover = ({ trip, size = 52 }: { trip: { name: string; emoji: string; cover
       <Text style={{ color: '#fff', fontWeight: '900', fontSize: size * 0.34, letterSpacing: 0.5 }}>{monogram(trip.name)}</Text>
     </View>
   );
+/** 読み取った文字を、上から順・同じ高さは左から順に並べて行にする */
+function rowsOf(lines: { text: string; x: number; y: number; h: number }[]) {
+  const sorted = [...lines].sort((a, c) => (Math.abs(a.y - c.y) < Math.min(a.h, c.h) * 0.5 ? a.x - c.x : a.y - c.y));
+  const rows: string[] = [];
+  let lastY = -1;
+  sorted.forEach((l) => {
+    if (lastY >= 0 && Math.abs(l.y - lastY) < l.h * 0.5) rows[rows.length - 1] += ' ' + l.text;
+    else rows.push(l.text);
+    lastY = l.y;
+  });
+  return rows;
+}
 const pickImage = async () => {
   const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
   return !r.canceled && r.assets?.[0] ? keepImage(r.assets[0].uri) : null;
@@ -179,7 +199,7 @@ function Main() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [newTrip, setNewTrip] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [adding, setAdding] = useState<{ tripId: string; edit?: Booking; initial?: { text?: string; image?: string; planDate?: string; planTitle?: string; planMemo?: string; planFrom?: string } } | null>(null);
+  const [adding, setAdding] = useState<{ tripId: string; edit?: Booking; initial?: AddInitial } | null>(null);
   const [detail, setDetail] = useState<{ tripId: string; id: string } | null>(null);
   const [incoming, setIncoming] = useState<{ text?: string; image?: string } | null>(null);
   const [wishIn, setWishIn] = useState<{ tripId: string; url: string } | null>(null);
@@ -337,6 +357,7 @@ function Main() {
           onAddPlan={(d, extra) => setAdding({ tripId: trip.id, initial: { planDate: d, ...(extra ?? {}) } })}
           onShare={() => setSharing(trip.id)}
           onOpen={(b) => setDetail({ tripId: trip.id, id: b.id })}
+          onInbox={(it) => setAdding({ tripId: trip.id, initial: { text: it.text, image: it.image, inboxId: it.id } })}
         />
       ) : (
         <Home
@@ -455,10 +476,19 @@ function Main() {
           home={settings.home}
           onClose={() => setAdding(null)}
           onSave={(b) => {
+            const inboxId = adding.initial?.inboxId;
             updateTrip(adding.tripId, (tr) => ({
               ...tr,
               bookings: tr.bookings.some((x) => x.id === b.id) ? tr.bookings.map((x) => (x.id === b.id ? b : x)) : [...tr.bookings, b],
+              inbox: inboxId ? (tr.inbox ?? []).filter((x) => x.id !== inboxId) : tr.inbox,
             }));
+            setAdding(null);
+          }}
+          onLater={(src) => {
+            if (!adding.initial?.inboxId) {
+              const it: InboxItem = { id: uid(), text: src.text, image: src.image, at: Date.now() };
+              updateTrip(adding.tripId, (tr) => ({ ...tr, inbox: [it, ...(tr.inbox ?? [])] }));
+            }
             setAdding(null);
           }}
         />
@@ -499,7 +529,19 @@ function Main() {
         </Sheet>
       )}
 
-      <SettingsSheet visible={showSettings} settings={settings} onClose={() => setShowSettings(false)} onChange={changeSettings} />
+      <SettingsSheet
+        visible={showSettings}
+        settings={settings}
+        onClose={() => setShowSettings(false)}
+        onChange={changeSettings}
+        onBackup={() => exportBackup(trips)}
+        onRestore={async () => {
+          const got = await importBackup();
+          if (!got) return 0;
+          updateTrips((all) => mergeBackup(all, got));
+          return got.length;
+        }}
+      />
 
       <WelcomeSheet
         visible={!settings.onboarded}
@@ -870,7 +912,9 @@ function TripScreen({
   onOpen,
   onShare,
   onAddPlan,
+  onInbox,
 }: {
+  onInbox: (it: InboxItem) => void;
   onAddPlan: (date: string, extra?: { planTitle?: string; planMemo?: string; planFrom?: string }) => void;
   onShare: () => void;
   trip: Trip;
@@ -899,6 +943,15 @@ function TripScreen({
   useEffect(() => scrollRef.current?.scrollTo({ y: 0, animated: false }), [tab]);
   const [journalDay, setJournalDay] = useState<string | null>(null);
   const [sure, setSure] = useState(false);
+  const [wx, setWx] = useState<TripWx | null>(null);
+  const wxKey = tripRange(trip).start + '|' + tripRange(trip).end + '|' + trip.bookings.filter((b) => b.type === 'hotel' || b.type === 'flight').map((b) => (b.from ?? '') + (b.to ?? '')).join(',');
+  useEffect(() => {
+    let off = false;
+    tripWeather(trip).then((w) => !off && setWx(w));
+    return () => {
+      off = true;
+    };
+  }, [trip.id, wxKey]);
   const { start, end } = tripRange(trip);
   const total = tripTotal(trip, rate);
   return (
@@ -959,8 +1012,10 @@ function TripScreen({
             onToPlan={(w) => onAddPlan(tripDays(trip)[0] ?? todayStr(), { planTitle: w.title, planMemo: [w.url, w.memo].filter(Boolean).join('\n') || undefined })}
           />
         )}
-        {tab === 'plan' && <PlanTab trip={trip} onOpen={onOpen} onJournal={setJournalDay} onAddPlan={onAddPlan} />}
-        {tab === 'bookings' && <BookingsTab trip={trip} rate={rate} onOpen={onOpen} />}
+        {tab === 'plan' && <PlanTab trip={trip} wx={wx} onOpen={onOpen} onJournal={setJournalDay} onAddPlan={onAddPlan} />}
+        {tab === 'bookings' && (
+          <BookingsTab trip={trip} rate={rate} onOpen={onOpen} onInbox={onInbox} onDropInbox={(id) => onChange((tr) => ({ ...tr, inbox: (tr.inbox ?? []).filter((x) => x.id !== id) }))} />
+        )}
         {tab === 'map' && <MapTab trip={trip} onOpen={onOpen} />}
         {tab === 'money' && <MoneyTab trip={trip} rate={rate} onChange={onChange} />}
         {tab === 'pack' && <PackTab trip={trip} onChange={onChange} />}
@@ -1059,7 +1114,8 @@ function ShareSheet({ trip, onClose, onShared, onStop }: { trip: Trip; onClose: 
   const meName = trip.members.find((m) => m.id === meId)?.name ?? '';
   const generic = (n: string) => !n.trim() || n === '自分' || n.toLowerCase() === 'me';
   const [myName, setMyName] = useState(generic(meName) ? '' : meName);
-  const invite = code ? t('inviteText', { name: trip.name, code: prettyCode(code), link: `tripfold://join?c=${code}` }) : '';
+  const invite = code ? t('inviteText', { name: trip.name, code: prettyCode(code), link: `${SERVER}/j/${code}` }) : '';
+  const [pdfBusy, setPdfBusy] = useState(false);
   return (
     <Sheet visible onClose={onClose}>
       <Text style={s.sheetTitle}>{t('shareTitle')}</Text>
@@ -1107,6 +1163,20 @@ function ShareSheet({ trip, onClose, onShared, onStop }: { trip: Trip; onClose: 
       )}
       {!!err && <Text style={[s.hint, { color: C.pink, marginTop: 8 }]}>{err}</Text>}
       <Text style={[s.kicker, { marginTop: 22, marginBottom: 8 }]}>{t('shareText').toUpperCase()}</Text>
+      <Pressable
+        style={[s.secondary, { marginBottom: 8 }, pdfBusy && { opacity: 0.5 }]}
+        disabled={pdfBusy}
+        onPress={async () => {
+          setPdfBusy(true);
+          try {
+            await exportShioriPdf(trip, await tripWeather(trip).catch(() => null));
+          } catch {}
+          setPdfBusy(false);
+        }}
+      >
+        {pdfBusy ? <ActivityIndicator color={C.ink} /> : <Icon name="print-outline" size={17} />}
+        <Text style={s.secondaryText}>{t('sendPdf')}</Text>
+      </Pressable>
       <Pressable style={[s.secondary]} onPress={() => Share.share({ message: itineraryText(trip) })}>
         <Icon name="document-text-outline" size={17} />
         <Text style={s.secondaryText}>{t('sendItinerary')}</Text>
@@ -1378,7 +1448,7 @@ function WishSheet({
   );
 }
 
-function PlanTab({ trip, onOpen, onJournal, onAddPlan }: { trip: Trip; onOpen: (b: Booking) => void; onJournal?: (d: string) => void; onAddPlan?: (d: string) => void }) {
+function PlanTab({ trip, wx, onOpen, onJournal, onAddPlan }: { trip: Trip; wx?: TripWx | null; onOpen: (b: Booking) => void; onJournal?: (d: string) => void; onAddPlan?: (d: string) => void }) {
   const tl = timeline(trip);
   const today = todayStr();
   const days = tripDays(trip).map((date) => ({ date, items: tl.find((d) => d.date === date)?.items ?? [] }));
@@ -1397,6 +1467,14 @@ function PlanTab({ trip, onOpen, onJournal, onAddPlan }: { trip: Trip; onOpen: (
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10, marginBottom: 10 }}>
             {!!start && <Text style={s.dayN}>{t('dayN', { n: daysBetween(start, date) + 1 })}</Text>}
             <Text style={s.dayDate}>{prettyDate(date)}</Text>
+            {!!wx?.days[date] && (
+              <View style={s.wxPill}>
+                <Icon name={wxIcon(wx.days[date].code).icon} size={14} color={C.ink} />
+                <Text style={s.wxText}>
+                  {wx.days[date].max}° / {wx.days[date].min}°{wx.days[date].rain ? `  ☂${wx.days[date].rain}%` : ''}
+                </Text>
+              </View>
+            )}
           </View>
           {items.length === 0 && !onAddPlan && <Text style={[s.hint, { marginLeft: 52, marginBottom: 8 }]}>{t('freeDay')}</Text>}
           {items.map((it, i) => {
@@ -1417,9 +1495,10 @@ function PlanTab({ trip, onOpen, onJournal, onAddPlan }: { trip: Trip; onOpen: (
                 <Pressable onPress={() => onOpen(b)} style={({ pressed }) => [s.tlCard, pressed && { opacity: 0.85 }]}>
                   <TypeBadge type={b.type} size={34} />
                   <View style={{ flex: 1 }}>
-                    <Text style={s.tlTitle} numberOfLines={2}>
+                    <Text style={[s.tlTitle, b.cancelled && s.cancelled]} numberOfLines={2}>
                       {b.title || typeName(b.type)}
                     </Text>
+                    {!!b.cancelled && <Text style={[s.tlEdge, { color: C.pink }]}>{t('cancelled')}</Text>}
                     {!!edge && <Text style={[s.tlEdge, { color: ty.color }]}>{edge}</Text>}
                     {(b.from || b.to) && it.edge !== 'end' ? (
                       <Text style={s.hint} numberOfLines={2}>
@@ -1476,10 +1555,45 @@ function JournalBlock({ entry, onPress }: { entry?: { text?: string; photos?: st
   );
 }
 
-function BookingsTab({ trip, rate, onOpen }: { trip: Trip; rate: RateInfo; onOpen: (b: Booking) => void }) {
-  if (!trip.bookings.length) return <PlanTab trip={trip} onOpen={onOpen} />;
+function InboxBox({ items, onOpen, onDrop }: { items: InboxItem[]; onOpen: (it: InboxItem) => void; onDrop: (id: string) => void }) {
+  if (!items.length) return null;
+  return (
+    <View style={[s.card, { borderWidth: 1, borderColor: C.yellow, marginBottom: 6 }]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+        <Icon name="alert-circle-outline" size={17} color={C.ink} />
+        <Text style={s.tlTitle}>
+          {t('inbox')} ({items.length})
+        </Text>
+      </View>
+      <Text style={[s.hint, { marginBottom: 6 }]}>{t('inboxHint')}</Text>
+      {items.map((it, i) => (
+        <Pressable key={it.id} onPress={() => onOpen(it)} onLongPress={() => onDrop(it.id)} style={[s.tlRow, i > 0 && s.tlLine]}>
+          {it.image ? <Image source={imgSrc(it.image)} style={{ width: 34, height: 44, borderRadius: 6, backgroundColor: C.chip }} /> : <Icon name="mail-outline" size={20} color={C.sub} />}
+          <View style={{ flex: 1 }}>
+            <Text style={s.tlTitle} numberOfLines={2}>
+              {(it.text ?? '').trim().split('\n')[0] || t('screenshot')}
+            </Text>
+            <Text style={s.hint}>{new Date(it.at).toLocaleDateString()}</Text>
+          </View>
+          <Icon name="chevron-forward" size={16} color={C.sub} />
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+function BookingsTab({ trip, rate, onOpen, onInbox, onDropInbox }: { trip: Trip; rate: RateInfo; onOpen: (b: Booking) => void; onInbox: (it: InboxItem) => void; onDropInbox: (id: string) => void }) {
+  const inbox = <InboxBox items={trip.inbox ?? []} onOpen={onInbox} onDrop={onDropInbox} />;
+  if (!trip.bookings.length)
+    return (
+      <>
+        {inbox}
+        <PlanTab trip={trip} onOpen={onOpen} />
+      </>
+    );
   return (
     <>
+      {inbox}
       {TYPES.filter((ty) => trip.bookings.some((b) => b.type === ty.id)).map((ty) => (
         <View key={ty.id} style={{ marginBottom: 14 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 18, marginBottom: 8 }}>
@@ -1493,9 +1607,10 @@ function BookingsTab({ trip, rate, onOpen }: { trip: Trip; rate: RateInfo; onOpe
               .map((b, i) => (
                 <Pressable key={b.id} onPress={() => onOpen(b)} style={[s.tlRow, i > 0 && s.tlLine]}>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.tlTitle} numberOfLines={2}>
+                    <Text style={[s.tlTitle, b.cancelled && s.cancelled]} numberOfLines={2}>
                       {b.title || typeName(b.type)}
                     </Text>
+                    {!!b.cancelled && <Text style={[s.tlEdge, { color: C.pink }]}>{t('cancelled')}</Text>}
                     <Text style={s.hint}>
                       {isDate(b.start) ? prettyDate(b.start) : ''} {b.startTime ?? ''}
                       {isDate(b.end) && b.end !== b.start ? ` 〜 ${prettyDate(b.end!)}` : ''}
@@ -1526,7 +1641,7 @@ function MoneyTab({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onChan
   const nameOf = (id: string) => trip.members.find((m) => m.id === id)?.name ?? '?';
   const byType = TYPES.map((ty) => ({
     ty,
-    v: trip.bookings.filter((b) => b.type === ty.id && b.price).reduce((a, b) => a + toHome(b.price!, b.currency || rate.base, rate), 0),
+    v: trip.bookings.filter((b) => b.type === ty.id && b.price && !b.cancelled).reduce((a, b) => a + toHome(b.price!, b.currency || rate.base, rate), 0),
   })).filter((x) => x.v > 0);
   const max = Math.max(1, ...byType.map((x) => x.v));
   return (
@@ -1626,7 +1741,7 @@ function MoneyTab({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onChan
                   style={[s.secondary, { marginBottom: 8 }]}
                   onPress={() => {
                     const data = { n: trip.name, c: rate.base, p: st.pay.map((p) => ({ f: nameOf(p.from), t: nameOf(p.to), a: Math.round(p.amount) })) };
-                    const link = `tripfold://settle?d=${encodeURIComponent(JSON.stringify(data))}`;
+                    const link = trip.share ? `${SERVER}/s/${trip.share.code}?c=${rate.base}` : `tripfold://settle?d=${encodeURIComponent(JSON.stringify(data))}`;
                     const lines = st.pay.map((p) => `・${nameOf(p.from)} → ${nameOf(p.to)}  ${fmtMoney(Math.round(p.amount), rate.base)}`);
                     Share.share({ message: `【${trip.name}】${t('settle')}\n${lines.join('\n')}\n\n${t('openInApp')}\n${link}` });
                   }}
@@ -1642,6 +1757,17 @@ function MoneyTab({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onChan
               )),
               ]
             )}
+            {!trip.share && st.pay.length > 0 && <Text style={[s.hint, { fontSize: 11, marginTop: 4 }]}>{t('settleWebHint')}</Text>}
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+              <Pressable style={[s.secondary, { flex: 1 }]} onPress={() => exportSettlePdf(trip, rate).catch(() => {})}>
+                <Icon name="document-outline" size={16} />
+                <Text style={s.secondaryText}>PDF</Text>
+              </Pressable>
+              <Pressable style={[s.secondary, { flex: 1 }]} onPress={() => exportSettleCsv(trip, rate).catch(() => {})}>
+                <Icon name="grid-outline" size={16} />
+                <Text style={s.secondaryText}>CSV</Text>
+              </Pressable>
+            </View>
           </View>
         </>
       )}
@@ -1712,14 +1838,57 @@ function ExpenseBox({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onCh
   const [payer, setPayer] = useState(trip.myId && trip.members.some((m) => m.id === trip.myId) ? trip.myId : trip.members[0]?.id);
   const c = findCurrency(cur);
   const list = trip.expenses ?? [];
-  const sum = list.reduce((a, e) => a + toHome(e.amount, e.currency, rate), 0);
+  const sum = list.reduce((a, e) => a + expHome(e, rate), 0);
+  const [rateTxt, setRateTxt] = useState('');
+  const [photo, setPhoto] = useState<string | undefined>();
+  const [ocrMsg, setOcrMsg] = useState('');
+  const [reading, setReading] = useState(false);
+  const autoRate = cur !== rate.base ? toHome(1, cur, rate) : 1;
   const add = () => {
     const v = parseFloat(amt);
     if (!v) return;
-    const e: Expense = { id: uid(), title: title.trim() || catName(cat), cat, amount: v, currency: cur, date: todayStr(), paidBy: payer };
+    const r = parseFloat(rateTxt);
+    const e: Expense = { id: uid(), title: title.trim() || catName(cat), cat, amount: v, currency: cur, date: todayStr(), paidBy: payer, rate: r > 0 && cur !== rate.base ? r : undefined, photo };
     onChange((tr) => ({ ...tr, expenses: [e, ...(tr.expenses ?? [])] }));
     setTitle('');
     setAmt('');
+    setPhoto(undefined);
+    setOcrMsg('');
+  };
+  // レシートを撮って（選んで）金額・通貨・お店の名前を読み取る
+  const receipt = async (camera: boolean) => {
+    let r: ImagePicker.ImagePickerResult;
+    try {
+      if (camera) {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (!perm.granted) return;
+        r = await ImagePicker.launchCameraAsync({ quality: 0.7 });
+      } else r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
+    } catch {
+      r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
+    }
+    if (r.canceled || !r.assets?.[0]) return;
+    const uri = keepImage(r.assets[0].uri);
+    setPhoto(uri);
+    if (!ocrAvailable) {
+      setOcrMsg(t('ocrNA'));
+      return;
+    }
+    setReading(true);
+    try {
+      const lines = (await recognizeReceipt(uri)) ?? [];
+      const rows = rowsOf(lines);
+      const text = rows.join('\n');
+      const p = findPrice(text);
+      const shop = rows.map((x) => x.trim()).find((x) => x.length >= 2 && x.length <= 30 && !/\d{3,}|receipt|領収|レシート|tel|〒/i.test(x));
+      if (p.price) setAmt(String(p.price));
+      if (p.currency) setCur(p.currency);
+      if (shop && !title) setTitle(shop);
+      setOcrMsg(p.price ? t('receiptOk') : t('readNone'));
+    } catch {
+      setOcrMsg(t('readNone'));
+    }
+    setReading(false);
   };
   return (
     <View style={s.card}>
@@ -1731,14 +1900,35 @@ function ExpenseBox({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onCh
           </Pressable>
         ))}
       </View>
-      <TextInput style={[s.input, { marginTop: 10 }]} value={title} onChangeText={setTitle} placeholder={t('expTitle')} placeholderTextColor={C.sub} />
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+        <TextInput style={[s.input, { flex: 1 }]} value={title} onChangeText={setTitle} placeholder={t('expTitle')} placeholderTextColor={C.sub} />
+        <Pressable style={s.iconBtn} onPress={() => receipt(true)} onLongPress={() => receipt(false)} accessibilityLabel={t('receipt')}>
+          {reading ? <ActivityIndicator color={C.ink} /> : photo ? <Image source={imgSrc(photo)} style={{ width: 30, height: 30, borderRadius: 6 }} /> : <Icon name="receipt-outline" size={20} />}
+        </Pressable>
+      </View>
+      {!!ocrMsg && <Text style={[s.hint, { marginTop: 4 }]}>{ocrMsg}</Text>}
+      {!ocrMsg && !amt && <Text style={[s.hint, { marginTop: 4, fontSize: 11 }]}>{t('receiptHint')}</Text>}
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
         <TextInput style={[s.input, { flex: 1 }]} value={amt} onChangeText={(x) => setAmt(cleanNum(x, c.decimals))} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={C.sub} />
-        <CurrencyPicker value={cur} onChange={setCur} />
+        <CurrencyPicker value={cur} onChange={(x) => (setCur(x), setRateTxt(''))} />
         <Pressable style={[s.smallBtn, !amt && { opacity: 0.35 }]} onPress={add} disabled={!amt}>
           <Icon name="add" size={20} color="#fff" />
         </Pressable>
       </View>
+      {cur !== rate.base && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
+          <Text style={[s.hint, { flexShrink: 0 }]}>{t('rate')}  1 {cur} =</Text>
+          <TextInput
+            style={[s.input, { paddingVertical: 6, flex: 1, fontSize: 13 }]}
+            value={rateTxt}
+            onChangeText={(x) => setRateTxt(cleanNum(x, 6))}
+            keyboardType="decimal-pad"
+            placeholder={String(Math.round(autoRate * 10000) / 10000)}
+            placeholderTextColor={C.sub}
+          />
+          <Text style={[s.hint, { flexShrink: 0 }]}>{rate.base}</Text>
+        </View>
+      )}
       {trip.members.length > 1 && (
         <View style={{ flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <Text style={s.hint}>{t('paidBy')}</Text>
@@ -1766,11 +1956,13 @@ function ExpenseBox({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onCh
                 <Text style={s.hint}>
                   {prettyDate(e.date)}
                   {trip.members.length > 1 ? ` · ${trip.members.find((m) => m.id === e.paidBy)?.name ?? ''}` : ''}
+                  {e.rate ? ` · ${t('rateManual')}` : ''}
                 </Text>
               </View>
+              {!!e.photo && <Image source={imgSrc(e.photo)} style={{ width: 26, height: 34, borderRadius: 4, marginRight: 8 }} />}
               <View style={{ alignItems: 'flex-end' }}>
                 <Text style={s.price}>{fmtMoney(e.amount, e.currency)}</Text>
-                {e.currency !== rate.base && <Text style={s.hint}>≈ {fmtMoney(Math.round(toHome(e.amount, e.currency, rate)), rate.base)}</Text>}
+                {e.currency !== rate.base && <Text style={s.hint}>≈ {fmtMoney(Math.round(expHome(e, rate)), rate.base)}</Text>}
               </View>
             </Pressable>
           ))}
@@ -1999,15 +2191,18 @@ function AddBookingSheet({
   home,
   onClose,
   onSave,
+  onLater,
   initial,
 }: {
-  initial?: { text?: string; image?: string; planDate?: string; planTitle?: string; planMemo?: string; planFrom?: string };
+  initial?: AddInitial;
   trip: Trip;
   edit?: Booking;
   home: string;
   onClose: () => void;
   onSave: (b: Booking) => void;
+  onLater?: (src: { text?: string; image?: string }) => void;
 }) {
+  const [src, setSrc] = useState<{ text?: string; image?: string }>({});
   const [mode, setMode] = useState<'choose' | 'text' | 'form'>(edit || initial?.planDate ? 'form' : 'choose');
   const [text, setText] = useState('');
   const [note, setNote] = useState('');
@@ -2019,11 +2214,27 @@ function AddBookingSheet({
         : { id: uid(), type: 'flight', title: '', start: tripRange(trip).start ?? todayStr(), currency: home, paidBy: trip.myId, createdAt: Date.now() }),
   );
   const set = (p: Partial<Booking>) => setB((x) => ({ ...x, ...p }));
-  const applyParsed = (src: string, photo?: string) => {
-    const p = parseBooking(src);
-    const got = Object.keys(p).filter((k) => k !== 'type').length;
+  const applyParsed = (raw: string, photo?: string) => {
+    setSrc({ text: photo ? undefined : raw, image: photo });
+    const p = parseBooking(raw);
+    const got = Object.keys(p).filter((k) => k !== 'type' && k !== 'cancelled').length;
+    // 同じ予約番号の予約があれば、そちらを更新する（座席指定・変更・キャンセルのメール）
+    const norm = (c?: string) => (c ?? '').replace(/[\s-]/g, '').toUpperCase();
+    // 往復で同じ予約番号のこともあるので、便名・日付で見分ける
+    const same = !edit && p.code && norm(p.code).length >= 5 ? trip.bookings.filter((x) => norm(x.code) === norm(p.code)) : [];
+    const hit =
+      same.find((x) => p.title && norm(x.title) === norm(p.title)) ??
+      same.find((x) => p.start && x.start === p.start && (!p.startTime || !x.startTime || x.startTime === p.startTime)) ??
+      (same.length === 1 && (!p.title || !same[0].title) ? same[0] : undefined);
+    if (hit) {
+      const keep = p.cancelled ? { cancelled: true } : { ...p, type: hit.type, cancelled: undefined };
+      setB({ ...hit, ...keep, currency: (keep as any).currency ?? hit.currency, photos: photo ? [...(hit.photos ?? []), photo] : hit.photos });
+      setNote(p.cancelled ? t('readCancel') : t('readUpdate'));
+      setMode('form');
+      return;
+    }
     setB((x) => ({ ...x, ...p, currency: p.currency ?? x.currency, photos: photo ? [...(x.photos ?? []), photo] : x.photos }));
-    setNote(got >= 2 ? t('readOk') : t('readNone'));
+    setNote(p.cancelled ? t('readCancelNew') : got >= 2 ? t('readOk') : t('readNone'));
     setMode('form');
   };
   const pickShot = async () => {
@@ -2033,6 +2244,7 @@ function AddBookingSheet({
   };
   const readImage = async (uri: string) => {
     if (!ocrAvailable) {
+      setSrc({ image: uri });
       set({ photos: [...(b.photos ?? []), uri] });
       setNote(t('ocrNA'));
       setMode('form');
@@ -2041,17 +2253,9 @@ function AddBookingSheet({
     setBusy(true);
     try {
       const lines = (await recognizeReceipt(uri)) ?? [];
-      // 上から順・同じ高さは左から順に並べて1つの文にする
-      const sorted = [...lines].sort((a, c) => (Math.abs(a.y - c.y) < Math.min(a.h, c.h) * 0.5 ? a.x - c.x : a.y - c.y));
-      const rows: string[] = [];
-      let lastY = -1;
-      sorted.forEach((l) => {
-        if (lastY >= 0 && Math.abs(l.y - lastY) < l.h * 0.5) rows[rows.length - 1] += ' ' + l.text;
-        else rows.push(l.text);
-        lastY = l.y;
-      });
-      applyParsed(rows.join('\n'), uri);
+      applyParsed(rowsOf(lines).join('\n'), uri);
     } catch {
+      setSrc({ image: uri });
       set({ photos: [...(b.photos ?? []), uri] });
       setNote(t('readNone'));
       setMode('form');
@@ -2122,7 +2326,17 @@ function AddBookingSheet({
           {!!note && (
             <View style={s.note}>
               <Text style={s.noteText}>{note}</Text>
+              {!!onLater && !edit && !!(src.text || src.image) && (note === t('readNone') || note === t('ocrNA')) && (
+                <Pressable onPress={() => onLater(src)} hitSlop={8} style={{ marginTop: 6 }}>
+                  <Text style={[s.noteText, { textDecorationLine: 'underline' }]}>{initial?.inboxId ? t('keepInInbox') : t('later')}</Text>
+                </Pressable>
+              )}
             </View>
+          )}
+          {!!b.cancelled && (
+            <Pressable onPress={() => set({ cancelled: undefined })} style={[s.note, { backgroundColor: C.pinkSoft }]}>
+              <Text style={[s.noteText, { color: C.pink }]}>{t('cancelled')} ・ {t('undoCancel')}</Text>
+            </Pressable>
           )}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
             {TYPES.map((ty) => (
@@ -2523,11 +2737,50 @@ const Info = ({ k, v, q }: { k: string; v: string; q?: string }) => (
 );
 
 /* ---------------- 設定・ようこそ ---------------- */
-function SettingsSheet({ visible, settings, onClose, onChange }: { visible: boolean; settings: Settings; onClose: () => void; onChange: (s: Settings) => void }) {
+function SettingsSheet({
+  visible,
+  settings,
+  onClose,
+  onChange,
+  onBackup,
+  onRestore,
+}: {
+  visible: boolean;
+  settings: Settings;
+  onClose: () => void;
+  onChange: (s: Settings) => void;
+  onBackup: () => Promise<unknown>;
+  onRestore: () => Promise<number>;
+}) {
+  const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState(false);
+  const run = async (fn: () => Promise<string>) => {
+    setBusy(true);
+    setMsg('');
+    try {
+      setMsg(await fn());
+    } catch {
+      setMsg(t('backupErr'));
+    }
+    setBusy(false);
+  };
   return (
     <Sheet visible={visible} onClose={onClose}>
       <Text style={s.sheetTitle}>{t('settings')}</Text>
       <SettingsBody settings={settings} onChange={onChange} />
+      <Text style={s.label}>{t('backup')}</Text>
+      <Text style={[s.hint, { marginBottom: 8, lineHeight: 18 }]}>{t('backupHint')}</Text>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <Pressable style={[s.secondary, { flex: 1 }, busy && { opacity: 0.5 }]} disabled={busy} onPress={() => run(async () => (await onBackup(), ''))}>
+          <Icon name="cloud-upload-outline" size={16} />
+          <Text style={s.secondaryText}>{t('backupSave')}</Text>
+        </Pressable>
+        <Pressable style={[s.secondary, { flex: 1 }, busy && { opacity: 0.5 }]} disabled={busy} onPress={() => run(async () => { const n = await onRestore(); return n ? t('restored', { n }) : ''; })}>
+          <Icon name="cloud-download-outline" size={16} />
+          <Text style={s.secondaryText}>{t('backupLoad')}</Text>
+        </Pressable>
+      </View>
+      {!!msg && <Text style={[s.hint, { marginTop: 6 }]}>{msg}</Text>}
       <Text style={[s.hint, { textAlign: 'center', marginTop: 16 }]}>v0.1</Text>
     </Sheet>
   );
@@ -2671,6 +2924,10 @@ function sampleTrip(st: Settings): Trip {
 }
 
 const s = StyleSheet.create({
+  iconBtn: { width: 48, borderRadius: 14, backgroundColor: C.chip, alignItems: 'center', justifyContent: 'center' },
+  wxPill: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 'auto', backgroundColor: C.card, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3 },
+  wxText: { fontSize: 12, fontWeight: '800', color: C.ink, fontVariant: ['tabular-nums'] },
+  cancelled: { textDecorationLine: 'line-through', color: C.sub },
   headRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   kicker: { fontSize: 11, fontWeight: '800', color: C.sub, letterSpacing: 1.2 },
   appTitle: { fontSize: 30, fontWeight: '900', color: C.ink, letterSpacing: -0.8 },

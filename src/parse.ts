@@ -112,7 +112,7 @@ const WEAK = /(price|料金|運賃|fare|金額|代金|cost)/i;
 const PENALTY = /(per night|\/\s?night|1泊あたり|1泊|avg|average|daily rate|per day|\bx\s?\d|×|割引|クーポン|discount|coupon|手数料|概算|うち|cleaning|清掃|サービス料|service fee|taxes|booking fee|消費税(?!込)|税金|deposit|保証金|refund|返金|ポイント|points|saved|節約)/i;
 
 /** 合計金額らしいもの：「お支払い金額」＞「合計」＞「料金」の順、1泊あたり・割引・手数料の行は避ける */
-function findPrice(text: string): { price?: number; currency?: string } {
+export function findPrice(text: string): { price?: number; currency?: string } {
   const num = '(\\d{1,3}(?:[.,，  \u202f]\\d{3})+(?:[.,]\\d{1,2})?|\\d+(?:[.,]\\d{1,2})?)';
   const re = new RegExp(`(-|−)?(?<![A-Za-z])${CUR_RE}?\\s?${num}\\s?${SUF_RE}?(?![A-Za-z])`, 'g');
   const lines = text.split(/\n/);
@@ -256,6 +256,8 @@ export function parseBooking(text: string, today = new Date()): Partial<Booking>
     const first = t.split('\n').map(cleanLine).find((l) => l.length >= 3 && l.length <= 40 && !/^\d/.test(l));
     if (first) out.title = first;
   }
+  // キャンセルのお知らせ
+  if (/(キャンセル(?:が完了|済|しました|を承り|のお知らせ|のご確認|確定)|予約(?:を)?取り?消|ご予約の取消|cancell?ation (?:confirm|notice)|has been cancell?ed|(?:booking|reservation|flight|trip|order) (?:is |was |has been )?cancell?ed|you(?:'ve| have) cancell?ed|annulation|stornierung|cancelación|cancellazione)/i.test(t)) out.cancelled = true;
   Object.keys(out).forEach((k) => (out as any)[k] === undefined && delete (out as any)[k]);
   return out;
 }

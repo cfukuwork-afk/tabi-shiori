@@ -17,7 +17,8 @@
         "CFBundleAllowMixedLocalizations": true,
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryUsageDescription": "予約のスクショや旅行の写真を選ぶために写真ライブラリを使います。",
-        "NSLocationWhenInUseUsageDescription": "旅行の地図に現在地を表示するために位置情報を使います。"
+        "NSLocationWhenInUseUsageDescription": "旅行の地図に現在地を表示するために位置情報を使います。",
+        "NSCameraUsageDescription": "レシートや搭乗券を撮って読み取るためにカメラを使います。"
       }
     },
     "web": {
@@ -36,7 +37,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "予約のスクショや旅行の写真を選ぶために写真ライブラリを使います。"
+          "photosPermission": "予約のスクショや旅行の写真を選ぶために写真ライブラリを使います。",
+          "cameraPermission": "レシートや搭乗券を撮って読み取るためにカメラを使います。"
         }
       ],
       [

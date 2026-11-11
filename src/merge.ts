@@ -1,7 +1,7 @@
 // 共有した旅行のまとめ方（サーバーと同じ考え方）：項目ごとに、あとから変えた方を採用する
 import { Trip } from './data';
 
-const COLLECTIONS = ['bookings', 'expenses', 'checklist', 'members', 'wishes'] as const;
+const COLLECTIONS = ['bookings', 'expenses', 'checklist', 'members', 'wishes', 'inbox'] as const;
 const META = ['name', 'emoji', 'cover', 'budget'] as const;
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
