@@ -527,7 +527,7 @@ function Memories({ trips, onOpen }: { trips: Trip[]; onOpen: (id: string) => vo
                       <Text style={s.memSub}>
                         {start ? prettyDate(start) : ''}
                         {end && end !== start ? ` – ${prettyDate(end)}` : ''}
-                        {photos.length ? `  ·  ${photos.length} ${t('photosN')}` : ''}
+                        {photos.length ? `  ·  ${photos.length}${t('photosN') === '枚' ? '' : ' '}${photos.length === 1 && t('photosN') === 'photos' ? 'photo' : t('photosN')}` : ''}
                       </Text>
                     </View>
                   </Pressable>
@@ -2007,12 +2007,19 @@ function sampleTrip(st: Settings): Trip {
       { id: uid(), type: 'hotel', title: 'Hotel Le Marais', start: d(0), startTime: '15:00', end: d(3), endTime: '11:00', from: '12 Rue de Rivoli, Paris', code: '4821.339.112', price: 420, currency: 'EUR', paidBy: 'm2', createdAt: 2 },
       { id: uid(), type: 'ticket', title: ja ? 'ルーヴル美術館' : 'Louvre Museum', start: d(1), startTime: '10:00', code: 'LV-55219', price: 44, currency: 'EUR', paidBy: 'me', createdAt: 3 },
       { id: uid(), type: 'food', title: 'Le Comptoir', start: d(1), startTime: '19:30', memo: ja ? '2名・窓側' : 'Table for 2', createdAt: 4 },
+      { id: uid(), type: 'plan', title: ja ? 'セーヌ川クルーズ' : 'Seine river cruise', start: d(1), startTime: '16:00', endTime: '17:00', from: 'Port de la Bourdonnais', createdAt: 7 },
       { id: uid(), type: 'car', title: 'Europcar', start: d(2), startTime: '09:00', end: d(2), endTime: '18:00', from: 'Paris Gare de Lyon', code: 'EC9921034', price: 89, currency: 'EUR', paidBy: 'm2', createdAt: 5 },
       { id: uid(), type: 'train', title: 'Eurostar', start: d(3), startTime: '17:13', endTime: '18:30', from: 'Paris Gare du Nord', to: 'London St Pancras', code: 'QXK7PL', price: 196, currency: 'GBP', paidBy: 'me', createdAt: 6 },
     ],
     checklist: t('defaultPack')
       .split(',')
       .map((x) => ({ id: uid(), text: x, done: false })),
+    budget: 250000,
+    expenses: [
+      { id: uid(), title: ja ? 'カフェで朝ごはん' : 'Breakfast at a cafe', cat: 'meal', amount: 18.5, currency: 'EUR', date: d(1), paidBy: 'me' },
+      { id: uid(), title: ja ? 'メトロ 回数券' : 'Metro tickets', cat: 'move', amount: 21.5, currency: 'EUR', date: d(1), paidBy: 'm2' },
+      { id: uid(), title: ja ? 'マルシェでおみやげ' : 'Souvenirs at the market', cat: 'shop', amount: 46, currency: 'EUR', date: d(2), paidBy: 'me' },
+    ],
     createdAt: Date.now(),
   };
 }
