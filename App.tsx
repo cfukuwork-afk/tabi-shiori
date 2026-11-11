@@ -111,6 +111,9 @@ const BUNDLED: Record<string, any> = {
   'asset:paris': require('./assets/covers/paris.jpg'),
   'asset:kyoto': require('./assets/covers/kyoto.jpg'),
   'asset:london': require('./assets/covers/london.jpg'),
+  'asset:matcha': require('./assets/covers/matcha.jpg'),
+  'asset:window': require('./assets/covers/window.jpg'),
+  'asset:croissant': require('./assets/covers/croissant.jpg'),
 };
 const imgSrc = (u: string) => BUNDLED[u] ?? { uri: u };
 
@@ -1959,7 +1962,7 @@ function pastSample(st: Settings): Trip {
     checklist: [],
     journal: {
       [a]: { text: ja ? '朝の新幹線で富士山がきれいに見えた。夜は先斗町で湯豆腐。' : 'Saw Mt Fuji from the train. Yudofu in Pontocho at night.' },
-      [shiftDate(a, 1)]: { text: ja ? '伏見稲荷を早朝に。人が少なくて最高だった。' : 'Fushimi Inari at dawn — almost empty, magical.' },
+      [shiftDate(a, 1)]: { text: ja ? '伏見稲荷を早朝に。人が少なくて最高だった。帰りに抹茶と和菓子。' : 'Fushimi Inari at dawn — almost empty, magical. Matcha and wagashi on the way back.', photos: ['asset:matcha'] },
     },
     createdAt: Date.now() - 1,
   };
@@ -1980,7 +1983,8 @@ function londonSample(st: Settings): Trip {
     ],
     checklist: [],
     journal: {
-      [shiftDate(a, 1)]: { text: ja ? '雨上がりの街がきれいだった。パブでフィッシュアンドチップス。' : 'The streets after the rain were lovely. Fish and chips at a pub.' },
+      [a]: { text: ja ? '機内から見た夕焼けが最高だった。' : 'The sunset from the plane was stunning.', photos: ['asset:window'] },
+      [shiftDate(a, 1)]: { text: ja ? '朝はカフェでクロワッサン。雨上がりの街がきれいだった。夜はパブでフィッシュアンドチップス。' : 'Croissant at a cafe in the morning. The streets after the rain were lovely. Fish and chips at a pub.', photos: ['asset:croissant'] },
     },
     createdAt: Date.now() - 2,
   };
