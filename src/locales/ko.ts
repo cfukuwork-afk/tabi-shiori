@@ -53,4 +53,5 @@ export default {
   vaultNote: '이 기기에만 저장돼요 (공유·백업에 포함되지 않음). 휴지통을 길게 눌러 삭제', noMemories: '아직 추억이 없어요', memoryBook: '추억', memoryBookMake: '추억을 한 권의 PDF로 (인쇄·포토북용)',
   toBudgetApp: '가계부로 보내기 (World Budget Book)', toBudgetHint: '내가 낸 예약과 지출을 CSV로 만들어요. World Budget Book의 설정 →「Wise CSV 선택」에서 불러올 수 있어요', findEsim: 'eSIM 찾기',
   wxClear: '맑음', wxPartly: '구름 조금', wxCloudy: '흐림', wxFog: '안개', wxRain: '비', wxSnow: '눈', wxStorm: '뇌우',
+  mFlight: '비행기', mTrain: '기차', mBus: '버스', mWalk: '도보', mCar: '자동차', mRide: '전철·차 (시내)',
 } as Record<string, string>;

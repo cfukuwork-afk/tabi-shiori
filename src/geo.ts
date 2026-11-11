@@ -140,3 +140,28 @@ export async function locate(q: string, near?: { lat: number; lng: number } | nu
   if (station) return (await searchPlace(q, near)) ?? (await geocode(q));
   return (await searchPlace(q, near)) ?? (await geocode(q));
 }
+
+/** 2地点の道のり（徒歩・車）。地図に実際の道を描くため。保存して何度も聞かない */
+export type Route = { coords: [number, number][]; km: number; min: number };
+export async function getRoute(mode: 'foot' | 'car', a: Geo, b: Geo): Promise<Route | null> {
+  const c = await loadCache();
+  const r4 = (x: number) => Math.round(x * 1e4) / 1e4;
+  const key = `r:${mode}|${r4(a.lat)},${r4(a.lng)}|${r4(b.lat)},${r4(b.lng)}`;
+  if (key in c) return (c as any)[key] ?? null;
+  try {
+    const res = await fetch(`${SERVER}/v1/geo/route?mode=${mode}&from=${a.lat},${a.lng}&to=${b.lat},${b.lng}`);
+    if (res.status === 404) {
+      (c as any)[key] = null;
+      saveCache();
+      return null;
+    }
+    if (!res.ok) return null;
+    const j = await res.json();
+    if (!Array.isArray(j?.coords)) return null;
+    (c as any)[key] = j;
+    saveCache();
+    return j;
+  } catch {
+    return null;
+  }
+}

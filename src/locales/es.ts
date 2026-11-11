@@ -53,4 +53,5 @@ export default {
   vaultNote: 'Solo en este dispositivo (no se comparte ni se copia). Mantén pulsada la papelera para borrar', noMemories: 'Aún no hay recuerdos', memoryBook: 'recuerdos', memoryBookMake: 'Crear un libro de recuerdos (PDF para imprimir)',
   toBudgetApp: 'Enviar a la app de presupuesto (World Budget Book)', toBudgetHint: 'Exporta lo que pagaste en CSV; impórtalo en World Budget Book desde Ajustes → «Elegir CSV de Wise»', findEsim: 'Buscar eSIM',
   wxClear: 'Despejado', wxPartly: 'Parcialmente nublado', wxCloudy: 'Nublado', wxFog: 'Niebla', wxRain: 'Lluvia', wxSnow: 'Nieve', wxStorm: 'Tormenta',
+  mFlight: 'Avión', mTrain: 'Tren', mBus: 'Autobús', mWalk: 'A pie', mCar: 'Coche', mRide: 'Transporte/coche (ciudad)',
 } as Record<string, string>;

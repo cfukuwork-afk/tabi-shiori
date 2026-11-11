@@ -53,4 +53,5 @@ export default {
   vaultNote: '只保存在本设备（不会分享或备份）。长按垃圾桶删除', noMemories: '还没有回忆', memoryBook: '回忆', memoryBookMake: '把回忆做成一本 PDF（打印·相册用）',
   toBudgetApp: '发送到记账（World Budget Book）', toBudgetHint: '把你付的预订和花费导出为 CSV，可在 World Budget Book 的设置 →「选择 Wise CSV」导入', findEsim: '找 eSIM',
   wxClear: '晴', wxPartly: '晴间多云', wxCloudy: '多云', wxFog: '雾', wxRain: '雨', wxSnow: '雪', wxStorm: '雷雨',
+  mFlight: '飞机', mTrain: '火车', mBus: '巴士', mWalk: '步行', mCar: '汽车', mRide: '电车·汽车（市内）',
 } as Record<string, string>;
