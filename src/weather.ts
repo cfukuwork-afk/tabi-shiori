@@ -94,12 +94,12 @@ export async function tripWeather(trip: Trip, force = false): Promise<TripWx | n
 }
 
 /** 天気コード → アイコンと短い言葉 */
-export function wxIcon(code: number): { icon: string; ja: string; en: string } {
-  if (code === 0) return { icon: 'sunny-outline', ja: '晴れ', en: 'Clear' };
-  if (code <= 2) return { icon: 'partly-sunny-outline', ja: '晴れ時々くもり', en: 'Partly cloudy' };
-  if (code === 3) return { icon: 'cloudy-outline', ja: 'くもり', en: 'Cloudy' };
-  if (code <= 48) return { icon: 'cloudy-outline', ja: '霧', en: 'Fog' };
-  if (code <= 67 || (code >= 80 && code <= 82)) return { icon: 'rainy-outline', ja: '雨', en: 'Rain' };
-  if (code <= 77 || code === 85 || code === 86) return { icon: 'snow-outline', ja: '雪', en: 'Snow' };
-  return { icon: 'thunderstorm-outline', ja: '雷雨', en: 'Storm' };
+export function wxIcon(code: number): { icon: string; key: 'wxClear' | 'wxPartly' | 'wxCloudy' | 'wxFog' | 'wxRain' | 'wxSnow' | 'wxStorm' } {
+  if (code === 0) return { icon: 'sunny-outline', key: 'wxClear' };
+  if (code <= 2) return { icon: 'partly-sunny-outline', key: 'wxPartly' };
+  if (code === 3) return { icon: 'cloudy-outline', key: 'wxCloudy' };
+  if (code <= 48) return { icon: 'cloudy-outline', key: 'wxFog' };
+  if (code <= 67 || (code >= 80 && code <= 82)) return { icon: 'rainy-outline', key: 'wxRain' };
+  if (code <= 77 || code === 85 || code === 86) return { icon: 'snow-outline', key: 'wxSnow' };
+  return { icon: 'thunderstorm-outline', key: 'wxStorm' };
 }

@@ -1,6 +1,7 @@
 // 旅のしおり：データの形と保存
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { FALLBACK_PER_USD, findCurrency } from './currencies';
+import { FALLBACK_PER_USD, currencyFromLocale, findCurrency } from './currencies';
+import { detectLang, Lang } from './i18n';
 
 export type BookingType = 'flight' | 'train' | 'bus' | 'hotel' | 'car' | 'ticket' | 'food' | 'plan' | 'other';
 
@@ -97,7 +98,7 @@ export type Trip = {
   createdAt: number;
 };
 
-export type Settings = { home: string; myName: string; lang: 'ja' | 'en'; onboarded: boolean; notify: boolean; mapApp?: 'ask' | 'apple' | 'google'; theme?: 'auto' | 'light' | 'dark' };
+export type Settings = { home: string; myName: string; lang: Lang; onboarded: boolean; notify: boolean; mapApp?: 'ask' | 'apple' | 'google'; theme?: 'auto' | 'light' | 'dark' };
 
 export type RateInfo = { base: string; rates: Record<string, number>; updatedAt: number };
 
@@ -121,16 +122,8 @@ async function writeJSON(key: string, value: unknown) {
   } catch {}
 }
 
-const detectLang = (): 'ja' | 'en' => {
-  try {
-    const l = Intl.DateTimeFormat().resolvedOptions().locale || '';
-    return l.startsWith('ja') ? 'ja' : 'en';
-  } catch {
-    return 'ja';
-  }
-};
 
-export const DEFAULT_SETTINGS: Settings = { home: 'JPY', myName: '', lang: detectLang(), onboarded: false, notify: true };
+export const DEFAULT_SETTINGS: Settings = { home: currencyFromLocale(), myName: '', lang: detectLang(), onboarded: false, notify: true };
 export const loadTrips = () => readJSON<Trip[]>(K_TRIPS, []);
 export const saveTrips = (v: Trip[]) => writeJSON(K_TRIPS, v);
 export const loadSettings = async () => ({ ...DEFAULT_SETTINGS, ...(await readJSON<Partial<Settings>>(K_SETTINGS, {})) });

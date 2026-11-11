@@ -1,0 +1,7 @@
+{
+  "CFBundleDisplayName": "Tripfold",
+  "NSPhotoLibraryUsageDescription": "예약 스크린샷과 여행 사진을 고르기 위해 사진 보관함을 사용해요.",
+  "NSCameraUsageDescription": "영수증과 탑승권을 찍어 읽기 위해 카메라를 사용해요.",
+  "NSLocationWhenInUseUsageDescription": "여행 지도에 현재 위치를 표시하기 위해 위치 정보를 사용해요.",
+  "NSFaceIDUsageDescription": "중요 서류(여권 사본 등)를 열 때 Face ID를 사용해요."
+}

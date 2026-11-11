@@ -72,7 +72,7 @@ import {
   typeOf,
   uid,
 } from './src/data';
-import { prettyDate, setLang, t, typeName } from './src/i18n';
+import { LANGS, bracket, dot, paren, prettyDate, range, setLang, t, typeName } from './src/i18n';
 import { parseBooking } from './src/parse';
 import { CURRENCIES, CUR_COUNTRIES, findCurrency } from './src/currencies';
 import { C, applyTheme, cleanNum, isDark, shadow } from './src/theme';
@@ -127,13 +127,13 @@ const catName = (c: ExpenseCat) => t(('cat' + c[0].toUpperCase() + c.slice(1)) a
 /** しおりを文字にして共有（LINE・メールなど） */
 function itineraryText(trip: Trip) {
   const { start, end } = tripRange(trip);
-  const lines = [`【${trip.name}】 ${start ? prettyDate(start) : ''}${end && end !== start ? ' – ' + prettyDate(end) : ''}`, ''];
+  const lines = [`${bracket(trip.name)} ${start ? prettyDate(start) : ''}${end && end !== start ? range() + prettyDate(end) : ''}`, ''];
   timeline(trip).forEach(({ date, items }) => {
     lines.push(`■ ${start ? t('dayN', { n: daysBetween(start, date) + 1 }) + ' ' : ''}${prettyDate(date)}`);
     items.forEach((it) => {
       const b = it.booking;
       const edge = it.edge === 'start' ? (b.type === 'hotel' ? t('checkin') : t('pickup')) : it.edge === 'end' ? (b.type === 'hotel' ? t('checkout') : t('dropoff')) : '';
-      lines.push(`${it.time ?? '--:--'}  ${typeName(b.type)}｜${b.title || ''}${edge ? `（${edge}）` : ''}`);
+      lines.push(`${it.time ?? '--:--'}  ${typeName(b.type)} | ${b.title || ''}${edge ? paren(edge) : ''}`);
       if (it.edge !== 'end' && (b.from || b.to)) lines.push(`        ${b.from ?? ''}${b.to ? ' → ' + b.to : ''}`);
       if (b.code) lines.push(`        ${t('code')}: ${b.code}`);
     });
@@ -1039,8 +1039,8 @@ function TripScreen({
             <Icon name="pencil" size={13} color={C.sub} />
           </View>
           <Text style={s.hint}>
-            {start ? `${prettyDate(start)}${end && end !== start ? ' 〜 ' + prettyDate(end) : ''}` : t('undated')}
-            {total > 0 ? `  ・  ${fmtMoney(Math.round(total), rate.base)}` : ''}
+            {start ? `${prettyDate(start)}${end && end !== start ? range() + prettyDate(end) : ''}` : t('undated')}
+            {total > 0 ? `  ${dot()}  ${fmtMoney(Math.round(total), rate.base)}` : ''}
           </Text>
         </Pressable>
         <Pressable onPress={onShare} hitSlop={12} style={s.back}>
@@ -1050,7 +1050,7 @@ function TripScreen({
       <View style={s.tabs}>
         {(['plan', 'bookings', 'map', 'money', 'pack'] as Tab[]).map((k) => (
           <Pressable key={k} onPress={() => setTab(k)} style={s.tab}>
-            <Text style={[s.tabText, tab === k && { color: C.ink }]}>
+            <Text style={[s.tabText, tab === k && { color: C.ink }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
               {k === 'plan' ? t('tabPlan') : k === 'bookings' ? t('tabBookings') : k === 'map' ? t('tabMap') : k === 'money' ? t('tabMoney') : t('tabPack')}
             </Text>
             <View style={[s.tabBar, tab === k && { backgroundColor: C.ink }]} />
@@ -1210,7 +1210,7 @@ function ShareSheet({ trip, onClose, onShared, onStop }: { trip: Trip; onClose: 
           </Text>
           <Text style={[s.hint, { fontSize: 11, marginTop: 4 }]}>
             {trip.share?.syncedAt ? `${t('synced')} ${new Date(trip.share.syncedAt).toLocaleTimeString().slice(0, 5)}` : ''}
-            {trip.share?.dirty ? `  ・  ${t('pending')}` : ''}
+            {trip.share?.dirty ? `  ${dot()}  ${t('pending')}` : ''}
           </Text>
           <Pressable style={[s.primary, { alignSelf: 'stretch' }]} onPress={() => Share.share({ message: invite })}>
             <Text style={s.primaryText}>{t('sendCode')}</Text>
@@ -1395,7 +1395,7 @@ function WishSection({ trip, onChange, onToPlan }: { trip: Trip; onChange: (fn: 
                   </Text>
                   {!!w.likes?.length && trip.members.length > 1 && (
                     <Text style={[s.hint, { fontSize: 10, marginTop: 2 }]} numberOfLines={1}>
-                      ♥ {w.likes.map((i) => trip.members.find((m) => m.id === i)?.name ?? '').filter(Boolean).join('・')}
+                      ♥ {w.likes.map((i) => trip.members.find((m) => m.id === i)?.name ?? '').filter(Boolean).join(dot())}
                     </Text>
                   )}
                   {!!pf.name && (
@@ -1621,7 +1621,7 @@ function PlanTab({ trip, wx, onOpen, onJournal, onAddPlan }: { trip: Trip; wx?: 
           {onAddPlan && (
             <Pressable onPress={() => onAddPlan(date)} hitSlop={6} style={({ pressed }) => [s.addPlan, pressed && { opacity: 0.6 }]}>
               <Icon name="add" size={15} color={C.sub} />
-              <Text style={s.addPlanText}>{items.length ? t('addPlan') : `${t('freeDay')} ・ ${t('addPlan')}`}</Text>
+              <Text style={s.addPlanText}>{items.length ? t('addPlan') : `${t('freeDay')} ${dot()} ${t('addPlan')}`}</Text>
             </Pressable>
           )}
           {onJournal && date <= today && <JournalBlock entry={trip.journal?.[date]} onPress={() => onJournal(date)} />}
@@ -1727,7 +1727,7 @@ function BookingsTab({ trip, rate, onOpen, onInbox, onDropInbox }: { trip: Trip;
                     {!!b.cancelled && <Text style={[s.tlEdge, { color: C.pink }]}>{t('cancelled')}</Text>}
                     <Text style={s.hint}>
                       {isDate(b.start) ? prettyDate(b.start) : ''} {b.startTime ?? ''}
-                      {isDate(b.end) && b.end !== b.start ? ` 〜 ${prettyDate(b.end!)}` : ''}
+                      {isDate(b.end) && b.end !== b.start ? `${range()}${prettyDate(b.end!)}` : ''}
                     </Text>
                     {!!b.code && <Text style={s.tlCode}>{b.code}</Text>}
                   </View>
@@ -1847,7 +1847,7 @@ function MoneyTab({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onChan
               <View key={m.id} style={s.rowBetween}>
                 <Text style={s.tlTitle}>{m.name}</Text>
                 <Text style={s.hint}>
-                  {t('paidTotal')} {fmtMoney(Math.round(st.paid[m.id] ?? 0), rate.base)} ・ {t('oweTotal')} {fmtMoney(Math.round(st.owe[m.id] ?? 0), rate.base)}
+                  {t('paidTotal')} {fmtMoney(Math.round(st.paid[m.id] ?? 0), rate.base)} {dot()} {t('oweTotal')} {fmtMoney(Math.round(st.owe[m.id] ?? 0), rate.base)}
                 </Text>
               </View>
             ))}
@@ -1862,8 +1862,8 @@ function MoneyTab({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onChan
                   onPress={() => {
                     const data = { n: trip.name, c: rate.base, p: st.pay.map((p) => ({ f: nameOf(p.from), t: nameOf(p.to), a: Math.round(p.amount) })) };
                     const link = trip.share ? `${SERVER}/s/${trip.share.code}?c=${rate.base}` : `tripfold://settle?d=${encodeURIComponent(JSON.stringify(data))}`;
-                    const lines = st.pay.map((p) => `・${nameOf(p.from)} → ${nameOf(p.to)}  ${fmtMoney(Math.round(p.amount), rate.base)}`);
-                    Share.share({ message: `【${trip.name}】${t('settle')}\n${lines.join('\n')}\n\n${t('openInApp')}\n${link}` });
+                    const lines = st.pay.map((p) => `${dot()} ${nameOf(p.from)} → ${nameOf(p.to)}  ${fmtMoney(Math.round(p.amount), rate.base)}`);
+                    Share.share({ message: `${bracket(trip.name)} ${t('settle')}\n${lines.join('\n')}\n\n${t('openInApp')}\n${link}` });
                   }}
                 >
                   <Icon name="paper-plane-outline" size={17} />
@@ -2215,7 +2215,7 @@ function PackTab({ trip, onChange }: { trip: Trip; onChange: (fn: (t: Trip) => T
         </ScrollView>
       )}
       <Text style={s.hint}>
-        {mode === 'gift' ? t('giftHint') : t('packHint')} ・ {done}/{list.length}
+        {mode === 'gift' ? t('giftHint') : t('packHint')} {dot()} {done}/{list.length}
       </Text>
       {groups.map((g) => (
         <View key={g.who || '-'} style={[s.card, { marginTop: 8 }]}>
@@ -2615,7 +2615,7 @@ function AddBookingSheet({
           )}
           {!!b.cancelled && (
             <Pressable onPress={() => set({ cancelled: undefined })} style={[s.note, { backgroundColor: C.pinkSoft }]}>
-              <Text style={[s.noteText, { color: C.pink }]}>{t('cancelled')} ・ {t('undoCancel')}</Text>
+              <Text style={[s.noteText, { color: C.pink }]}>{t('cancelled')} {dot()} {t('undoCancel')}</Text>
             </Pressable>
           )}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
@@ -2631,7 +2631,7 @@ function AddBookingSheet({
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 6 }} contentContainerStyle={{ gap: 6, alignItems: 'center' }} keyboardShouldPersistTaps="handled">
               {tripDays(trip).map((d, i) => (
                 <Pressable key={d} onPress={() => set({ start: d })} style={[s.typeChip, b.start === d && { backgroundColor: C.ink, borderColor: C.ink }]}>
-                  <Text style={[s.chipText, b.start === d && { color: C.onInk }]}>{`${t('dayN', { n: i + 1 })} ・ ${prettyDate(d)}`}</Text>
+                  <Text style={[s.chipText, b.start === d && { color: C.onInk }]}>{`${t('dayN', { n: i + 1 })} ${dot()} ${prettyDate(d)}`}</Text>
                 </Pressable>
               ))}
             </ScrollView>
@@ -3209,10 +3209,10 @@ function SettingsBody({ settings, onChange }: { settings: Settings; onChange: (s
   return (
     <>
       <Text style={s.label}>{t('language')}</Text>
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        {(['ja', 'en'] as const).map((l) => (
-          <Pressable key={l} onPress={() => onChange({ ...settings, lang: l })} style={[s.typeChip, settings.lang === l && { backgroundColor: C.pinkSoft, borderColor: C.pink }]}>
-            <Text style={s.chipText}>{l === 'ja' ? '日本語' : 'English'}</Text>
+      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+        {LANGS.map((l) => (
+          <Pressable key={l.id} onPress={() => onChange({ ...settings, lang: l.id })} style={[s.typeChip, settings.lang === l.id && { backgroundColor: C.pinkSoft, borderColor: C.pink }]}>
+            <Text style={s.chipText}>{l.name}</Text>
           </Pressable>
         ))}
       </View>

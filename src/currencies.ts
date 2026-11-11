@@ -64,7 +64,7 @@ export function currencyName(code: string): string {
   if (lang === 'ja') return findCurrency(code).name;
   if (lang !== 'en') {
     try {
-      const dn = new (Intl as any).DisplayNames([lang === 'zh' ? 'zh-Hans' : lang], { type: 'currency' });
+      const dn = new (Intl as any).DisplayNames([lang], { type: 'currency' });
       const n = dn.of(code);
       if (n && n !== code) return n;
     } catch {}
@@ -111,3 +111,22 @@ export const CUR_COUNTRIES: Record<string, string> = {
   SAR: 'サウジアラビア saudi arabia',
   CLP: 'チリ chile',
 };
+
+/** 端末の地域からふだんの通貨を決める（最初の設定用） */
+export function currencyFromLocale(): string {
+  try {
+    const loc = Intl.DateTimeFormat().resolvedOptions().locale || '';
+    const region = (loc.match(/[-_]([A-Z]{2})\b/) ?? [])[1];
+    const R: Record<string, string> = {
+      JP: 'JPY', GB: 'GBP', US: 'USD', KR: 'KRW', CN: 'CNY', TW: 'TWD', HK: 'HKD', SG: 'SGD', TH: 'THB', AU: 'AUD', NZ: 'NZD', CA: 'CAD', CH: 'CHF',
+      SE: 'SEK', NO: 'NOK', DK: 'DKK', PL: 'PLN', CZ: 'CZK', HU: 'HUF', TR: 'TRY', MX: 'MXN', BR: 'BRL', AR: 'ARS', CL: 'CLP', IN: 'INR', ID: 'IDR',
+      MY: 'MYR', PH: 'PHP', VN: 'VND', AE: 'AED', IL: 'ILS', ZA: 'ZAR', IS: 'ISK', QA: 'QAR', SA: 'SAR',
+      DE: 'EUR', FR: 'EUR', ES: 'EUR', IT: 'EUR', PT: 'EUR', NL: 'EUR', BE: 'EUR', AT: 'EUR', IE: 'EUR', FI: 'EUR', GR: 'EUR', LU: 'EUR', SK: 'EUR', SI: 'EUR', EE: 'EUR', LV: 'EUR', LT: 'EUR', HR: 'EUR', MT: 'EUR', CY: 'EUR',
+    };
+    if (region && R[region]) return R[region];
+    const lang = loc.slice(0, 2);
+    return ({ ja: 'JPY', ko: 'KRW', zh: 'CNY', de: 'EUR', fr: 'EUR', es: 'EUR', it: 'EUR', pt: 'EUR' } as Record<string, string>)[lang] ?? 'USD';
+  } catch {
+    return 'USD';
+  }
+}

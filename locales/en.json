@@ -1,0 +1,7 @@
+{
+  "CFBundleDisplayName": "Tripfold",
+  "NSPhotoLibraryUsageDescription": "Tripfold uses your photo library to pick booking screenshots and trip photos.",
+  "NSCameraUsageDescription": "Tripfold uses the camera to scan receipts and boarding passes.",
+  "NSLocationWhenInUseUsageDescription": "Tripfold uses your location to show where you are on the trip map.",
+  "NSFaceIDUsageDescription": "Tripfold uses Face ID to open your important documents (such as passport copies)."
+}

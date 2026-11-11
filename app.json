@@ -13,14 +13,14 @@
         "usesNonExemptEncryption": false
       },
       "infoPlist": {
-        "CFBundleDevelopmentRegion": "ja",
+        "CFBundleDevelopmentRegion": "en",
         "CFBundleAllowMixedLocalizations": true,
         "ITSAppUsesNonExemptEncryption": false,
-        "NSPhotoLibraryUsageDescription": "予約のスクショや旅行の写真を選ぶために写真ライブラリを使います。",
-        "NSLocationWhenInUseUsageDescription": "旅行の地図に現在地を表示するために位置情報を使います。",
-        "NSCameraUsageDescription": "レシートや搭乗券を撮って読み取るためにカメラを使います。",
+        "NSPhotoLibraryUsageDescription": "Tripfold uses your photo library to pick booking screenshots and trip photos.",
+        "NSLocationWhenInUseUsageDescription": "Tripfold uses your location to show where you are on the trip map.",
+        "NSCameraUsageDescription": "Tripfold uses the camera to scan receipts and boarding passes.",
         "NSSupportsLiveActivities": true,
-        "NSFaceIDUsageDescription": "大事な書類（パスポートの写しなど）を開くときに Face ID を使います。"
+        "NSFaceIDUsageDescription": "Tripfold uses Face ID to open your important documents (such as passport copies)."
       }
     },
     "web": {
@@ -39,8 +39,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "予約のスクショや旅行の写真を選ぶために写真ライブラリを使います。",
-          "cameraPermission": "レシートや搭乗券を撮って読み取るためにカメラを使います。"
+          "photosPermission": "Tripfold uses your photo library to pick booking screenshots and trip photos.",
+          "cameraPermission": "Tripfold uses the camera to scan receipts and boarding passes."
         }
       ],
       [
@@ -65,7 +65,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "旅行の地図に現在地を表示するために位置情報を使います。"
+          "locationWhenInUsePermission": "Tripfold uses your location to show where you are on the trip map."
         }
       ],
       [
@@ -74,8 +74,8 @@
           "widgets": [
             {
               "name": "NextTrip",
-              "displayName": "次の予定",
-              "description": "次の予定・あと何日・予約番号",
+              "displayName": "Tripfold",
+              "description": "Next booking, countdown and booking ref",
               "ios": {
                 "supportedFamilies": [
                   "systemSmall",
@@ -91,7 +91,7 @@
       [
         "expo-local-authentication",
         {
-          "faceIDPermission": "大事な書類（パスポートの写しなど）を開くときに Face ID を使います。"
+          "faceIDPermission": "Tripfold uses Face ID to open your important documents (such as passport copies)."
         }
       ]
     ],
@@ -104,6 +104,18 @@
     "updates": {
       "url": "https://u.expo.dev/51d9cc15-7dc4-4e72-9e57-3693dd68a114"
     },
-    "scheme": "tripfold"
+    "scheme": "tripfold",
+    "locales": {
+      "ja": "./locales/ja.json",
+      "en": "./locales/en.json",
+      "ko": "./locales/ko.json",
+      "zh-Hans": "./locales/zh-Hans.json",
+      "zh-Hant": "./locales/zh-Hant.json",
+      "es": "./locales/es.json",
+      "fr": "./locales/fr.json",
+      "de": "./locales/de.json",
+      "it": "./locales/it.json",
+      "pt": "./locales/pt.json"
+    }
   }
 }

@@ -15,26 +15,25 @@ table{width:100%;border-collapse:collapse;margin:6pt 0 14pt}td,th{padding:5pt 4p
 h2{font-size:13pt;margin:16pt 0 4pt}.foot{margin-top:18pt;color:#aaa;font-size:8.5pt}`;
 
 const wrap = (title: string, body: string) =>
-  `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>${CSS}</style></head><body>${body}<div class="foot">Tripfold</div></body></html>`;
+  `<!doctype html><html lang="${getLang()}"><head><meta charset="utf-8"><title>${esc(title)}</title><style>${CSS}</style></head><body>${body}<div class="foot">Tripfold</div></body></html>`;
 
 export function shioriHtml(trip: Trip, wx?: TripWx | null) {
   const { start, end } = tripRange(trip);
-  const ja = getLang() === 'ja';
   const days = timeline(trip)
     .map(({ date, items }) => {
       const w = wx?.days[date];
-      const wtxt = w ? `${ja ? wxIcon(w.code).ja : wxIcon(w.code).en} ${w.max}° / ${w.min}°${w.rain != null ? ` ・ ☂ ${w.rain}%` : ''}` : '';
+      const wtxt = w ? `${t(wxIcon(w.code).key)} ${w.max}° / ${w.min}°${w.rain != null ? ` · ☂ ${w.rain}%` : ''}` : '';
       const rows = items
         .map((it) => {
           const b = it.booking;
           const edge = it.edge === 'start' ? (b.type === 'hotel' ? t('checkin') : t('pickup')) : it.edge === 'end' ? (b.type === 'hotel' ? t('checkout') : t('dropoff')) : '';
           const place = it.edge !== 'end' && (b.from || b.to) ? `<div class="sm">${esc(b.from ?? '')}${b.to ? ' → ' + esc(b.to) : ''}</div>` : '';
-          const code = b.code ? `<div class="sm">${esc(t('code'))}: <span class="code">${esc(b.code)}</span>${b.seat ? ` ・ ${esc(t('seat'))} ${esc(b.seat)}` : ''}</div>` : '';
+          const code = b.code ? `<div class="sm">${esc(t('code'))}: <span class="code">${esc(b.code)}</span>${b.seat ? ` · ${esc(t('seat'))} ${esc(b.seat)}` : ''}</div>` : '';
           const memo = b.memo && it.edge !== 'end' ? `<div class="sm">${esc(b.memo).replace(/\n/g, '<br>')}</div>` : '';
-          return `<div class="it"><div class="tm">${esc(it.time ?? '')}</div><div style="flex:1"><div class="ty">${esc(typeName(b.type))}${edge ? ' ・ ' + esc(edge) : ''}</div><div class="ti ${b.cancelled ? 'x' : ''}">${esc(b.title || '')}</div>${place}${code}${memo}</div></div>`;
+          return `<div class="it"><div class="tm">${esc(it.time ?? '')}</div><div style="flex:1"><div class="ty">${esc(typeName(b.type))}${edge ? ' · ' + esc(edge) : ''}</div><div class="ti ${b.cancelled ? 'x' : ''}">${esc(b.title || '')}</div>${place}${code}${memo}</div></div>`;
         })
         .join('');
-      const n = start ? t('dayN', { n: daysBetween(start, date) + 1 }) + ' ・ ' : '';
+      const n = start ? t('dayN', { n: daysBetween(start, date) + 1 }) + ' · ' : '';
       return `<div class="day"><div class="dh"><div class="dn">${esc(n + prettyDate(date))}</div><div class="wx">${esc(wtxt)}</div></div>${rows}</div>`;
     })
     .join('');
@@ -65,7 +64,7 @@ export function settleHtml(trip: Trip, r: RateInfo) {
   const rows = lines(trip, r).map((l) => `<tr><td>${esc(l.date)}</td><td>${esc(l.title)}</td><td class="r">${fmtMoney(l.amount, l.cur)}</td><td class="r">${fmtMoney(l.home, r.base)}</td><td>${esc(l.by)}</td><td class="sm">${esc(l.split)}</td></tr>`).join('');
   return wrap(
     trip.name + ' ' + t('settle'),
-    `<h1>${esc(trip.name)}</h1><div class="range">${esc(t('settle'))} ・ ${esc(t('total'))} ${fmtMoney(tripTotal(trip, r), r.base)}</div>
+    `<h1>${esc(trip.name)}</h1><div class="range">${esc(t('settle'))} · ${esc(t('total'))} ${fmtMoney(tripTotal(trip, r), r.base)}</div>
 <h2>${esc(t('whoPays'))}</h2><table>${pay}</table>
 <h2>${esc(t('perPerson'))}</h2><table><tr><th></th><th class="r">${esc(t('paidCol'))}</th><th class="r">${esc(t('shareCol'))}</th></tr>${per}</table>
 <h2>${esc(t('details'))}</h2><table><tr><th>${esc(t('date'))}</th><th></th><th class="r">${esc(t('price'))}</th><th class="r">${esc(r.base)}</th><th>${esc(t('paidBy'))}</th><th>${esc(t('splitWith'))}</th></tr>${rows}</table>`,
@@ -97,7 +96,7 @@ export async function exportMemoryBook(trip: Trip, toDataUri: (u: string) => Pro
       const d = await toDataUri(p);
       if (d) imgs.push(d);
     }
-    const n = start ? t('dayN', { n: daysBetween(start, date) + 1 }) + ' ・ ' : '';
+    const n = start ? t('dayN', { n: daysBetween(start, date) + 1 }) + ' · ' : '';
     const grid = imgs.length
       ? `<div style="display:grid;grid-template-columns:${imgs.length === 1 ? '1fr' : '1fr 1fr'};gap:6pt;margin:8pt 0">${imgs
           .map((d) => `<img src="${d}" style="width:100%;height:${imgs.length === 1 ? '120mm' : '62mm'};object-fit:cover;border-radius:6pt">`)

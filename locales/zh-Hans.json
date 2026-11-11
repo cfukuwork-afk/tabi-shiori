@@ -1,0 +1,7 @@
+{
+  "CFBundleDisplayName": "Tripfold",
+  "NSPhotoLibraryUsageDescription": "用于选择预订截图和旅行照片。",
+  "NSCameraUsageDescription": "用于拍摄并读取收据和登机牌。",
+  "NSLocationWhenInUseUsageDescription": "用于在旅行地图上显示你的当前位置。",
+  "NSFaceIDUsageDescription": "打开重要证件（如护照复印件）时使用 Face ID。"
+}

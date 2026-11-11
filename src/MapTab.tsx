@@ -4,7 +4,7 @@ import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-na
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Booking, Trip, timeline, typeOf } from './data';
 import { C } from './theme';
-import { t, prettyDate, typeName } from './i18n';
+import { dot, t, prettyDate, typeName } from './i18n';
 import { openMap, placeQuery, routeUrl, tripCity } from './maps';
 import { Geo, locate, looksLikeAddress } from './geo';
 import NativeMap from './NativeMap';
@@ -91,7 +91,7 @@ export default function MapTab({ trip, onOpen }: { trip: Trip; onOpen: (b: Booki
     if (!g) return;
     const same = points.find((p) => distKm(p, g) < 0.03);
     if (same) {
-      same.label += `・${label(s)}`;
+      same.label += `·${label(s)}`;
       same.title += ` / ${label(s)}  ${s.title}`;
       same.key += `+${label(s)}`;
       return;
@@ -114,7 +114,7 @@ export default function MapTab({ trip, onOpen }: { trip: Trip; onOpen: (b: Booki
         {['all', ...days].map((d) => (
           <Pressable key={d} onPress={() => setDay(d)} style={[st.chip, day === d && st.chipOn]}>
             <Text style={[st.chipText, day === d && { color: C.onInk }]}>
-              {d === 'all' ? t('allDays') : `${t('dayN', { n: days.indexOf(d) + 1 })} ・ ${prettyDate(d)}`}
+              {d === 'all' ? t('allDays') : `${t('dayN', { n: days.indexOf(d) + 1 })} ${dot()} ${prettyDate(d)}`}
             </Text>
           </Pressable>
         ))}

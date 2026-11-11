@@ -1,5 +1,34 @@
 // 日本語・英語
-export type Lang = 'ja' | 'en';
+import ko from './locales/ko';
+import zhHans from './locales/zh-Hans';
+import zhHant from './locales/zh-Hant';
+import es from './locales/es';
+import fr from './locales/fr';
+import de from './locales/de';
+import it from './locales/it';
+import pt from './locales/pt';
+
+export type Lang = 'ja' | 'en' | 'ko' | 'zh-Hans' | 'zh-Hant' | 'es' | 'fr' | 'de' | 'it' | 'pt';
+/** 選べる言語（その言語での名前） */
+export const LANGS: { id: Lang; name: string }[] = [
+  { id: 'ja', name: '日本語' }, { id: 'en', name: 'English' }, { id: 'ko', name: '한국어' }, { id: 'zh-Hans', name: '简体中文' }, { id: 'zh-Hant', name: '繁體中文' },
+  { id: 'es', name: 'Español' }, { id: 'fr', name: 'Français' }, { id: 'de', name: 'Deutsch' }, { id: 'it', name: 'Italiano' }, { id: 'pt', name: 'Português' },
+];
+/** 端末の言語から選ぶ（ないときは英語） */
+export function detectLang(): Lang {
+  try {
+    const l = (Intl.DateTimeFormat().resolvedOptions().locale || 'en').toLowerCase();
+    if (l.startsWith('ja')) return 'ja';
+    if (l.startsWith('ko')) return 'ko';
+    if (l.startsWith('zh')) return /hant|tw|hk|mo/.test(l) ? 'zh-Hant' : 'zh-Hans';
+    for (const x of ['es', 'fr', 'de', 'it', 'pt'] as const) if (l.startsWith(x)) return x;
+    return 'en';
+  } catch {
+    return 'en';
+  }
+}
+/** 日付・数字の書き方に使うロケール */
+export const localeOf = (l: Lang) => (l === 'zh-Hans' ? 'zh-CN' : l === 'zh-Hant' ? 'zh-TW' : l === 'pt' ? 'pt-BR' : l);
 let current: Lang = 'ja';
 export const setLang = (l: Lang) => (current = l);
 export const getLang = () => current;
@@ -285,6 +314,13 @@ const ja = {
   toBudgetApp: "家計簿へ送る（World Budget Book）",
   toBudgetHint: "自分が払った予約と出費をCSVにします。World Budget Book の設定 →「Wise の CSV を選ぶ」から取り込めます",
   findEsim: "eSIMを探す",
+  wxClear: "晴れ",
+  wxPartly: "晴れ時々くもり",
+  wxCloudy: "くもり",
+  wxFog: "霧",
+  wxRain: "雨",
+  wxSnow: "雪",
+  wxStorm: "雷雨",
 };
 type Dict = typeof ja;
 const en: Dict = {
@@ -568,26 +604,52 @@ const en: Dict = {
   toBudgetApp: "Send to budget app (World Budget Book)",
   toBudgetHint: "Exports what you paid as CSV — import it in World Budget Book via Settings → “Choose Wise CSV”",
   findEsim: "Find eSIM",
+  wxClear: "Clear",
+  wxPartly: "Partly cloudy",
+  wxCloudy: "Cloudy",
+  wxFog: "Fog",
+  wxRain: "Rain",
+  wxSnow: "Snow",
+  wxStorm: "Storm",
 };
 const TYPE_NAMES: Record<Lang, Record<string, string>> = {
+  ko: { flight: '항공', train: '기차', bus: '버스', hotel: '호텔', car: '렌터카', ticket: '티켓', food: '식당', plan: '일정', other: '기타' },
+  'zh-Hans': { flight: '航班', train: '火车', bus: '巴士', hotel: '酒店', car: '租车', ticket: '门票', food: '餐厅', plan: '行程', other: '其他' },
+  'zh-Hant': { flight: '航班', train: '火車', bus: '巴士', hotel: '飯店', car: '租車', ticket: '門票', food: '餐廳', plan: '行程', other: '其他' },
+  es: { flight: 'Vuelo', train: 'Tren', bus: 'Autobús', hotel: 'Hotel', car: 'Coche', ticket: 'Entrada', food: 'Restaurante', plan: 'Plan', other: 'Otro' },
+  fr: { flight: 'Vol', train: 'Train', bus: 'Bus', hotel: 'Hôtel', car: 'Voiture', ticket: 'Billet', food: 'Restaurant', plan: 'Plan', other: 'Autre' },
+  de: { flight: 'Flug', train: 'Zug', bus: 'Bus', hotel: 'Hotel', car: 'Mietwagen', ticket: 'Ticket', food: 'Restaurant', plan: 'Plan', other: 'Sonstiges' },
+  it: { flight: 'Volo', train: 'Treno', bus: 'Autobus', hotel: 'Hotel', car: 'Auto', ticket: 'Biglietto', food: 'Ristorante', plan: 'Piano', other: 'Altro' },
+  pt: { flight: 'Voo', train: 'Trem', bus: 'Ônibus', hotel: 'Hotel', car: 'Carro', ticket: 'Ingresso', food: 'Restaurante', plan: 'Plano', other: 'Outro' },
   ja: { flight: '飛行機', train: '電車', bus: 'バス', hotel: 'ホテル', car: 'レンタカー', ticket: 'チケット', food: 'お店', plan: '予定', other: 'その他' },
   en: { flight: 'Flight', train: 'Train', bus: 'Bus', hotel: 'Hotel', car: 'Car', ticket: 'Ticket', food: 'Dining', plan: 'Plan', other: 'Other' },
 };
-const DICTS: Record<Lang, Dict> = { ja, en };
+const DICTS: Record<Lang, Partial<Dict>> = { ja, en, ko, 'zh-Hans': zhHans, 'zh-Hant': zhHant, es, fr, de, it, pt };
 
 export function t(key: keyof Dict, vars?: Record<string, string | number>) {
-  let s = DICTS[current][key] ?? ja[key];
+  let s = DICTS[current]?.[key] ?? en[key] ?? ja[key];
   if (vars) Object.entries(vars).forEach(([k, v]) => (s = s.replace(`{${k}}`, String(v))));
   return s;
 }
-export const typeName = (id: string) => TYPE_NAMES[current][id] ?? id;
+export const typeName = (id: string) => TYPE_NAMES[current]?.[id] ?? TYPE_NAMES.en[id] ?? id;
 
 const WD = { ja: ['日', '月', '火', '水', '木', '金', '土'], en: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] };
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 /** 2026-02-14 → 2/14(土) / Sat 14 Feb */
 export function prettyDate(s: string) {
   const d = new Date(Number(s.slice(0, 4)), Number(s.slice(5, 7)) - 1, Number(s.slice(8, 10)));
-  return current === 'ja'
-    ? `${d.getMonth() + 1}/${d.getDate()}(${WD.ja[d.getDay()]})`
-    : `${WD.en[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]}`;
+  if (current === 'ja') return `${d.getMonth() + 1}/${d.getDate()}(${WD.ja[d.getDay()]})`;
+  if (current === 'en') return `${WD.en[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]}`;
+  try {
+    return new Intl.DateTimeFormat(localeOf(current), { month: 'short', day: 'numeric', weekday: 'short' }).format(d);
+  } catch {
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  }
 }
+
+/** 区切りの記号（日本語は「・」「〜」、ほかの言語は「·」「–」） */
+export const dot = () => (current === 'ja' ? '・' : '·');
+export const range = () => (current === 'ja' ? ' 〜 ' : ' – ');
+/** かっこ・見出しの記号 */
+export const paren = (x: string) => (current === 'ja' || current.startsWith('zh') ? `（${x}）` : ` (${x})`);
+export const bracket = (x: string) => (current === 'ja' || current.startsWith('zh') ? `【${x}】` : `[${x}]`);
