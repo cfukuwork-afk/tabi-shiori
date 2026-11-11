@@ -273,6 +273,17 @@ const ja = {
   themeAuto: "自動",
   themeLight: "ライト",
   themeDark: "ダーク",
+  countries: "行った国（これまで）",
+  vault: "大事な書類",
+  vaultOpen: "Face ID で開く（パスポート・保険の写し）",
+  vaultHint: "パスポート・ビザ・海外旅行保険の写しなどを、Face ID をかけて保存します。なくしたときの控えに",
+  vaultPh: "書類の名前（例：パスポート）",
+  vaultNote: "この端末の中だけに保存します（共有・バックアップには入りません）。長押しで削除",
+  noMemories: "まだ思い出がありません",
+  memoryBook: "思い出",
+  memoryBookMake: "思い出を1冊のPDFにする（印刷・フォトブック用）",
+  toBudgetApp: "家計簿へ送る（World Budget Book）",
+  toBudgetHint: "自分が払った予約と出費をCSVにします。World Budget Book の設定 →「Wise の CSV を選ぶ」から取り込めます",
 };
 type Dict = typeof ja;
 const en: Dict = {
@@ -544,6 +555,17 @@ const en: Dict = {
   themeAuto: "Auto",
   themeLight: "Light",
   themeDark: "Dark",
+  countries: "Countries visited",
+  vault: "Important documents",
+  vaultOpen: "Open with Face ID (passport, insurance copies)",
+  vaultHint: "Keep copies of your passport, visa and insurance behind Face ID — handy if you lose them",
+  vaultPh: "Name (e.g. Passport)",
+  vaultNote: "Stored on this device only (not shared or backed up). Long-press the bin to delete",
+  noMemories: "No memories yet",
+  memoryBook: "memories",
+  memoryBookMake: "Make a memory book (PDF for printing)",
+  toBudgetApp: "Send to budget app (World Budget Book)",
+  toBudgetHint: "Exports what you paid as CSV — import it in World Budget Book via Settings → “Choose Wise CSV”",
 };
 const TYPE_NAMES: Record<Lang, Record<string, string>> = {
   ja: { flight: '飛行機', train: '電車', bus: 'バス', hotel: 'ホテル', car: 'レンタカー', ticket: 'チケット', food: 'お店', plan: '予定', other: 'その他' },

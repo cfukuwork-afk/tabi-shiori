@@ -83,12 +83,16 @@ import { toMyTime, tzToMyTime, localToDate } from './src/airports';
 import { Directory, File as FSFile, Paths } from 'expo-file-system';
 import * as ExpoLinking from 'expo-linking';
 import { tripWeather, wxIcon, TripWx } from './src/weather';
-import { exportShioriPdf, exportSettleCsv, exportSettlePdf } from './src/exporters';
+import { exportBudgetCsv, exportMemoryBook, exportShioriPdf, exportSettleCsv, exportSettlePdf } from './src/exporters';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { exportBackup, importBackup, mergeBackup } from './src/backup';
 import { findPrice } from './src/parse';
 import { parseItinerary, PlanDraft } from './src/itinerary';
 import { SERVER } from './src/sync';
 import { InboxItem } from './src/data';
+import { countriesOf, flag } from './src/countries';
+import { dropVaultImage, keepVaultImage, loadVault, saveVault, unlock, VaultDoc } from './src/vault';
+import { myTz } from './src/airports';
 import { isPdf, isPkpass, keepFile, readPkpass, TicketFile } from './src/pkpass';
 import { pickAnyFile } from './src/files';
 import * as Sharing from 'expo-sharing';
@@ -151,6 +155,17 @@ const BUNDLED: Record<string, any> = {
   'asset:ticket': require('./assets/covers/ticket.jpg'),
 };
 const imgSrc = (u: string) => BUNDLED[u] ?? { uri: localPhoto(u) };
+/** 写真を小さくして data: URI に（PDFの中に入れる用） */
+async function toDataUri(u: string): Promise<string | null> {
+  try {
+    const uri = BUNDLED[u] ? Image.resolveAssetSource(BUNDLED[u])?.uri ?? u : localPhoto(u);
+    if (Platform.OS === 'web') return uri;
+    const r = await manipulateAsync(uri, [{ resize: { width: 900 } }], { compress: 0.7, format: SaveFormat.JPEG, base64: true });
+    return r.base64 ? `data:image/jpeg;base64,${r.base64}` : null;
+  } catch {
+    return null;
+  }
+}
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 const Icon = ({ name, size = 18, color = C.ink }: { name: string; size?: number; color?: string }) => (
@@ -690,7 +705,8 @@ function YearSummary({ trips, rate }: { trips: Trip[]; rate: RateInfo }) {
   mine.forEach((tr) => tr.bookings.forEach((b) => b.to && b.type !== 'car' && places.add(b.to.split(/[ ,(]/)[0])));
   const flights = mine.reduce((a, tr) => a + tr.bookings.filter((b) => b.type === 'flight').length, 0);
   const total = mine.reduce((a, tr) => a + tripTotal(tr, rate), 0);
-  const msg = `${t('yearTitle', { y })}\n✈ ${t('ysTrips')} ${mine.length} / ${t('ysNights')} ${nights} / ${t('ysPlaces')} ${places.size} / ${t('ysFlights')} ${flights}\n— Tripfold`;
+  const ever = countriesOf(trips.filter((tr) => isPast(tr) || (tripRange(tr).start ?? '9') <= todayStr()), myTz());
+  const msg = `${t('yearTitle', { y })}\n✈ ${t('ysTrips')} ${mine.length} / ${t('ysNights')} ${nights} / ${t('ysPlaces')} ${places.size} / ${t('ysFlights')} ${flights}${ever.length ? `\n${t('countries')} ${ever.length}  ${ever.map(flag).join('')}` : ''}\n— Tripfold`;
   return (
     <>
       <Text style={[s.sec, { marginTop: 14 }]}>{t('yearTitle', { y }).toUpperCase()}</Text>
@@ -708,6 +724,12 @@ function YearSummary({ trips, rate }: { trips: Trip[]; rate: RateInfo }) {
             </View>
           ))}
         </View>
+        {ever.length > 0 && (
+          <View style={{ marginTop: 6 }}>
+            <Text style={s.passK}>{`${t('countries').toUpperCase()}  ${ever.length}`}</Text>
+            <Text style={{ fontSize: 26, letterSpacing: 2, marginTop: 4, lineHeight: 34 }}>{ever.map(flag).join(' ')}</Text>
+          </View>
+        )}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
           <View>
             <Text style={s.passK}>{t('total').toUpperCase()}</Text>
@@ -1218,6 +1240,22 @@ function ShareSheet({ trip, onClose, onShared, onStop }: { trip: Trip; onClose: 
         <Icon name="document-text-outline" size={17} />
         <Text style={s.secondaryText}>{t('sendItinerary')}</Text>
       </Pressable>
+      {Object.values(trip.journal ?? {}).some((j) => j?.text || j?.photos?.length) && (
+        <Pressable
+          style={[s.secondary, { marginTop: 8 }, pdfBusy && { opacity: 0.5 }]}
+          disabled={pdfBusy}
+          onPress={async () => {
+            setPdfBusy(true);
+            try {
+              await exportMemoryBook(trip, toDataUri);
+            } catch {}
+            setPdfBusy(false);
+          }}
+        >
+          <Icon name="book-outline" size={17} />
+          <Text style={s.secondaryText}>{t('memoryBookMake')}</Text>
+        </Pressable>
+      )}
     </Sheet>
   );
 }
@@ -1736,6 +1774,12 @@ function MoneyTab({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onChan
 
       <Text style={s.sec}>{t('spending').toUpperCase()}</Text>
       <ExpenseBox trip={trip} rate={rate} onChange={onChange} />
+
+      <Pressable style={[s.secondary, { marginTop: 10 }]} onPress={() => exportBudgetCsv(trip).catch(() => {})}>
+        <Icon name="wallet-outline" size={16} />
+        <Text style={s.secondaryText}>{t('toBudgetApp')}</Text>
+      </Pressable>
+      <Text style={[s.hint, { fontSize: 11, marginTop: 4 }]}>{t('toBudgetHint')}</Text>
 
       <Text style={s.sec}>{t('convert').toUpperCase()}</Text>
       <Converter trip={trip} rate={rate} />
@@ -2980,6 +3024,74 @@ function BookingDetail({
   );
 }
 
+/** 大事な書類（Face ID で開いたあと） */
+function VaultSheet({ onClose }: { onClose: () => void }) {
+  const [docs, setDocs] = useState<VaultDoc[]>([]);
+  const [title, setTitle] = useState('');
+  const [view, setView] = useState<string[] | null>(null);
+  useEffect(() => {
+    loadVault().then(setDocs);
+  }, []);
+  const save = (v: VaultDoc[]) => (setDocs(v), saveVault(v));
+  return (
+    <Sheet visible onClose={onClose} tall>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 30 }}>
+        <Text style={s.sheetTitle}>{t('vault')}</Text>
+        <Text style={[s.hint, { lineHeight: 18, marginBottom: 10 }]}>{t('vaultHint')}</Text>
+        {docs.map((d) => (
+          <View key={d.id} style={[s.card, { marginBottom: 8 }]}>
+            <View style={s.rowBetween}>
+              <Text style={s.tlTitle}>{d.title}</Text>
+              <Pressable
+                hitSlop={8}
+                onLongPress={() => {
+                  d.photos.forEach(dropVaultImage);
+                  save(docs.filter((x) => x.id !== d.id));
+                }}
+              >
+                <Icon name="trash-outline" size={16} color={C.sub} />
+              </Pressable>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, marginTop: 8 }}>
+              {d.photos.map((p, i) => (
+                <Pressable key={p} onPress={() => setView(d.photos.slice(i).concat(d.photos.slice(0, i)))}>
+                  <Image source={{ uri: p }} style={s.ticketThumb} />
+                </Pressable>
+              ))}
+              <Pressable
+                style={s.ticketAdd}
+                onPress={async () => {
+                  const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, quality: 0.9 });
+                  if (!r.canceled) save(docs.map((x) => (x.id === d.id ? { ...x, photos: [...x.photos, ...r.assets.map((a) => keepVaultImage(a.uri))] } : x)));
+                }}
+              >
+                <Icon name="add" size={22} color={C.sub} />
+              </Pressable>
+            </ScrollView>
+          </View>
+        ))}
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
+          <TextInput style={[s.input, { flex: 1 }]} value={title} onChangeText={setTitle} placeholder={t('vaultPh')} placeholderTextColor={C.sub} />
+          <Pressable
+            style={[s.smallBtn, !title.trim() && { opacity: 0.4 }]}
+            disabled={!title.trim()}
+            onPress={async () => {
+              const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, quality: 0.9 });
+              const photos = r.canceled ? [] : r.assets.map((a) => keepVaultImage(a.uri));
+              save([...docs, { id: uid(), title: title.trim(), photos, at: Date.now() }]);
+              setTitle('');
+            }}
+          >
+            <Icon name="add" size={20} color={C.onInk} />
+          </Pressable>
+        </View>
+        <Text style={[s.hint, { fontSize: 11, marginTop: 10 }]}>{t('vaultNote')}</Text>
+      </ScrollView>
+      {view && <TicketViewer photos={view} onClose={() => setView(null)} />}
+    </Sheet>
+  );
+}
+
 /** 搭乗券・PDFを開く（共有メニュー：プレビュー・ウォレットに追加・ファイルに保存） */
 async function openTicketFile(f: { name: string; uri: string; mime?: string }) {
   try {
@@ -3045,6 +3157,7 @@ function SettingsSheet({
 }) {
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
+  const [vault, setVault] = useState(false);
   const run = async (fn: () => Promise<string>) => {
     setBusy(true);
     setMsg('');
@@ -3072,6 +3185,17 @@ function SettingsSheet({
         </Pressable>
       </View>
       {!!msg && <Text style={[s.hint, { marginTop: 6 }]}>{msg}</Text>}
+      <Text style={s.label}>{t('vault')}</Text>
+      <Pressable
+        style={s.secondary}
+        onPress={async () => {
+          if (await unlock(t('vault'))) setVault(true);
+        }}
+      >
+        <Icon name="lock-closed-outline" size={16} />
+        <Text style={s.secondaryText}>{t('vaultOpen')}</Text>
+      </Pressable>
+      {vault && <VaultSheet onClose={() => setVault(false)} />}
       <Text style={[s.hint, { textAlign: 'center', marginTop: 16 }]}>v0.1</Text>
     </Sheet>
   );

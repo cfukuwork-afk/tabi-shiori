@@ -80,3 +80,45 @@ export function exportSettleCsv(trip: Trip, r: RateInfo) {
   const csv = '﻿' + [head, ...body].map((row) => row.map(csvCell).join(',')).join('\n');
   return shareTextFile(`${trip.name}-${t('settle')}.csv`, csv, 'text/csv');
 }
+
+/** 思い出を1冊に：日ごとの写真と文（写真は小さくしてPDFの中に入れる） */
+export async function exportMemoryBook(trip: Trip, toDataUri: (u: string) => Promise<string | null>) {
+  const { start, end } = tripRange(trip);
+  const days = Object.entries(trip.journal ?? {})
+    .filter(([, j]) => j?.text || j?.photos?.length)
+    .sort(([a], [b]) => a.localeCompare(b));
+  const cover = trip.cover ? await toDataUri(trip.cover) : null;
+  let body = `<div style="page-break-after:always;min-height:240mm;display:flex;flex-direction:column;justify-content:flex-end">${
+    cover ? `<img src="${cover}" style="width:100%;height:150mm;object-fit:cover;border-radius:10pt;margin-bottom:14pt">` : ''
+  }<h1 style="font-size:30pt">${esc(trip.name)}</h1><div class="range">${start ? esc(prettyDate(start)) : ''}${end && end !== start ? ' – ' + esc(prettyDate(end)) : ''}</div></div>`;
+  for (const [date, j] of days) {
+    const imgs: string[] = [];
+    for (const p of (j.photos ?? []).slice(0, 6)) {
+      const d = await toDataUri(p);
+      if (d) imgs.push(d);
+    }
+    const n = start ? t('dayN', { n: daysBetween(start, date) + 1 }) + ' ・ ' : '';
+    const grid = imgs.length
+      ? `<div style="display:grid;grid-template-columns:${imgs.length === 1 ? '1fr' : '1fr 1fr'};gap:6pt;margin:8pt 0">${imgs
+          .map((d) => `<img src="${d}" style="width:100%;height:${imgs.length === 1 ? '120mm' : '62mm'};object-fit:cover;border-radius:6pt">`)
+          .join('')}</div>`
+      : '';
+    body += `<div style="break-inside:avoid;margin-bottom:18pt"><div class="dn" style="border-top:2pt solid #15171C;padding-top:6pt">${esc(n + prettyDate(date))}</div>${grid}${
+      j.text ? `<p style="font-size:12pt;line-height:1.8;white-space:pre-wrap">${esc(j.text)}</p>` : ''
+    }</div>`;
+  }
+  if (!days.length) body += `<p>${esc(t('noMemories'))}</p>`;
+  return sharePdf(`${trip.name}-${t('memoryBook')}`, wrap(trip.name, body));
+}
+
+/** World Budget Book（家計簿アプリ）へ：自分が払った分を CSV で */
+export function exportBudgetCsv(trip: Trip) {
+  const me = trip.myId ?? trip.members[0]?.id;
+  const mine = (by?: string) => trip.members.length <= 1 || (by ?? trip.members[0]?.id) === me;
+  const rows = [
+    ...trip.bookings.filter((b) => b.price && !b.cancelled && mine(b.paidBy)).map((b) => [b.id, b.start, b.price, b.currency || 'JPY', b.type, `${trip.name} ${b.title || typeName(b.type)}`]),
+    ...(trip.expenses ?? []).filter((e) => mine(e.paidBy)).map((e) => [e.id, e.date, e.amount, e.currency, e.cat, `${trip.name} ${e.title}`]),
+  ];
+  const csv = '﻿' + [['tripfold_id', 'date', 'amount', 'currency', 'category', 'memo'], ...rows].map((r) => r.map(csvCell).join(',')).join('\n');
+  return shareTextFile(`${trip.name}-tripfold.csv`, csv, 'text/csv');
+}
