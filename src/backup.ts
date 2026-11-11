@@ -12,7 +12,7 @@ function localUris(trips: Trip[]): string[] {
   const add = (u?: string) => u && u.startsWith('file:') && out.add(u);
   trips.forEach((t) => {
     add(t.cover);
-    t.bookings.forEach((b) => b.photos?.forEach(add));
+    t.bookings.forEach((b) => (b.photos?.forEach(add), b.files?.forEach((f) => add(f.uri))));
     Object.values(t.journal ?? {}).forEach((j) => j.photos?.forEach(add));
     t.wishes?.forEach((w) => (add(w.image), w.photos?.forEach(add)));
     t.expenses?.forEach((e) => add(e.photo));

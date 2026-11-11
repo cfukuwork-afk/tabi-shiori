@@ -8,6 +8,8 @@ import { t, prettyDate, typeName } from './i18n';
 import { openMap, placeQuery, routeUrl, tripCity } from './maps';
 import { geocode, Geo } from './geo';
 import NativeMap from './NativeMap';
+import { estimate, fmtKm } from './eta';
+import { openRoute } from './maps';
 
 export type Stop = { key: string; day: string; n: number; time?: string; title: string; sub: string; q: string; b: Booking; color: string };
 
@@ -91,7 +93,7 @@ export default function MapTab({ trip, onOpen }: { trip: Trip; onOpen: (b: Booki
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 12 }} contentContainerStyle={{ gap: 6 }}>
         {['all', ...days].map((d) => (
           <Pressable key={d} onPress={() => setDay(d)} style={[st.chip, day === d && st.chipOn]}>
-            <Text style={[st.chipText, day === d && { color: '#fff' }]}>
+            <Text style={[st.chipText, day === d && { color: C.onInk }]}>
               {d === 'all' ? t('allDays') : `${t('dayN', { n: days.indexOf(d) + 1 })} ・ ${prettyDate(d)}`}
             </Text>
           </Pressable>
@@ -107,15 +109,26 @@ export default function MapTab({ trip, onOpen }: { trip: Trip; onOpen: (b: Booki
       </View>
       {!!route && (
         <Pressable style={st.routeBtn} onPress={() => Linking.openURL(route)}>
-          <Ionicons name="navigate" size={16} color="#fff" />
+          <Ionicons name="navigate" size={16} color={C.onInk} />
           <Text style={st.routeText}>{t('routeGoogle')}</Text>
         </Pressable>
       )}
       <View style={{ marginTop: 14 }}>
         {shown.map((s, i) => {
           const newDay = i === 0 || shown[i - 1].day !== s.day;
+          const prev = !newDay ? shown[i - 1] : undefined;
+          // 同じ便・列車の出発→到着の間は出さない
+          const leg = prev && prev.b.id === s.b.id && ['flight', 'train', 'bus'].includes(s.b.type);
+          const est = prev && !leg && geo[prev.q] && geo[s.q] ? estimate(geo[prev.q]!, geo[s.q]!) : null;
           return (
             <View key={s.key}>
+              {est && est.mode !== 'far' && (
+                <Pressable style={st.eta} onPress={() => openRoute(prev!.q, s.q)}>
+                  <Ionicons name={est.mode === 'walk' ? 'walk-outline' : 'train-outline'} size={13} color={C.sub} />
+                  <Text style={st.etaText}>{`${est.mode === 'walk' ? t('walk') : t('ride')} ${t('aboutMin', { n: est.min })} · ${fmtKm(est.km)}`}</Text>
+                  <Ionicons name="chevron-forward" size={12} color={C.sub} />
+                </Pressable>
+              )}
               {newDay && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14, marginBottom: 6 }}>
                   {all && <View style={{ width: 14, height: 4, borderRadius: 2, backgroundColor: dayColor(s.day) }} />}
@@ -148,21 +161,29 @@ export default function MapTab({ trip, onOpen }: { trip: Trip; onOpen: (b: Booki
   );
 }
 
-const st = StyleSheet.create({
+let st = makeSt();
+export function restyleMap() {
+  st = makeSt();
+}
+function makeSt() {
+  return StyleSheet.create({
+  eta: { flexDirection: 'row', alignItems: 'center', gap: 5, marginLeft: 13, paddingLeft: 22, borderLeftWidth: 2, borderStyle: 'dotted', borderColor: C.line, paddingVertical: 4 },
+  etaText: { color: C.sub, fontSize: 12, fontWeight: '700' },
   empty: { color: C.sub, textAlign: 'center', marginTop: 40, lineHeight: 22 },
   chip: { borderRadius: 20, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, paddingHorizontal: 12, paddingVertical: 7 },
   chipOn: { backgroundColor: C.ink, borderColor: C.ink },
   chipText: { fontWeight: '800', color: C.ink, fontSize: 13 },
   mapBox: { height: 360, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: C.line, backgroundColor: C.chip },
   busy: { position: 'absolute', top: 10, alignSelf: 'center', backgroundColor: 'rgba(21,23,28,0.85)', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6 },
-  busyText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  busyText: { color: C.onInk, fontSize: 12, fontWeight: '700' },
   routeBtn: { flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: C.ink, borderRadius: 16, paddingVertical: 14, marginTop: 12 },
-  routeText: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  routeText: { color: C.onInk, fontWeight: '800', fontSize: 15 },
   dayHead: { fontSize: 13, fontWeight: '900', color: C.ink, marginTop: 14, marginBottom: 6 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.card, borderRadius: 16, padding: 12, marginBottom: 6, borderWidth: 1, borderColor: C.line },
   num: { minWidth: 30, height: 26, paddingHorizontal: 5, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  numText: { color: '#fff', fontWeight: '900', fontSize: 13 },
+  numText: { color: C.onInk, fontWeight: '900', fontSize: 13 },
   title: { fontWeight: '800', color: C.ink, fontSize: 14 },
   sub: { color: C.sub, fontSize: 12, marginTop: 2 },
   missing: { color: C.sub, fontSize: 12, marginTop: 8, lineHeight: 18 },
 });
+}

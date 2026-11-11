@@ -48,6 +48,7 @@ export type Booking = {
   splitWith?: string[]; // 割り勘する人（空なら全員）
   memo?: string;
   photos?: string[]; // スクショ（端末内のURI）
+  files?: { name: string; uri: string; mime?: string }[]; // 搭乗券（.pkpass）・PDFのチケット
   tz?: string; createdAt: number;
   cancelled?: boolean; // キャンセルのメールで消さずに印をつける
   u?: number;

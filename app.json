@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.fukuda.tripfold",
@@ -52,7 +52,8 @@
           "iosActivationRules": {
             "NSExtensionActivationSupportsText": true,
             "NSExtensionActivationSupportsWebURLWithMaxCount": 1,
-            "NSExtensionActivationSupportsImageWithMaxCount": 1
+            "NSExtensionActivationSupportsImageWithMaxCount": 1,
+            "NSExtensionActivationSupportsFileWithMaxCount": 1
           },
           "androidIntentFilters": [
             "text/*",

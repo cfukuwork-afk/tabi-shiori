@@ -19,13 +19,15 @@ import {
   TextInput,
   View,
   useWindowDimensions,
+  useColorScheme,
   AppState,
   ActivityIndicator,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { openMap, openRoute, placeQuery, setMapApp, tripCity } from './src/maps';
-import { bookingTz, arrivalTz, fillTimezones } from './src/geo';
+import { bookingTz, arrivalTz, fillTimezones, geocode } from './src/geo';
+import { estimate, fmtKm } from './src/eta';
 import MapTab, { tripStops } from './src/MapTab';
 import { fetchMeta, firstUrl, platformOf } from './src/wish';
 import { stamp, mergeTrip } from './src/merge';
@@ -73,7 +75,8 @@ import {
 import { prettyDate, setLang, t, typeName } from './src/i18n';
 import { parseBooking } from './src/parse';
 import { CURRENCIES, CUR_COUNTRIES, findCurrency } from './src/currencies';
-import { C, cleanNum, shadow } from './src/theme';
+import { C, applyTheme, cleanNum, isDark, shadow } from './src/theme';
+import { restyleMap } from './src/MapTab';
 import { ocrAvailable, recognizeReceipt } from './modules/receipt-ocr';
 import { askPermission, rescheduleAll } from './src/notify';
 import { toMyTime, tzToMyTime, localToDate } from './src/airports';
@@ -83,8 +86,12 @@ import { tripWeather, wxIcon, TripWx } from './src/weather';
 import { exportShioriPdf, exportSettleCsv, exportSettlePdf } from './src/exporters';
 import { exportBackup, importBackup, mergeBackup } from './src/backup';
 import { findPrice } from './src/parse';
+import { parseItinerary, PlanDraft } from './src/itinerary';
 import { SERVER } from './src/sync';
 import { InboxItem } from './src/data';
+import { isPdf, isPkpass, keepFile, readPkpass, TicketFile } from './src/pkpass';
+import { pickAnyFile } from './src/files';
+import * as Sharing from 'expo-sharing';
 import { activityLinks, hotelLinks, FindLink } from './src/affiliate';
 import { syncTripActivity, updateNextWidget, widgetsAvailable } from './src/liveWidgets';
 
@@ -132,7 +139,7 @@ function itineraryText(trip: Trip) {
   return lines.join('\n');
 }
 
-type AddInitial = { text?: string; image?: string; planDate?: string; planTitle?: string; planMemo?: string; planFrom?: string; inboxId?: string };
+type AddInitial = { file?: { name: string; uri: string; mime?: string }; text?: string; image?: string; planDate?: string; planTitle?: string; planMemo?: string; planFrom?: string; inboxId?: string };
 /** アプリに入れてある写真（お試し旅行の表紙） */
 const BUNDLED: Record<string, any> = {
   'asset:paris': require('./assets/covers/paris.jpg'),
@@ -153,7 +160,7 @@ const Icon = ({ name, size = 18, color = C.ink }: { name: string; size?: number;
 const TypeBadge = ({ type, size = 38 }: { type: BookingType; size?: number }) => {
   const ty = typeOf(type);
   return (
-    <View style={{ width: size, height: size, borderRadius: size * 0.32, backgroundColor: ty.soft, alignItems: 'center', justifyContent: 'center' }}>
+    <View style={{ width: size, height: size, borderRadius: size * 0.32, backgroundColor: isDark() ? ty.color + '33' : ty.soft, alignItems: 'center', justifyContent: 'center' }}>
       <Icon name={ty.icon + '-outline'} size={size * 0.48} color={ty.color} />
     </View>
   );
@@ -203,7 +210,7 @@ function Main() {
   const [showSettings, setShowSettings] = useState(false);
   const [adding, setAdding] = useState<{ tripId: string; edit?: Booking; initial?: AddInitial } | null>(null);
   const [detail, setDetail] = useState<{ tripId: string; id: string } | null>(null);
-  const [incoming, setIncoming] = useState<{ text?: string; image?: string } | null>(null);
+  const [incoming, setIncoming] = useState<{ text?: string; image?: string; file?: { name: string; uri: string; mime?: string } } | null>(null);
   const [wishIn, setWishIn] = useState<{ tripId: string; url: string } | null>(null);
   const [sharing, setSharing] = useState<string | null>(null);
   const [joining, setJoining] = useState<string | null>(null); // 共有コード（空文字なら入力から）
@@ -230,8 +237,10 @@ function Main() {
   useEffect(() => {
     if (!hasShareIntent) return;
     const img = shareIntent.files?.find((f) => f.mimeType?.startsWith('image'))?.path;
+    const doc = shareIntent.files?.find((f) => isPdf(f.fileName, f.mimeType) || isPkpass(f.fileName, f.mimeType));
     const text = shareIntent.text ?? undefined;
-    if (img || text) setIncoming({ text, image: img });
+    if (doc) setIncoming({ file: { name: doc.fileName ?? 'ticket', uri: doc.path, mime: doc.mimeType ?? undefined } });
+    else if (img || text) setIncoming({ text, image: img });
     resetShareIntent();
   }, [hasShareIntent]);
   useEffect(() => {
@@ -254,6 +263,14 @@ function Main() {
 
   setLang(settings.lang);
   setMapApp(settings.mapApp ?? 'ask');
+  // ダークモード（設定：自動・ライト・ダーク）
+  const scheme = useColorScheme();
+  const dark = settings.theme === 'dark' || (settings.theme !== 'light' && scheme === 'dark');
+  if (dark !== isDark()) {
+    applyTheme(dark);
+    s = makeStyles();
+    restyleMap();
+  }
 
   useEffect(() => {
     (async () => {
@@ -356,8 +373,8 @@ function Main() {
   if (!ready) return <View style={{ flex: 1, backgroundColor: C.bg }} />;
 
   return (
-    <View style={{ flex: 1, backgroundColor: C.bg, paddingTop: insets.top }}>
-      <StatusBar style="dark" />
+    <View key={dark ? 'dark' : 'light'} style={{ flex: 1, backgroundColor: C.bg, paddingTop: insets.top }}>
+      <StatusBar style={dark ? 'light' : 'dark'} />
       {trip ? (
         <TripScreen
           trip={trip}
@@ -498,6 +515,10 @@ function Main() {
               bookings: tr.bookings.some((x) => x.id === b.id) ? tr.bookings.map((x) => (x.id === b.id ? b : x)) : [...tr.bookings, b],
               inbox: inboxId ? (tr.inbox ?? []).filter((x) => x.id !== inboxId) : tr.inbox,
             }));
+            setAdding(null);
+          }}
+          onSaveMany={(list) => {
+            updateTrip(adding.tripId, (tr) => ({ ...tr, bookings: [...tr.bookings, ...list] }));
             setAdding(null);
           }}
           onLater={(src) => {
@@ -693,8 +714,8 @@ function YearSummary({ trips, rate }: { trips: Trip[]; rate: RateInfo }) {
             <Text style={[s.passV, { fontSize: 20 }]}>{fmtMoney(Math.round(total), rate.base)}</Text>
           </View>
           <Pressable onPress={() => Share.share({ message: msg })} style={s.yearShare}>
-            <Icon name="share-outline" size={16} color={C.ink} />
-            <Text style={[s.chipText, { color: C.ink }]}>{t('share')}</Text>
+            <Icon name="share-outline" size={16} color="#15171C" />
+            <Text style={[s.chipText, { color: '#15171C' }]}>{t('share')}</Text>
           </Pressable>
         </View>
       </View>
@@ -890,7 +911,7 @@ function NextCard({ next, onPress, onTickets }: { next: NonNullable<ReturnType<t
         </Text>
         {!!b.photos?.length && onTickets && (
           <Pressable onPress={onTickets} hitSlop={8} style={s.ticketPill}>
-            <Icon name="qr-code" size={14} color={C.ink} />
+            <Icon name="qr-code" size={14} color="#15171C" />
             <Text style={s.ticketPillText}>{t('showTicket')}</Text>
           </Pressable>
         )}
@@ -985,7 +1006,7 @@ function TripScreen({
         >
           <Cover trip={trip} size={40} />
           <View style={[s.camBadge, { width: 18, height: 18, right: -4, bottom: -4 }]}>
-            <Icon name="camera" size={10} color="#fff" />
+            <Icon name="camera" size={10} color={C.onInk} />
           </View>
         </Pressable>
         <Pressable style={{ flex: 1 }} onPress={() => setEditing(true)} accessibilityHint={t('tapToRename')}>
@@ -1041,7 +1062,7 @@ function TripScreen({
       </ScrollView>
       {(tab === 'plan' || tab === 'bookings') && (
         <Pressable style={({ pressed }) => [s.fab, pressed && { transform: [{ scale: 0.97 }] }]} onPress={onAdd}>
-          <Icon name="add" size={20} color="#fff" />
+          <Icon name="add" size={20} color={C.onInk} />
           <Text style={s.fabText}>{t('addBooking')}</Text>
         </Pressable>
       )}
@@ -1156,7 +1177,7 @@ function ShareSheet({ trip, onClose, onShared, onStop }: { trip: Trip; onClose: 
               setBusy(false);
             }}
           >
-            {busy ? <ActivityIndicator color="#fff" /> : <Text style={s.primaryText}>{t('makeCode')}</Text>}
+            {busy ? <ActivityIndicator color={C.onInk} /> : <Text style={s.primaryText}>{t('makeCode')}</Text>}
           </Pressable>
         </>
       ) : (
@@ -1243,7 +1264,7 @@ function JoinSheet({ initialCode, myName, onClose, onJoin }: { initialCode: stri
             onSubmitEditing={() => look()}
           />
           <Pressable style={[s.primary, busy && { opacity: 0.5 }]} disabled={busy} onPress={() => look()}>
-            {busy ? <ActivityIndicator color="#fff" /> : <Text style={s.primaryText}>{t('findTrip')}</Text>}
+            {busy ? <ActivityIndicator color={C.onInk} /> : <Text style={s.primaryText}>{t('findTrip')}</Text>}
           </Pressable>
         </>
       ) : (
@@ -1270,7 +1291,7 @@ function JoinSheet({ initialCode, myName, onClose, onJoin }: { initialCode: stri
               const id = uid();
               join(id, { id, name: name.trim() });
             }}>
-              <Icon name="add" size={20} color="#fff" />
+              <Icon name="add" size={20} color={C.onInk} />
             </Pressable>
           </View>
         </>
@@ -1438,7 +1459,7 @@ function WishSheet({
               }
             }}
           >
-            <Icon name="clipboard-outline" size={18} color="#fff" />
+            <Icon name="clipboard-outline" size={18} color={C.onInk} />
           </Pressable>
         </View>
         {!!w.url && (
@@ -1701,7 +1722,7 @@ function MoneyTab({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onChan
   const max = Math.max(1, ...byType.map((x) => x.v));
   return (
     <>
-      <View style={[s.card, { backgroundColor: C.ink }]}>
+      <View style={[s.card, { backgroundColor: C.night }]}>
         <Text style={{ color: '#E8DCE6', fontWeight: '800', fontSize: 13 }}>{t('total')}</Text>
         <Text style={{ color: '#fff', fontWeight: '900', fontSize: 32, marginTop: 2 }}>{fmtMoney(Math.round(total), rate.base)}</Text>
         {trip.members.length > 1 && (
@@ -1710,7 +1731,7 @@ function MoneyTab({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onChan
           </Text>
         )}
         <Text style={{ color: '#B9A9B7', fontSize: 11, marginTop: 6 }}>{t('rateNote')}</Text>
-        <BudgetBar trip={trip} total={total} home={rate.base} onChange={onChange} />
+        <BudgetBar trip={trip} total={total} rate={rate} home={rate.base} onChange={onChange} />
       </View>
 
       <Text style={s.sec}>{t('spending').toUpperCase()}</Text>
@@ -1830,7 +1851,7 @@ function MoneyTab({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onChan
   );
 }
 
-function BudgetBar({ trip, total, home, onChange }: { trip: Trip; total: number; home: string; onChange: (fn: (t: Trip) => Trip) => void }) {
+function BudgetBar({ trip, total, rate, home, onChange }: { trip: Trip; total: number; rate: RateInfo; home: string; onChange: (fn: (t: Trip) => Trip) => void }) {
   const [edit, setEdit] = useState(false);
   const [v, setV] = useState(trip.budget ? String(trip.budget) : '');
   const b = trip.budget ?? 0;
@@ -1841,7 +1862,7 @@ function BudgetBar({ trip, total, home, onChange }: { trip: Trip; total: number;
       {edit ? (
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <TextInput
-            style={[s.input, { flex: 1, backgroundColor: '#24272E', borderColor: '#33363E', color: '#fff' }]}
+            style={[s.input, { flex: 1, backgroundColor: '#24272E', borderColor: '#33363E', color: C.onInk }]}
             value={v}
             onChangeText={(x) => setV(cleanNum(x, 0))}
             keyboardType="number-pad"
@@ -1857,7 +1878,7 @@ function BudgetBar({ trip, total, home, onChange }: { trip: Trip; total: number;
               setEdit(false);
             }}
           >
-            <Icon name="checkmark" size={20} color="#fff" />
+            <Icon name="checkmark" size={20} color={C.onInk} />
           </Pressable>
         </View>
       ) : b ? (
@@ -1873,6 +1894,27 @@ function BudgetBar({ trip, total, home, onChange }: { trip: Trip; total: number;
           <View style={{ height: 6, borderRadius: 3, backgroundColor: '#2C2F36', marginTop: 8, overflow: 'hidden' }}>
             <View style={{ height: 6, width: `${ratio * 100}%`, backgroundColor: over ? C.pink : '#7FE0BE' }} />
           </View>
+          {(() => {
+            // 1日の予算：残りの予算を残りの日数で割って、今日使った分を引く
+            const { start, end } = tripRange(trip);
+            const today = todayStr();
+            if (!start || !end || end < today) return null;
+            const from = start > today ? start : today;
+            const daysLeft = daysBetween(from, end) + 1;
+            const todaySpent = (trip.expenses ?? []).filter((e) => e.date === today).reduce((a, e) => a + expHome(e, rate), 0);
+            const daily = (b - (total - todaySpent)) / daysLeft;
+            const leftToday = daily - (start > today ? 0 : todaySpent);
+            return (
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }}>
+                <Text style={{ color: '#B9BCC4', fontSize: 12, fontWeight: '700' }}>{t('perDay', { v: fmtMoney(Math.max(0, Math.round(daily)), home) })}</Text>
+                {start <= today && (
+                  <Text style={{ color: leftToday < 0 ? C.pink : '#FFFFFF', fontSize: 13, fontWeight: '900' }}>
+                    {leftToday < 0 ? t('todayOver', { v: fmtMoney(Math.round(-leftToday), home) }) : t('todayLeft', { v: fmtMoney(Math.round(leftToday), home) })}
+                  </Text>
+                )}
+              </View>
+            );
+          })()}
         </Pressable>
       ) : (
         <Pressable onPress={() => setEdit(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -1950,8 +1992,8 @@ function ExpenseBox({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onCh
       <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
         {EXP_CATS.map((x) => (
           <Pressable key={x.id} onPress={() => setCat(x.id)} style={[s.typeChip, cat === x.id && { backgroundColor: C.ink, borderColor: C.ink }]}>
-            <Icon name={x.icon} size={14} color={cat === x.id ? '#fff' : C.sub} />
-            <Text style={[s.chipText, cat === x.id ? { color: '#fff' } : { color: C.sub }]}>{catName(x.id)}</Text>
+            <Icon name={x.icon} size={14} color={cat === x.id ? C.onInk : C.sub} />
+            <Text style={[s.chipText, cat === x.id ? { color: C.onInk } : { color: C.sub }]}>{catName(x.id)}</Text>
           </Pressable>
         ))}
       </View>
@@ -1967,7 +2009,7 @@ function ExpenseBox({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onCh
         <TextInput style={[s.input, { flex: 1 }]} value={amt} onChangeText={(x) => setAmt(cleanNum(x, c.decimals))} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={C.sub} />
         <CurrencyPicker value={cur} onChange={(x) => (setCur(x), setRateTxt(''))} />
         <Pressable style={[s.smallBtn, !amt && { opacity: 0.35 }]} onPress={add} disabled={!amt}>
-          <Icon name="add" size={20} color="#fff" />
+          <Icon name="add" size={20} color={C.onInk} />
         </Pressable>
       </View>
       {cur !== rate.base && (
@@ -2058,66 +2100,96 @@ const PACK_SETS = [
 ] as const;
 
 function PackTab({ trip, onChange }: { trip: Trip; onChange: (fn: (t: Trip) => Trip) => void }) {
+  const [mode, setMode] = useState<'pack' | 'gift'>('pack');
   const [text, setText] = useState('');
-  const done = trip.checklist.filter((c) => c.done).length;
+  const [who, setWho] = useState('');
+  const list = trip.checklist.filter((c) => (mode === 'gift' ? c.kind === 'gift' : c.kind !== 'gift'));
+  const done = list.filter((c) => c.done).length;
+  const add = () => {
+    if (!text.trim()) return;
+    const item = mode === 'gift' ? { id: uid(), text: text.trim(), done: false, kind: 'gift' as const, who: who.trim() || undefined } : { id: uid(), text: text.trim(), done: false };
+    onChange((tr) => ({ ...tr, checklist: [...tr.checklist, item] }));
+    setText('');
+  };
+  // お土産は「誰に」ごとにまとめる
+  const groups = mode === 'gift' ? [...new Set(list.map((c) => c.who ?? ''))].map((w) => ({ who: w, items: list.filter((c) => (c.who ?? '') === w) })) : [{ who: '', items: list }];
+  const row = (c: (typeof list)[number], i: number) => (
+    <Pressable
+      key={c.id}
+      style={[s.tlRow, i > 0 && s.tlLine]}
+      onPress={() => onChange((tr) => ({ ...tr, checklist: tr.checklist.map((x) => (x.id === c.id ? { ...x, done: !x.done } : x)) }))}
+      onLongPress={() => onChange((tr) => ({ ...tr, checklist: tr.checklist.filter((x) => x.id !== c.id) }))}
+    >
+      <View style={[s.check, c.done && { backgroundColor: C.ink, borderColor: C.ink }]}>{c.done && <Icon name="checkmark" size={15} color={C.onInk} />}</View>
+      <Text style={[s.tlTitle, { flex: 1 }, c.done && { color: C.sub, textDecorationLine: 'line-through' }]}>{c.text}</Text>
+      {mode === 'gift' && (
+        <Pressable
+          hitSlop={8}
+          onPress={async () => {
+            const uri = await pickImage();
+            if (uri) onChange((tr) => ({ ...tr, checklist: tr.checklist.map((x) => (x.id === c.id ? { ...x, photo: uri } : x)) }));
+          }}
+        >
+          {c.photo ? <Image source={imgSrc(c.photo)} style={{ width: 34, height: 34, borderRadius: 8 }} /> : <Icon name="camera-outline" size={18} color={C.sub} />}
+        </Pressable>
+      )}
+    </Pressable>
+  );
   return (
     <>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 10 }}>
-        {PACK_SETS.map((ps) => (
-          <Pressable
-            key={ps.id}
-            style={s.typeChip}
-            onPress={() =>
-              onChange((tr) => {
-                const have = new Set(tr.checklist.map((c) => c.text));
-                const add = t(ps.key).split(',').filter((x) => !have.has(x));
-                return { ...tr, checklist: [...tr.checklist, ...add.map((x) => ({ id: uid(), text: x, done: false }))] };
-              })
-            }
-          >
-            <Icon name={ps.icon} size={14} color={C.sub} />
-            <Text style={s.chipText}>{t(ps.name)}</Text>
+      <View style={[s.seg, { marginBottom: 12 }]}>
+        {(['pack', 'gift'] as const).map((m) => (
+          <Pressable key={m} onPress={() => setMode(m)} style={[s.segItem, mode === m && s.segOn]}>
+            <Icon name={m === 'pack' ? 'bag-check-outline' : 'gift-outline'} size={15} color={mode === m ? C.ink : C.sub} />
+            <Text style={[s.chipText, mode !== m && { color: C.sub }]}>{m === 'pack' ? t('tabPack') : t('gifts')}</Text>
           </Pressable>
         ))}
-      </ScrollView>
+      </View>
+      {mode === 'pack' && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 10 }}>
+          {PACK_SETS.map((ps) => (
+            <Pressable
+              key={ps.id}
+              style={s.typeChip}
+              onPress={() =>
+                onChange((tr) => {
+                  const have = new Set(tr.checklist.map((c) => c.text));
+                  const add = t(ps.key).split(',').filter((x) => !have.has(x));
+                  return { ...tr, checklist: [...tr.checklist, ...add.map((x) => ({ id: uid(), text: x, done: false }))] };
+                })
+              }
+            >
+              <Icon name={ps.icon} size={14} color={C.sub} />
+              <Text style={s.chipText}>{t(ps.name)}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      )}
       <Text style={s.hint}>
-        {t('packHint')} ・ {done}/{trip.checklist.length}
+        {mode === 'gift' ? t('giftHint') : t('packHint')} ・ {done}/{list.length}
       </Text>
+      {groups.map((g) => (
+        <View key={g.who || '-'} style={[s.card, { marginTop: 8 }]}>
+          {mode === 'gift' && !!g.who && <Text style={[s.kicker, { marginBottom: 4 }]}>{t('giftFor', { who: g.who })}</Text>}
+          {g.items.map(row)}
+        </View>
+      ))}
       <View style={[s.card, { marginTop: 8 }]}>
-        {trip.checklist.map((c, i) => (
-          <Pressable
-            key={c.id}
-            style={[s.tlRow, i > 0 && s.tlLine]}
-            onPress={() => onChange((tr) => ({ ...tr, checklist: tr.checklist.map((x) => (x.id === c.id ? { ...x, done: !x.done } : x)) }))}
-            onLongPress={() => onChange((tr) => ({ ...tr, checklist: tr.checklist.filter((x) => x.id !== c.id) }))}
-          >
-            <View style={[s.check, c.done && { backgroundColor: C.ink, borderColor: C.ink }]}>{c.done && <Icon name="checkmark" size={15} color="#fff" />}</View>
-            <Text style={[s.tlTitle, c.done && { color: C.sub, textDecorationLine: 'line-through' }]}>{c.text}</Text>
-          </Pressable>
-        ))}
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+        {mode === 'gift' && (
+          <TextInput style={[s.input, { marginBottom: 8 }]} value={who} onChangeText={setWho} placeholder={t('giftWhoPh')} placeholderTextColor={C.sub} />
+        )}
+        <View style={{ flexDirection: 'row', gap: 8 }}>
           <TextInput
             style={[s.input, { flex: 1 }]}
             value={text}
             onChangeText={setText}
-            placeholder={t('packPh')}
+            placeholder={mode === 'gift' ? t('giftPh') : t('packPh')}
             placeholderTextColor={C.sub}
             returnKeyType="done"
             submitBehavior="submit"
-            onSubmitEditing={() => {
-              if (!text.trim()) return;
-              onChange((tr) => ({ ...tr, checklist: [...tr.checklist, { id: uid(), text: text.trim(), done: false }] }));
-              setText('');
-            }}
+            onSubmitEditing={add}
           />
-          <Pressable
-            style={s.smallBtn}
-            onPress={() => {
-              if (!text.trim()) return;
-              onChange((tr) => ({ ...tr, checklist: [...tr.checklist, { id: uid(), text: text.trim(), done: false }] }));
-              setText('');
-            }}
-          >
+          <Pressable style={s.smallBtn} onPress={add}>
             <Text style={s.smallBtnText}>＋</Text>
           </Pressable>
         </View>
@@ -2226,7 +2298,7 @@ function NewTripSheet({
         >
           <Cover trip={{ name: name || '··', emoji: color, cover }} size={96} />
           <View style={s.camBadge}>
-            <Icon name="camera" size={14} color="#fff" />
+            <Icon name="camera" size={14} color={C.onInk} />
           </View>
         </Pressable>
         <Text style={[s.hint, { marginTop: 8 }]}>{t('coverHint')}</Text>
@@ -2266,6 +2338,7 @@ function AddBookingSheet({
   onClose,
   onSave,
   onLater,
+  onSaveMany,
   initial,
 }: {
   initial?: AddInitial;
@@ -2275,9 +2348,11 @@ function AddBookingSheet({
   onClose: () => void;
   onSave: (b: Booking) => void;
   onLater?: (src: { text?: string; image?: string }) => void;
+  onSaveMany?: (list: Booking[]) => void;
 }) {
+  const [drafts, setDrafts] = useState<PlanDraft[] | null>(null);
   const [src, setSrc] = useState<{ text?: string; image?: string }>({});
-  const [mode, setMode] = useState<'choose' | 'text' | 'form'>(edit || initial?.planDate ? 'form' : 'choose');
+  const [mode, setMode] = useState<'choose' | 'text' | 'form' | 'ai'>(edit || initial?.planDate ? 'form' : 'choose');
   const [text, setText] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -2290,7 +2365,10 @@ function AddBookingSheet({
   const set = (p: Partial<Booking>) => setB((x) => ({ ...x, ...p }));
   const applyParsed = (raw: string, photo?: string) => {
     setSrc({ text: photo ? undefined : raw, image: photo });
-    const p = parseBooking(raw);
+    applyFields(parseBooking(raw), photo);
+  };
+  const applyFields = (p: Partial<Booking>, photo?: string, file?: TicketFile) => {
+    const addFile = (fs?: TicketFile[]) => (file ? [...(fs ?? []), file] : fs);
     const got = Object.keys(p).filter((k) => k !== 'type' && k !== 'cancelled').length;
     // 同じ予約番号の予約があれば、そちらを更新する（座席指定・変更・キャンセルのメール）
     const norm = (c?: string) => (c ?? '').replace(/[\s-]/g, '').toUpperCase();
@@ -2302,14 +2380,30 @@ function AddBookingSheet({
       (same.length === 1 && (!p.title || !same[0].title) ? same[0] : undefined);
     if (hit) {
       const keep = p.cancelled ? { cancelled: true } : { ...p, type: hit.type, cancelled: undefined };
-      setB({ ...hit, ...keep, currency: (keep as any).currency ?? hit.currency, photos: photo ? [...(hit.photos ?? []), photo] : hit.photos });
+      setB({ ...hit, ...keep, currency: (keep as any).currency ?? hit.currency, photos: photo ? [...(hit.photos ?? []), photo] : hit.photos, files: addFile(hit.files), memo: p.memo && hit.memo && !hit.memo.includes(p.memo) ? `${hit.memo}\n${p.memo}` : p.memo ?? hit.memo });
       setNote(p.cancelled ? t('readCancel') : t('readUpdate'));
       setMode('form');
       return;
     }
-    setB((x) => ({ ...x, ...p, currency: p.currency ?? x.currency, photos: photo ? [...(x.photos ?? []), photo] : x.photos }));
+    setB((x) => ({ ...x, ...p, currency: p.currency ?? x.currency, photos: photo ? [...(x.photos ?? []), photo] : x.photos, files: addFile(x.files) }));
     setNote(p.cancelled ? t('readCancelNew') : got >= 2 ? t('readOk') : t('readNone'));
     setMode('form');
+  };
+  // 搭乗券（.pkpass）・PDFのチケット
+  const readFile = async (f: { name: string; uri: string; mime?: string }) => {
+    const uri = keepFile(f.uri, f.name);
+    const file: TicketFile = { name: f.name, uri, mime: f.mime };
+    if (isPkpass(f.name, f.mime)) {
+      const p = await readPkpass(uri);
+      if (p) return applyFields(p, undefined, file);
+    }
+    setB((x) => ({ ...x, files: [...(x.files ?? []), file] }));
+    setNote(isPdf(f.name, f.mime) ? t('pdfAttached') : t('fileAttached'));
+    setMode('form');
+  };
+  const pickFile = async () => {
+    const f = await pickAnyFile(['application/pdf', 'application/vnd.apple.pkpass', 'com.apple.pkpass', '*/*']);
+    if (f) readFile(f);
   };
   const pickShot = async () => {
     const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
@@ -2343,18 +2437,21 @@ function AddBookingSheet({
   const cur = findCurrency(b.currency || home);
   useEffect(() => {
     if (!initial || initial.planDate) return;
-    if (initial.image) readImage(keepImage(initial.image));
+    if (initial.file) readFile(initial.file);
+    else if (initial.image) readImage(keepImage(initial.image));
     else if (initial.text) applyParsed(initial.text);
   }, []);
 
   return (
-    <Sheet visible onClose={onClose} tall={mode === 'form'}>
+    <Sheet visible onClose={onClose} tall={mode === 'form' || mode === 'ai'}>
       {mode === 'choose' && (
         <>
           <Text style={s.sheetTitle}>{t('howAdd')}</Text>
           <AddOption icon="scan-outline" title={t('fromShot')} sub={busy ? t('ocrBusy') : t('fromShotSub')} onPress={pickShot} />
+          <AddOption icon="wallet-outline" title={t('fromFile')} sub={t('fromFileSub')} onPress={pickFile} />
           <AddOption icon="mail-open-outline" title={t('fromText')} sub={t('fromTextSub')} onPress={() => setMode('text')} />
           <AddOption icon="create-outline" title={t('manual')} sub={t('manualSub')} onPress={() => setMode('form')} />
+          {!!onSaveMany && <AddOption icon="sparkles-outline" title={t('fromAi')} sub={t('fromAiSub')} onPress={() => setMode('ai')} />}
           <AddOption
             icon="flag-outline"
             title={t('addPlan')}
@@ -2394,6 +2491,66 @@ function AddBookingSheet({
           </View>
         </>
       )}
+      {mode === 'ai' && (
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 30 }}>
+          <Text style={s.sheetTitle}>{t('fromAi')}</Text>
+          <Text style={[s.hint, { marginBottom: 8, lineHeight: 18 }]}>{t('aiHint')}</Text>
+          <TextInput style={[s.input, { height: 180, textAlignVertical: 'top' }]} multiline value={text} onChangeText={(v) => (setText(v), setDrafts(null))} placeholder={t('aiPh')} placeholderTextColor={C.sub} />
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+            <Pressable style={[s.secondary, { flex: 1 }]} onPress={async () => { const c = await Clipboard.getStringAsync(); if (c) (setText(c), setDrafts(null)); }}>
+              <Icon name="clipboard-outline" size={17} />
+              <Text style={s.secondaryText}>{t('paste')}</Text>
+            </Pressable>
+            <Pressable style={[s.primary, { flex: 1, marginTop: 0 }, !text.trim() && { opacity: 0.4 }]} disabled={!text.trim()} onPress={() => setDrafts(parseItinerary(text, tripRange(trip).start ?? todayStr()))}>
+              <Text style={s.primaryText}>{t('read')}</Text>
+            </Pressable>
+          </View>
+          {drafts && (
+            <View style={[s.card, { marginTop: 12 }]}>
+              {drafts.length === 0 ? (
+                <Text style={s.hint}>{t('aiNone')}</Text>
+              ) : (
+                drafts.map((d, i) => (
+                  <View key={i} style={[s.tlRow, i > 0 && s.tlLine]}>
+                    <Text style={[s.tlTime, { width: 74 }]}>{`${t('dayN', { n: d.day })}\n${d.time ?? '—'}`}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.tlTitle} numberOfLines={2}>{d.title}</Text>
+                      {!!d.memo && <Text style={s.hint} numberOfLines={2}>{d.memo}</Text>}
+                    </View>
+                    <Pressable hitSlop={8} onPress={() => setDrafts(drafts.filter((_, j) => j !== i))}>
+                      <Icon name="close-circle" size={18} color={C.sub} />
+                    </Pressable>
+                  </View>
+                ))
+              )}
+            </View>
+          )}
+          {!!drafts?.length && (
+            <Pressable
+              style={s.primary}
+              onPress={() => {
+                const base = tripRange(trip).start ?? todayStr();
+                onSaveMany!(
+                  drafts.map((d, i) => ({
+                    id: uid(),
+                    type: 'plan' as BookingType,
+                    title: d.title,
+                    start: d.date ?? shiftDate(base, d.day - 1),
+                    startTime: d.time,
+                    endTime: d.endTime,
+                    from: d.place,
+                    memo: d.memo,
+                    currency: home,
+                    createdAt: Date.now() + i,
+                  })),
+                );
+              }}
+            >
+              <Text style={s.primaryText}>{t('aiAdd', { n: drafts.length })}</Text>
+            </Pressable>
+          )}
+        </ScrollView>
+      )}
       {mode === 'form' && (
         <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={{ paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
           <Text style={s.sheetTitle}>{edit ? t('edit') : b.type === 'plan' ? t('addPlan') : t('addTitle')}</Text>
@@ -2425,7 +2582,7 @@ function AddBookingSheet({
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 6 }} contentContainerStyle={{ gap: 6, alignItems: 'center' }} keyboardShouldPersistTaps="handled">
               {tripDays(trip).map((d, i) => (
                 <Pressable key={d} onPress={() => set({ start: d })} style={[s.typeChip, b.start === d && { backgroundColor: C.ink, borderColor: C.ink }]}>
-                  <Text style={[s.chipText, b.start === d && { color: '#fff' }]}>{`${t('dayN', { n: i + 1 })} ・ ${prettyDate(d)}`}</Text>
+                  <Text style={[s.chipText, b.start === d && { color: C.onInk }]}>{`${t('dayN', { n: i + 1 })} ・ ${prettyDate(d)}`}</Text>
                 </Pressable>
               ))}
             </ScrollView>
@@ -2506,6 +2663,16 @@ function AddBookingSheet({
             </>
           )}
           <Field label={t('memo')} value={b.memo ?? ''} onChange={(v) => set({ memo: v || undefined })} multiline />
+          {!!b.files?.length && (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+              {b.files.map((f) => (
+                <Pressable key={f.uri} onLongPress={() => set({ files: b.files!.filter((x) => x.uri !== f.uri) })} style={s.typeChip}>
+                  <Icon name={isPkpass(f.name, f.mime) ? 'wallet-outline' : 'document-outline'} size={14} color={C.sub} />
+                  <Text style={s.chipText} numberOfLines={1}>{f.name}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
           <Text style={s.label}>{t('photos')}</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {(b.photos ?? []).map((p) => (
@@ -2693,9 +2860,30 @@ function BookingDetail({
               <Image source={imgSrc(p)} style={s.ticketThumb} />
             </Pressable>
           ))}
+          {(b.files ?? []).map((f) => (
+            <Pressable key={f.uri} onPress={() => openTicketFile(f)} onLongPress={() => onUpdate({ ...b, files: b.files!.filter((x) => x.uri !== f.uri) })} style={[s.ticketAdd, { borderStyle: 'solid', backgroundColor: C.card }]}>
+              <Icon name={isPkpass(f.name, f.mime) ? 'wallet-outline' : 'document-text-outline'} size={24} color={C.ink} />
+              <Text style={[s.hint, { fontSize: 10, textAlign: 'center' }]} numberOfLines={2}>
+                {isPkpass(f.name, f.mime) ? t('addToWallet') : f.name}
+              </Text>
+            </Pressable>
+          ))}
           <Pressable onPress={attach} style={s.ticketAdd}>
             <Icon name="qr-code-outline" size={22} color={C.sub} />
             <Text style={[s.hint, { fontSize: 11, textAlign: 'center' }]}>{t('attachTicket')}</Text>
+          </Pressable>
+          <Pressable
+            onPress={async () => {
+              const f = await pickAnyFile(['application/pdf', 'application/vnd.apple.pkpass', 'com.apple.pkpass', '*/*']);
+              if (!f) return;
+              const file = { name: f.name, uri: keepFile(f.uri, f.name), mime: f.mime };
+              const p = isPkpass(f.name, f.mime) ? await readPkpass(file.uri) : null;
+              onUpdate({ ...b, seat: b.seat ?? p?.seat, memo: p?.memo && !(b.memo ?? '').includes(p.memo) ? [b.memo, p.memo].filter(Boolean).join('\n') : b.memo, files: [...(b.files ?? []), file] });
+            }}
+            style={s.ticketAdd}
+          >
+            <Icon name="document-attach-outline" size={22} color={C.sub} />
+            <Text style={[s.hint, { fontSize: 11, textAlign: 'center' }]}>{t('attachFile')}</Text>
           </Pressable>
         </ScrollView>
         {!!b.photos?.length && <Text style={[s.hint, { marginTop: -8, marginBottom: 10, fontSize: 11 }]}>{t('ticketHint')}</Text>}
@@ -2740,12 +2928,7 @@ function BookingDetail({
             if (i <= 0 || b.type === 'flight') return null;
             const prev = stops[i - 1];
             if (prev.q === stops[i].q) return null;
-            return (
-              <Pressable onPress={() => openRoute(prev.q, stops[i].q)} style={s.howTo}>
-                <Icon name="walk-outline" size={16} color={C.pink} />
-                <Text style={s.howToText} numberOfLines={2}>{`${t('howToGet')}：${prev.title} → ${stops[i].title}`}</Text>
-              </Pressable>
-            );
+            return <HowTo fromQ={prev.q} toQ={stops[i].q} label={`${t('howToGet')}：${prev.title} → ${stops[i].title}`} />;
           })()}
           {b.type !== 'flight' && (() => {
             const tz = bookingTz(b, trip);
@@ -2797,6 +2980,39 @@ function BookingDetail({
   );
 }
 
+/** 搭乗券・PDFを開く（共有メニュー：プレビュー・ウォレットに追加・ファイルに保存） */
+async function openTicketFile(f: { name: string; uri: string; mime?: string }) {
+  try {
+    if (Platform.OS === 'web') return Linking.openURL(f.uri);
+    await Sharing.shareAsync(f.uri, { mimeType: f.mime ?? (isPdf(f.name) ? 'application/pdf' : 'application/vnd.apple.pkpass'), UTI: isPkpass(f.name, f.mime) ? 'com.apple.pkpass' : isPdf(f.name, f.mime) ? 'com.adobe.pdf' : undefined, dialogTitle: f.name });
+  } catch {}
+}
+/** 前の予定からの行き方（所要時間の目安つき） */
+function HowTo({ fromQ, toQ, label }: { fromQ: string; toQ: string; label: string }) {
+  const [est, setEst] = useState<ReturnType<typeof estimate>>(null);
+  useEffect(() => {
+    let off = false;
+    (async () => {
+      const a = await geocode(fromQ);
+      const b = a ? await geocode(toQ) : null;
+      if (!off && a && b) setEst(estimate(a, b));
+    })();
+    return () => {
+      off = true;
+    };
+  }, [fromQ, toQ]);
+  return (
+    <Pressable onPress={() => openRoute(fromQ, toQ)} style={s.howTo}>
+      <Icon name={est?.mode === 'ride' ? 'train-outline' : 'walk-outline'} size={16} color={C.pink} />
+      <View style={{ flex: 1 }}>
+        <Text style={s.howToText} numberOfLines={2}>
+          {label}
+        </Text>
+        {!!est && est.mode !== 'far' && <Text style={[s.hint, { fontSize: 12, marginTop: 2 }]}>{`${est.mode === 'walk' ? t('walk') : t('ride')} ${t('aboutMin', { n: est.min })} · ${fmtKm(est.km)}（${t('estimate')}）`}</Text>}
+      </View>
+    </Pressable>
+  );
+}
 const Info = ({ k, v, q }: { k: string; v: string; q?: string }) => (
   <View style={[s.infoRow, { alignItems: 'center' }]}>
     <Text style={s.infoK}>{k}</Text>
@@ -2805,7 +3021,7 @@ const Info = ({ k, v, q }: { k: string; v: string; q?: string }) => (
     </Text>
     {!!q && (
       <Pressable onPress={() => openMap(q)} hitSlop={8} style={s.mapBtn}>
-        <Icon name="navigate" size={14} color="#fff" />
+        <Icon name="navigate" size={14} color={C.onInk} />
       </Pressable>
     )}
   </View>
@@ -2879,7 +3095,15 @@ function SettingsBody({ settings, onChange }: { settings: Settings; onChange: (s
       <View style={{ flexDirection: 'row', gap: 8 }}>
         {[true, false].map((v) => (
           <Pressable key={String(v)} onPress={() => onChange({ ...settings, notify: v })} style={[s.typeChip, settings.notify === v && { backgroundColor: C.ink, borderColor: C.ink }]}>
-            <Text style={[s.chipText, settings.notify === v && { color: '#fff' }]}>{v ? 'ON' : 'OFF'}</Text>
+            <Text style={[s.chipText, settings.notify === v && { color: C.onInk }]}>{v ? 'ON' : 'OFF'}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <Text style={s.label}>{t('theme')}</Text>
+      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+        {(['auto', 'light', 'dark'] as const).map((v) => (
+          <Pressable key={v} onPress={() => onChange({ ...settings, theme: v })} style={[s.typeChip, (settings.theme ?? 'auto') === v && { backgroundColor: C.ink, borderColor: C.ink }]}>
+            <Text style={[s.chipText, (settings.theme ?? 'auto') === v && { color: C.onInk }]}>{v === 'auto' ? t('themeAuto') : v === 'light' ? t('themeLight') : t('themeDark')}</Text>
           </Pressable>
         ))}
       </View>
@@ -2887,7 +3111,7 @@ function SettingsBody({ settings, onChange }: { settings: Settings; onChange: (s
       <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
         {(['ask', 'apple', 'google'] as const).map((v) => (
           <Pressable key={v} onPress={() => onChange({ ...settings, mapApp: v })} style={[s.typeChip, (settings.mapApp ?? 'ask') === v && { backgroundColor: C.ink, borderColor: C.ink }]}>
-            <Text style={[s.chipText, (settings.mapApp ?? 'ask') === v && { color: '#fff' }]}>{v === 'ask' ? t('mapAsk') : v === 'apple' ? 'Apple' : 'Google'}</Text>
+            <Text style={[s.chipText, (settings.mapApp ?? 'ask') === v && { color: C.onInk }]}>{v === 'ask' ? t('mapAsk') : v === 'apple' ? 'Apple' : 'Google'}</Text>
           </Pressable>
         ))}
       </View>
@@ -2998,7 +3222,12 @@ function sampleTrip(st: Settings): Trip {
   };
 }
 
-const s = StyleSheet.create({
+let s = makeStyles();
+function makeStyles() {
+  return StyleSheet.create({
+  seg: { flexDirection: 'row', backgroundColor: C.chip, borderRadius: 12, padding: 3 },
+  segItem: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 8, borderRadius: 10 },
+  segOn: { backgroundColor: C.card },
   likeBtn: { position: 'absolute', top: 8, right: 8, flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: C.card, borderRadius: 14, paddingHorizontal: 8, paddingVertical: 5 },
   likeText: { fontSize: 12, fontWeight: '800', color: C.ink },
   iconBtn: { width: 48, borderRadius: 14, backgroundColor: C.chip, alignItems: 'center', justifyContent: 'center' },
@@ -3016,13 +3245,13 @@ const s = StyleSheet.create({
   ghostBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: C.line, backgroundColor: C.card },
   ghostBtnText: { fontWeight: '800', fontSize: 13, color: C.ink },
   smallBtn: { backgroundColor: C.ink, borderRadius: 14, paddingHorizontal: 16, minWidth: 48, alignItems: 'center', justifyContent: 'center' },
-  smallBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  smallBtnText: { color: C.onInk, fontWeight: '800', fontSize: 16 },
   tripCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: C.card, borderRadius: 20, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: C.line },
   tripName: { fontSize: 17, fontWeight: '800', color: C.ink, letterSpacing: -0.2 },
   tripTotal: { fontSize: 14, fontWeight: '800', color: C.ink, fontVariant: ['tabular-nums'] },
   status: { fontSize: 11.5, fontWeight: '800', color: C.sub },
   // 搭乗券風のカード
-  pass: { backgroundColor: C.ink, borderRadius: 26, padding: 20, overflow: 'hidden' },
+  pass: { backgroundColor: C.night, borderRadius: 26, padding: 20, overflow: 'hidden' },
   passTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   passKicker: { color: '#fff', fontWeight: '800', fontSize: 11, letterSpacing: 1.3 },
   passWhen: { color: C.pink, fontWeight: '800', fontSize: 12 },
@@ -3045,7 +3274,7 @@ const s = StyleSheet.create({
   howTo: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12, borderTopWidth: 1, borderColor: C.line },
   howToText: { color: C.pink, fontWeight: '800', flex: 1, fontSize: 13 },
   ticketPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6 },
-  ticketPillText: { color: C.ink, fontWeight: '800', fontSize: 12 },
+  ticketPillText: { color: '#15171C', fontWeight: '800', fontSize: 12 },
   viewerClose: { position: 'absolute', top: 54, right: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(21,23,28,0.7)', alignItems: 'center', justifyContent: 'center' },
   viewerCount: { position: 'absolute', bottom: 40, alignSelf: 'center', color: C.sub, fontWeight: '800' },
   ticketThumb: { width: 96, height: 128, borderRadius: 12, backgroundColor: C.chip, borderWidth: 1, borderColor: C.line },
@@ -3077,21 +3306,21 @@ const s = StyleSheet.create({
   chip: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.chip, borderRadius: 20, paddingLeft: 4, paddingRight: 12, paddingVertical: 4 },
   chipText: { fontWeight: '800', color: C.ink, fontSize: 13 },
   avatar: { width: 26, height: 26, borderRadius: 13, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { color: '#fff', fontWeight: '900', fontSize: 12 },
+  avatarText: { color: C.onInk, fontWeight: '900', fontSize: 12 },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 5 },
-  check: { width: 24, height: 24, borderRadius: 7, borderWidth: 1.5, borderColor: '#CFCAC2', alignItems: 'center', justifyContent: 'center' },
+  check: { width: 24, height: 24, borderRadius: 7, borderWidth: 1.5, borderColor: C.sub, alignItems: 'center', justifyContent: 'center' },
   fab: { position: 'absolute', bottom: 34, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.ink, borderRadius: 30, paddingHorizontal: 24, paddingVertical: 16, ...shadow, shadowOpacity: 0.2 },
-  fabText: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  fabText: { color: C.onInk, fontWeight: '800', fontSize: 15 },
   sheetWrap: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(21,23,28,0.35)' },
   sheet: { backgroundColor: C.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingTop: 10 },
   sheetTop: { height: 40, alignItems: 'center', justifyContent: 'center' },
-  grabber: { width: 40, height: 5, borderRadius: 3, backgroundColor: '#D6D2CB' },
+  grabber: { width: 40, height: 5, borderRadius: 3, backgroundColor: C.line },
   closeBtn: { position: 'absolute', right: -6, top: 0, width: 42, height: 42, borderRadius: 21, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' },
   sheetTitle: { fontSize: 24, fontWeight: '900', color: C.ink, marginBottom: 14, letterSpacing: -0.5 },
   input: { minWidth: 0, backgroundColor: C.card, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, color: C.ink, fontWeight: '700', borderWidth: 1, borderColor: C.line },
   label: { fontSize: 11, fontWeight: '800', color: C.sub, marginTop: 14, marginBottom: 6, letterSpacing: 0.6 },
   primary: { backgroundColor: C.ink, borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 20 },
-  primaryText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  primaryText: { color: C.onInk, fontWeight: '800', fontSize: 16 },
   secondary: { flexDirection: 'row', justifyContent: 'center', gap: 6, backgroundColor: C.card, borderRadius: 16, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: C.line },
   secondaryText: { color: C.ink, fontWeight: '800', fontSize: 14 },
   swatch: { width: 34, height: 34, borderRadius: 17 },
@@ -3099,7 +3328,7 @@ const s = StyleSheet.create({
   option: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: C.card, borderRadius: 18, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: C.line },
   optIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: C.chip, alignItems: 'center', justifyContent: 'center' },
   note: { backgroundColor: C.mintSoft, borderRadius: 14, padding: 12, marginBottom: 12 },
-  noteText: { color: '#17795A', fontWeight: '800', fontSize: 13 },
+  noteText: { color: C.mint, fontWeight: '800', fontSize: 13 },
   typeChip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 20, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, paddingHorizontal: 11, paddingVertical: 7 },
   two: { flexDirection: 'row', gap: 8 },
   dateRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.line },
@@ -3110,7 +3339,7 @@ const s = StyleSheet.create({
   curWrap: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-start', paddingTop: 70, paddingHorizontal: 24 },
   curList: { backgroundColor: C.bg, borderRadius: 22, maxHeight: '55%', padding: 8 },
   curRow: { flexDirection: 'row', gap: 12, alignItems: 'center', padding: 12, borderRadius: 12 },
-  thumb: { width: 76, height: 110, borderRadius: 12, backgroundColor: '#eee' },
+  thumb: { width: 76, height: 110, borderRadius: 12, backgroundColor: C.chip },
   thumbAdd: { alignItems: 'center', justifyContent: 'center', backgroundColor: C.card, borderWidth: 1, borderColor: C.line, borderStyle: 'dashed' },
   detailHead: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 },
   detailTitle: { fontSize: 24, fontWeight: '900', color: C.ink, letterSpacing: -0.5, marginTop: 2 },
@@ -3123,11 +3352,11 @@ const s = StyleSheet.create({
   mapBtn: { width: 30, height: 30, borderRadius: 15, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center' },
   expRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
   expIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: C.chip, alignItems: 'center', justifyContent: 'center' },
-  yearCard: { backgroundColor: C.ink, borderRadius: 24, padding: 18 },
+  yearCard: { backgroundColor: C.night, borderRadius: 24, padding: 18 },
   yearNum: { color: '#fff', fontSize: 34, fontWeight: '900', letterSpacing: -1 },
   yearShare: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#fff', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 9 },
   year: { fontSize: 20, fontWeight: '900', color: C.ink, marginBottom: 10, marginTop: 4, letterSpacing: -0.3 },
-  memCard: { width: 210, height: 260, borderRadius: 22, overflow: 'hidden', backgroundColor: C.ink, marginBottom: 16 },
+  memCard: { width: 210, height: 260, borderRadius: 22, overflow: 'hidden', backgroundColor: C.night, marginBottom: 16 },
   memShade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 110, backgroundColor: 'rgba(0,0,0,0.38)' },
   memName: { color: '#fff', fontSize: 19, fontWeight: '900', letterSpacing: -0.3 },
   memSub: { color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '700', marginTop: 3 },
@@ -3136,5 +3365,6 @@ const s = StyleSheet.create({
   journalEmpty: { marginLeft: 52, marginTop: 2, borderRadius: 16, paddingVertical: 12, paddingHorizontal: 14, borderWidth: 1, borderColor: C.line, borderStyle: 'dashed' },
   journalPhoto: { width: 120, height: 120, borderRadius: 12, backgroundColor: C.chip },
   journalText: { fontSize: 14, color: C.ink, fontWeight: '600', lineHeight: 21 },
-  photoBig: { width: 150, height: 230, borderRadius: 14, backgroundColor: '#eee' },
+  photoBig: { width: 150, height: 230, borderRadius: 14, backgroundColor: C.chip },
 });
+}
