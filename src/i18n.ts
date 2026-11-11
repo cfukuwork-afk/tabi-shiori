@@ -284,6 +284,7 @@ const ja = {
   memoryBookMake: "思い出を1冊のPDFにする（印刷・フォトブック用）",
   toBudgetApp: "家計簿へ送る（World Budget Book）",
   toBudgetHint: "自分が払った予約と出費をCSVにします。World Budget Book の設定 →「Wise の CSV を選ぶ」から取り込めます",
+  findEsim: "eSIMを探す",
 };
 type Dict = typeof ja;
 const en: Dict = {
@@ -566,6 +567,7 @@ const en: Dict = {
   memoryBookMake: "Make a memory book (PDF for printing)",
   toBudgetApp: "Send to budget app (World Budget Book)",
   toBudgetHint: "Exports what you paid as CSV — import it in World Budget Book via Settings → “Choose Wise CSV”",
+  findEsim: "Find eSIM",
 };
 const TYPE_NAMES: Record<Lang, Record<string, string>> = {
   ja: { flight: '飛行機', train: '電車', bus: 'バス', hotel: 'ホテル', car: 'レンタカー', ticket: 'チケット', food: 'お店', plan: '予定', other: 'その他' },

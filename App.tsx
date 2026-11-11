@@ -96,7 +96,7 @@ import { myTz } from './src/airports';
 import { isPdf, isPkpass, keepFile, readPkpass, TicketFile } from './src/pkpass';
 import { pickAnyFile } from './src/files';
 import * as Sharing from 'expo-sharing';
-import { activityLinks, hotelLinks, FindLink } from './src/affiliate';
+import { activityLinks, esimLinks, hotelLinks, FindLink } from './src/affiliate';
 import { syncTripActivity, updateNextWidget, widgetsAvailable } from './src/liveWidgets';
 
 /** 選んだ写真をアプリの中にコピー（元の写真を消しても、圏外でも見られるように） */
@@ -1705,7 +1705,7 @@ function BookingsTab({ trip, rate, onOpen, onInbox, onDropInbox }: { trip: Trip;
       {noHotel && !!city && (
         <View style={[s.card, { marginBottom: 6 }]}>
           <Text style={s.tlTitle}>{t('noHotelYet')}</Text>
-          <FindRow title={t('findHotel', { city })} links={hotelLinks(city, rs, re)} />
+          <FindRow title={t('findHotel', { city })} links={hotelLinks(city, rs, re, /[぀-ヿ一-鿿]/.test(city))} />
         </View>
       )}
       {TYPES.filter((ty) => trip.bookings.some((b) => b.type === ty.id)).map((ty) => (
@@ -2166,6 +2166,11 @@ function PackTab({ trip, onChange }: { trip: Trip; onChange: (fn: (t: Trip) => T
     >
       <View style={[s.check, c.done && { backgroundColor: C.ink, borderColor: C.ink }]}>{c.done && <Icon name="checkmark" size={15} color={C.onInk} />}</View>
       <Text style={[s.tlTitle, { flex: 1 }, c.done && { color: C.sub, textDecorationLine: 'line-through' }]}>{c.text}</Text>
+      {mode === 'pack' && !c.done && /esim|sim/i.test(c.text) && (
+        <Pressable hitSlop={8} onPress={() => Linking.openURL(esimLinks()[0].url)} style={[s.typeChip, { paddingVertical: 4 }]}>
+          <Text style={[s.chipText, { fontSize: 11 }]}>{t('findEsim')}</Text>
+        </Pressable>
+      )}
       {mode === 'gift' && (
         <Pressable
           hitSlop={8}
