@@ -17,7 +17,7 @@ export default {
   inviteText: 'Tripfold에서 「{name}」을 함께 편집해요!\n공유 코드: {code}\n앱에서 「새 여행」→「공유 코드로 참여」에 입력하세요.\n{link}', joinByCode: '공유 코드로 참여', findTrip: '여행 찾기',
   codeLen: '코드는 8자리예요 (예: K7QX-2M9P)', codeNotFound: '이 코드의 여행을 찾을 수 없어요', netErr: '연결할 수 없어요. 인터넷이 될 때 다시 시도해 주세요', whoAreYou: '당신은 누구인가요? (정산용)',
   orAddMe: '목록에 없으면 추가', nBookings: '예약·일정 {n}건', howToGet: '이전 일정에서 가는 길', wishes: '가고 싶은 곳', addWish: '가고 싶은 곳 추가',
-  wishHint: '인스타·유튜브·틱톡에서 본 「여기 가고 싶다」를 링크째 저장', wishUrl: '링크 (인스타·유튜브·틱톡 등)', wishTitle: '이름 (예: 몽마르트의 카페)', wishMemo: '메모 (끌린 점·영업시간 등)',
+  wishHint: '인스타·유튜브·틱톡에서 본 「여기 가고 싶다」를 링크째 저장', wishUrl: '링크', wishTitle: '이름 (예: 몽마르트의 카페)', wishMemo: '메모 (끌린 점·영업시간 등)',
   pasteLink: '링크 붙여넣기', toPlan: '일정에 넣기', openLink: '링크 열기', shareWishQ: '이 링크를 「가고 싶은 곳」에 넣을까요?', ticketsSec: '티켓·QR', attachTicket: '추가',
   ticketHint: '탭하면 전체 화면 (화면이 밝아져요)·길게 눌러 삭제', showTicket: '티켓', googleMaps: 'Google 지도에서 열기', tabMap: '지도', mapApp: '지도 앱', mapAsk: '매번 묻기',
   editTrip: '여행 편집', routeGoogle: 'Google 지도에서 경로 보기', allDays: '전체 일정', address: '장소·주소 (목적지)', fromAirport: '출발 공항 (예: ICN)', toAirport: '도착 공항 (예: LHR)',

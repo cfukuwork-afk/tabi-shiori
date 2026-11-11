@@ -17,7 +17,7 @@ export default {
   inviteText: '¡Planeemos «{name}» juntos en Tripfold!\nCódigo: {code}\nEn la app: Nuevo viaje → Unirse con un código.\n{link}', joinByCode: 'Unirse con un código', findTrip: 'Buscar viaje',
   codeLen: 'El código tiene 8 caracteres (p. ej. K7QX-2M9P)', codeNotFound: 'No hay ningún viaje con este código', netErr: 'No se pudo conectar. Inténtalo con conexión', whoAreYou: '¿Quién eres? (para repartir gastos)',
   orAddMe: '¿No estás? Añádete', nBookings: '{n} reservas y planes', howToGet: 'Cómo llegar desde la parada anterior', wishes: 'Quiero ir', addWish: 'Añadir lugar',
-  wishHint: 'Guarda los sitios que viste en Instagram, YouTube o TikTok con su enlace', wishUrl: 'Enlace (Instagram, YouTube, TikTok…)', wishTitle: 'Nombre (p. ej. café en Montmartre)', wishMemo: 'Notas (qué te llamó la atención, horario…)',
+  wishHint: 'Guarda los sitios que viste en Instagram, YouTube o TikTok con su enlace', wishUrl: 'Enlace', wishTitle: 'Nombre (p. ej. café en Montmartre)', wishMemo: 'Notas (qué te llamó la atención, horario…)',
   pasteLink: 'Pegar enlace', toPlan: 'Añadir al plan', openLink: 'Abrir enlace', shareWishQ: '¿Añadir este enlace a «Quiero ir»?', ticketsSec: 'Billetes y QR', attachTicket: 'Añadir',
   ticketHint: 'Toca para pantalla completa (sube el brillo) · mantén pulsado para quitar', showTicket: 'Billete', googleMaps: 'Abrir en Google Maps', tabMap: 'Mapa', mapApp: 'App de mapas', mapAsk: 'Preguntar siempre',
   editTrip: 'Editar viaje', routeGoogle: 'Ruta en Google Maps', allDays: 'Todos los días', address: 'Lugar / dirección (destino)', fromAirport: 'Aeropuerto de salida (p. ej. MAD)', toAirport: 'Aeropuerto de llegada (p. ej. LHR)',

@@ -17,7 +17,7 @@ export default {
   inviteText: 'Vamos planejar “{name}” juntos no Tripfold!\nCódigo: {code}\nNo app: Nova viagem → Entrar com código.\n{link}', joinByCode: 'Entrar com código', findTrip: 'Encontrar viagem',
   codeLen: 'O código tem 8 caracteres (ex.: K7QX-2M9P)', codeNotFound: 'Nenhuma viagem com este código', netErr: 'Não foi possível conectar. Tente com internet', whoAreYou: 'Quem é você? (para dividir as contas)',
   orAddMe: 'Não está na lista? Adicione-se', nBookings: '{n} reservas e planos', howToGet: 'Como chegar desde a parada anterior', wishes: 'Quero ir', addWish: 'Adicionar lugar',
-  wishHint: 'Salve lugares vistos no Instagram, YouTube ou TikTok com o link', wishUrl: 'Link (Instagram, YouTube, TikTok…)', wishTitle: 'Nome (ex.: café em Montmartre)', wishMemo: 'Notas (o que chamou atenção, horários…)',
+  wishHint: 'Salve lugares vistos no Instagram, YouTube ou TikTok com o link', wishUrl: 'Link', wishTitle: 'Nome (ex.: café em Montmartre)', wishMemo: 'Notas (o que chamou atenção, horários…)',
   pasteLink: 'Colar link', toPlan: 'Adicionar ao plano', openLink: 'Abrir link', shareWishQ: 'Adicionar este link a “Quero ir”?', ticketsSec: 'Ingressos e QR', attachTicket: 'Adicionar',
   ticketHint: 'Toque para tela cheia (mais brilho) · segure para remover', showTicket: 'Ingresso', googleMaps: 'Abrir no Google Maps', tabMap: 'Mapa', mapApp: 'App de mapas', mapAsk: 'Perguntar sempre',
   editTrip: 'Editar viagem', routeGoogle: 'Rota no Google Maps', allDays: 'Todos os dias', address: 'Lugar / endereço (destino)', fromAirport: 'Aeroporto de partida (ex.: GRU)', toAirport: 'Aeroporto de chegada (ex.: LHR)',

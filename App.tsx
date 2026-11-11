@@ -1354,9 +1354,7 @@ function WishSection({ trip, onChange, onToPlan }: { trip: Trip; onChange: (fn: 
           <Text style={s.addPlanText}>{t('addWish')}</Text>
         </Pressable>
       </View>
-      {list.length === 0 ? (
-        <Text style={[s.hint, { fontSize: 12, lineHeight: 18 }]}>{t('wishHint')}</Text>
-      ) : (
+      {list.length === 0 ? null : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }} style={{ flexGrow: 0 }}>
           {list.map((w) => {
             const pf = platformOf(w.url);

@@ -17,7 +17,7 @@ export default {
   inviteText: '一起在 Tripfold 编辑「{name}」吧！\n分享码：{code}\n在应用中「新旅行」→「用分享码加入」输入。\n{link}', joinByCode: '用分享码加入', findTrip: '查找旅行',
   codeLen: '分享码为8位（例：K7QX-2M9P）', codeNotFound: '找不到此分享码的旅行', netErr: '无法连接。请在有网络时重试', whoAreYou: '你是哪一位？（用于分账）',
   orAddMe: '不在列表中就添加自己', nBookings: '{n} 个预订·行程', howToGet: '从上一个行程怎么去', wishes: '想去的地方', addWish: '添加想去的地方',
-  wishHint: '把在小红书、Instagram、YouTube、抖音看到的「想去这里」连同链接一起保存', wishUrl: '链接（Instagram、YouTube、TikTok 等）', wishTitle: '名称（例：蒙马特的咖啡馆）', wishMemo: '备注（吸引你的地方、营业时间等）',
+  wishHint: '把在小红书、Instagram、YouTube、抖音看到的「想去这里」连同链接一起保存', wishUrl: '链接', wishTitle: '名称（例：蒙马特的咖啡馆）', wishMemo: '备注（吸引你的地方、营业时间等）',
   pasteLink: '粘贴链接', toPlan: '加入行程', openLink: '打开链接', shareWishQ: '把这个链接加入「想去的地方」？', ticketsSec: '票券·二维码', attachTicket: '添加',
   ticketHint: '点按全屏显示（屏幕变亮）·长按删除', showTicket: '票券', googleMaps: '在 Google 地图中打开', tabMap: '地图', mapApp: '地图应用', mapAsk: '每次询问',
   editTrip: '编辑旅行', routeGoogle: '在 Google 地图中查看路线', allDays: '全部日程', address: '地点·地址（目的地）', fromAirport: '出发机场（例：PVG）', toAirport: '到达机场（例：LHR）',
