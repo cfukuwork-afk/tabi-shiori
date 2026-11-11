@@ -54,4 +54,5 @@ export default {
   toBudgetApp: 'Enviar ao app de orçamento (World Budget Book)', toBudgetHint: 'Exporta o que você pagou em CSV; importe no World Budget Book em Ajustes → “Escolher CSV do Wise”', findEsim: 'Encontrar eSIM',
   wxClear: 'Céu limpo', wxPartly: 'Parcialmente nublado', wxCloudy: 'Nublado', wxFog: 'Neblina', wxRain: 'Chuva', wxSnow: 'Neve', wxStorm: 'Tempestade',
   mFlight: 'Avião', mTrain: 'Trem', mBus: 'Ônibus', mWalk: 'A pé', mCar: 'Carro', mRide: 'Transporte/carro (cidade)',
+  sugTitle: 'Prepare a viagem (sugestões)', sugFlight: 'Procurar voos', sugTransfer: 'Reservar transfer do aeroporto', sugCar: 'Procurar carro de aluguel', sugLuggage: 'Guardar a bagagem após o check-out', sugAirhelp: 'Ver compensação por atrasos ou cancelamentos', inspireTitle: 'Que tal {city}?', inspireSub: 'Uma ideia para a próxima viagem', inspireFind: 'Atividades e voos para {city}', city_seoul: 'Seul', city_taipei: 'Taipé', city_bangkok: 'Bangkok', city_singapore: 'Singapura', city_paris: 'Paris', city_london: 'Londres', city_barcelona: 'Barcelona', city_honolulu: 'Honolulu', city_sydney: 'Sydney', city_newyork: 'Nova York',
 } as Record<string, string>;

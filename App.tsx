@@ -96,7 +96,7 @@ import { myTz } from './src/airports';
 import { isPdf, isPkpass, keepFile, readPkpass, TicketFile } from './src/pkpass';
 import { pickAnyFile } from './src/files';
 import * as Sharing from 'expo-sharing';
-import { activityLinks, esimLinks, hotelLinks, FindLink } from './src/affiliate';
+import { activityLinks, airhelpLink, carLinks, esimLinks, flightLinks, hotelLinks, inspireLinks, luggageLinks, transferLinks, FindLink } from './src/affiliate';
 import { syncTripActivity, updateNextWidget, widgetsAvailable } from './src/liveWidgets';
 
 /** 選んだ写真をアプリの中にコピー（元の写真を消しても、圏外でも見られるように） */
@@ -677,6 +677,7 @@ function Home({
         .map((tr) => (
           <TripCard key={tr.id} trip={tr} rate={rate} onPress={() => onOpen(tr.id)} />
         ))}
+      <Inspire trips={trips} />
       <Memories trips={sorted.filter((tr) => isPast(tr))} onOpen={onOpen} />
       <YearSummary trips={trips} rate={rate} />
     </ScrollView>
@@ -1706,6 +1707,7 @@ function BookingsTab({ trip, rate, onOpen, onInbox, onDropInbox }: { trip: Trip;
           <FindRow title={t('findHotel', { city })} links={hotelLinks(city, rs, re, /[぀-ヿ一-鿿]/.test(city))} />
         </View>
       )}
+      <Suggest trip={trip} city={city} />
       {TYPES.filter((ty) => trip.bookings.some((b) => b.type === ty.id)).map((ty) => (
         <View key={ty.id} style={{ marginBottom: 14 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 18, marginBottom: 8 }}>
@@ -2246,6 +2248,64 @@ function PackTab({ trip, onChange }: { trip: Trip; onChange: (fn: (t: Trip) => T
 }
 
 /** 予約サイトで探す（提携リンク） */
+/** 予約の流れで次に必要になりそうなもの（航空券・空港の送迎・レンタカー・荷物預け・遅延の補償） */
+function Suggest({ trip, city }: { trip: Trip; city?: string }) {
+  const { start, end } = tripRange(trip);
+  if (!start || (end ?? start) < todayStr()) return null;
+  const has = (ty: string) => trip.bookings.some((b) => b.type === ty && !b.cancelled);
+  const days = end ? daysBetween(start, end) + 1 : 1;
+  const hotels = trip.bookings.filter((b) => b.type === 'hotel' && !b.cancelled);
+  // チェックアウトした日に、あとで電車・飛行機で出発する → 荷物を預ける
+  const luggage = hotels.some((h) => h.end && trip.bookings.some((b) => (b.type === 'flight' || b.type === 'train' || b.type === 'bus') && b.start === h.end && (b.startTime ?? '00:00') >= '14:00'));
+  const rows: { title: string; links: FindLink[] }[] = [];
+  if (!has('flight') && !has('train')) rows.push({ title: t('sugFlight'), links: flightLinks() });
+  if (has('flight')) rows.push({ title: t('sugTransfer'), links: transferLinks() });
+  if (!has('car') && days >= 3) rows.push({ title: t('sugCar'), links: carLinks() });
+  if (luggage) rows.push({ title: t('sugLuggage'), links: luggageLinks(city) });
+  if (has('flight')) rows.push({ title: t('sugAirhelp'), links: [airhelpLink()] });
+  if (!rows.length) return null;
+  return (
+    <View style={[s.card, { marginBottom: 6 }]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <Text style={[s.tlTitle, { flex: 1 }]}>{t('sugTitle')}</Text>
+        <Text style={[s.hint, { fontSize: 10, fontWeight: '800' }]}>PR</Text>
+      </View>
+      {rows.map((r) => (
+        <FindRow key={r.title} title={r.title} links={r.links} />
+      ))}
+    </View>
+  );
+}
+
+// ホームの「〇〇に行きませんか？」（日ごとに入れ替え。× で7日間出さない）
+const INSPIRE = ['seoul', 'taipei', 'bangkok', 'singapore', 'paris', 'london', 'barcelona', 'honolulu', 'sydney', 'newyork'];
+function Inspire({ trips }: { trips: Trip[] }) {
+  const [hidden, setHidden] = useState(true);
+  useEffect(() => {
+    AsyncStorage.getItem('ts.inspire.hide').then((d) => setHidden(!!d && d > todayStr()));
+  }, []);
+  if (hidden) return null;
+  const day = Math.floor(Date.now() / 86400000);
+  const key = INSPIRE[day % INSPIRE.length];
+  const name = t(('city_' + key) as any);
+  return (
+    <View style={[s.card, { marginTop: 18 }]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <Text style={[s.tlTitle, { flex: 1 }]}>{t('inspireTitle', { city: name })}</Text>
+        <Text style={[s.hint, { fontSize: 10, fontWeight: '800' }]}>PR</Text>
+        <Pressable hitSlop={10} onPress={() => {
+          setHidden(true);
+          AsyncStorage.setItem('ts.inspire.hide', shiftDate(todayStr(), 7)).catch(() => {});
+        }}>
+          <Icon name="close" size={16} color={C.sub} />
+        </Pressable>
+      </View>
+      <Text style={[s.hint, { marginTop: 2 }]}>{t('inspireSub')}</Text>
+      <FindRow title={t('inspireFind', { city: name })} links={inspireLinks(name)} />
+    </View>
+  );
+}
+
 function FindRow({ title, links }: { title: string; links: FindLink[] }) {
   if (!links.length) return null;
   return (

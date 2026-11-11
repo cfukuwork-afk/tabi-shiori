@@ -54,4 +54,5 @@ export default {
   toBudgetApp: '发送到记账（World Budget Book）', toBudgetHint: '把你付的预订和花费导出为 CSV，可在 World Budget Book 的设置 →「选择 Wise CSV」导入', findEsim: '找 eSIM',
   wxClear: '晴', wxPartly: '晴间多云', wxCloudy: '多云', wxFog: '雾', wxRain: '雨', wxSnow: '雪', wxStorm: '雷雨',
   mFlight: '飞机', mTrain: '火车', mBus: '巴士', mWalk: '步行', mCar: '汽车', mRide: '电车·汽车（市内）',
+  sugTitle: '旅行准备（推荐）', sugFlight: '查找机票', sugTransfer: '预订机场接送', sugCar: '查找租车', sugLuggage: '退房后寄存行李', sugAirhelp: '了解延误・取消的赔偿', inspireTitle: '去{city}看看吗？', inspireSub: '下一次旅行的灵感', inspireFind: '查看{city}的体验・机票', city_seoul: '首尔', city_taipei: '台北', city_bangkok: '曼谷', city_singapore: '新加坡', city_paris: '巴黎', city_london: '伦敦', city_barcelona: '巴塞罗那', city_honolulu: '檀香山', city_sydney: '悉尼', city_newyork: '纽约',
 } as Record<string, string>;

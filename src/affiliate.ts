@@ -20,6 +20,15 @@ const TP_BRAND: Record<string, { c: string; p: string }> = {
   airalo: { c: '541', p: '8310' },
   kkday: { c: '633', p: '9074' },
   tiqets: { c: '89', p: '2074' },
+  yesim: { c: '224', p: '5998' },
+  saily: { c: '629', p: '8979' },
+  kiwitaxi: { c: '1', p: '647' },
+  welcome: { c: '627', p: '8919' },
+  getrentacar: { c: '222', p: '5996' },
+  localrent: { c: '87', p: '2043' },
+  radical: { c: '209', p: '5867' },
+  aviasales: { c: '100', p: '4114' },
+  airhelp: { c: '120', p: '9139' },
 };
 const tp = (brand: keyof typeof TP_BRAND, url: string) =>
   `https://tp.media/r?campaign_id=${TP_BRAND[brand].c}&marker=${TP.marker}&p=${TP_BRAND[brand].p}&trs=${TP.trs}&u=${enc(url)}`;
@@ -56,6 +65,32 @@ export function esimLinks(country?: string): FindLink[] {
   const q = country ? `eSIM ${country}` : 'eSIM';
   return [
     { id: 'airalo', name: 'Airalo', url: tp('airalo', 'https://www.airalo.com/') },
+    { id: 'yesim', name: 'Yesim', url: tp('yesim', 'https://yesim.app/') },
+    { id: 'saily', name: 'Saily', url: tp('saily', 'https://saily.com/') },
     { id: 'klook-esim', name: 'Klook eSIM', url: tp('klook', `https://www.klook.com/search/result/?query=${enc(q)}`) },
   ];
 }
+
+/** 航空券を探す */
+export const flightLinks = (): FindLink[] => [{ id: 'aviasales', name: 'Aviasales', url: tp('aviasales', 'https://www.aviasales.com/') }];
+/** 空港からの送迎 */
+export const transferLinks = (): FindLink[] => [
+  { id: 'kiwitaxi', name: 'Kiwitaxi', url: tp('kiwitaxi', 'https://kiwitaxi.com/') },
+  { id: 'welcome', name: 'Welcome Pickups', url: tp('welcome', 'https://www.welcomepickups.com/') },
+];
+/** レンタカー */
+export const carLinks = (): FindLink[] => [
+  { id: 'getrentacar', name: 'GetRentacar', url: tp('getrentacar', 'https://getrentacar.com/') },
+  { id: 'localrent', name: 'Localrent', url: tp('localrent', 'https://localrent.com/') },
+];
+/** 荷物を預ける（チェックアウト後・出発前） */
+export const luggageLinks = (city?: string): FindLink[] => [
+  { id: 'radical', name: 'Radical Storage', url: tp('radical', city ? `https://radicalstorage.com/search?q=${enc(city)}` : 'https://radicalstorage.com/') },
+];
+/** 遅延・欠航の補償 */
+export const airhelpLink = (): FindLink => ({ id: 'airhelp', name: 'AirHelp', url: tp('airhelp', 'https://www.airhelp.com/') });
+/** 行き先のおすすめ（ホーム）：体験と航空券 */
+export const inspireLinks = (city: string): FindLink[] => [
+  { id: 'klook', name: 'Klook', url: tp('klook', `https://www.klook.com/search/result/?query=${enc(city)}`) },
+  { id: 'aviasales', name: 'Aviasales', url: tp('aviasales', 'https://www.aviasales.com/') },
+];

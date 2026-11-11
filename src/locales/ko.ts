@@ -54,4 +54,5 @@ export default {
   toBudgetApp: '가계부로 보내기 (World Budget Book)', toBudgetHint: '내가 낸 예약과 지출을 CSV로 만들어요. World Budget Book의 설정 →「Wise CSV 선택」에서 불러올 수 있어요', findEsim: 'eSIM 찾기',
   wxClear: '맑음', wxPartly: '구름 조금', wxCloudy: '흐림', wxFog: '안개', wxRain: '비', wxSnow: '눈', wxStorm: '뇌우',
   mFlight: '비행기', mTrain: '기차', mBus: '버스', mWalk: '도보', mCar: '자동차', mRide: '전철·차 (시내)',
+  sugTitle: '여행 준비 (추천)', sugFlight: '항공권 찾기', sugTransfer: '공항 픽업 예약', sugCar: '렌터카 찾기', sugLuggage: '체크아웃 후 짐 맡기기', sugAirhelp: '지연・결항 보상 알아보기', inspireTitle: '{city}에 가 보는 건 어때요?', inspireSub: '다음 여행 아이디어', inspireFind: '{city} 체험・항공권 보기', city_seoul: '서울', city_taipei: '타이베이', city_bangkok: '방콕', city_singapore: '싱가포르', city_paris: '파리', city_london: '런던', city_barcelona: '바르셀로나', city_honolulu: '호놀룰루', city_sydney: '시드니', city_newyork: '뉴욕',
 } as Record<string, string>;
