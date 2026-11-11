@@ -12,6 +12,17 @@ export const PARTNER = {
 
 export type FindLink = { id: string; name: string; url: string };
 const enc = encodeURIComponent;
+
+// Travelpayouts（承認済み：Klook・Airalo・KKday・Tiqets）。リンク先を tp.media 経由にすると紹介料の対象になる
+const TP = { marker: '804335', trs: '599453' };
+const TP_BRAND: Record<string, { c: string; p: string }> = {
+  klook: { c: '137', p: '4110' },
+  airalo: { c: '541', p: '8310' },
+  kkday: { c: '633', p: '9074' },
+  tiqets: { c: '89', p: '2074' },
+};
+const tp = (brand: keyof typeof TP_BRAND, url: string) =>
+  `https://tp.media/r?campaign_id=${TP_BRAND[brand].c}&marker=${TP.marker}&p=${TP_BRAND[brand].p}&trs=${TP.trs}&u=${enc(url)}`;
 const q2 = (title: string, city?: string) => [title, city].filter(Boolean).join(' ').trim();
 
 /** チケット・ツアー・体験を探す */
@@ -19,7 +30,9 @@ export function activityLinks(title: string, city?: string): FindLink[] {
   const q = q2(title, city);
   if (!q) return [];
   return [
-    { id: 'klook', name: 'Klook', url: `https://www.klook.com/search/result/?query=${enc(q)}${PARTNER.klook ? `&aid=${PARTNER.klook}` : ''}` },
+    { id: 'klook', name: 'Klook', url: tp('klook', `https://www.klook.com/search/result/?query=${enc(q)}`) },
+    { id: 'tiqets', name: 'Tiqets', url: tp('tiqets', `https://www.tiqets.com/en/search?q=${enc(q)}`) },
+    { id: 'kkday', name: 'KKday', url: tp('kkday', `https://www.kkday.com/en/product/productlist?keyword=${enc(q)}`) },
     { id: 'gyg', name: 'GetYourGuide', url: `https://www.getyourguide.com/s/?q=${enc(q)}${PARTNER.gyg ? `&partner_id=${PARTNER.gyg}` : ''}` },
   ];
 }
@@ -36,13 +49,13 @@ export function hotelLinks(city: string, checkin?: string, checkout?: string, do
   ];
 }
 
-export const hasPartner = () => Object.values(PARTNER).some(Boolean);
+export const hasPartner = () => true;
 
 /** eSIM を探す（海外旅行の持ち物の「eSIM」から） */
 export function esimLinks(country?: string): FindLink[] {
   const q = country ? `eSIM ${country}` : 'eSIM';
   return [
-    { id: 'klook-esim', name: 'Klook eSIM', url: `https://www.klook.com/search/result/?query=${enc(q)}${PARTNER.klook ? `&aid=${PARTNER.klook}` : ''}` },
-    { id: 'airalo', name: 'Airalo', url: `https://www.airalo.com/${PARTNER.airalo ? `?ref=${PARTNER.airalo}` : ''}` },
+    { id: 'airalo', name: 'Airalo', url: tp('airalo', 'https://www.airalo.com/') },
+    { id: 'klook-esim', name: 'Klook eSIM', url: tp('klook', `https://www.klook.com/search/result/?query=${enc(q)}`) },
   ];
 }
