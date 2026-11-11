@@ -6,7 +6,7 @@ import { Booking, Trip, timeline, typeOf } from './data';
 import { C } from './theme';
 import { dot, t, prettyDate, typeName } from './i18n';
 import { openMap, placeQuery, routeUrl, tripCity } from './maps';
-import { Geo, locate, looksLikeAddress } from './geo';
+import { Geo, locate, looksLikeAddress, searchPlace } from './geo';
 import NativeMap from './NativeMap';
 import { distKm, estimate, fmtKm } from './eta';
 import { openRoute } from './maps';
@@ -65,8 +65,11 @@ export default function MapTab({ trip, onOpen }: { trip: Trip; onOpen: (b: Booki
         const any = stops.filter((x) => found[x.q] && !(x.b.type === 'flight')).map((x) => found[x.q]!);
         const near = sameDay[sameDay.length - 1] ?? any[0] ?? null;
         let g = await locate(st.q, isMove(st) ? null : near, isMove(st));
-        // 近くの地点から300km以上離れた結果は別の場所とみなして使わない
-        if (g && near && !isMove(st) && distKm(g, near) > 300) g = null;
+        // 同じ日の地点から100km以上離れた結果は別の場所の可能性が高い → 地図データで近くに絞って探し直し、それでも遠ければ出さない
+        if (g && near && !isMove(st) && distKm(g, near) > 100) {
+          const g2 = await searchPlace(st.q, near);
+          g = g2 && distKm(g2, near) <= 100 ? g2 : null;
+        }
         found[st.q] = g;
         if (!off) setGeo((x) => ({ ...x, [st.q]: g }));
       }
