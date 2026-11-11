@@ -35,7 +35,7 @@ export default function NativeMap({ points, lines }: { points: MapPoint[]; lines
     <MapView ref={ref} style={{ flex: 1 }} showsPointsOfInterests={false} toolbarEnabled={false}>
       {lines.map((l, i) =>
         l.coords.length > 1 ? (
-          <Polyline key={`${i}-${l.coords.length}`} coordinates={l.coords.map((p) => ({ latitude: p.lat, longitude: p.lng }))} strokeColor={l.color} strokeWidth={3} lineDashPattern={[8, 6]} />
+          <Polyline key={`${i}-${l.coords.length}`} coordinates={l.coords.map((p) => ({ latitude: p.lat, longitude: p.lng }))} strokeColor={l.color} strokeWidth={1.5} lineDashPattern={[4, 4]} />
         ) : null,
       )}
       {points.map((p) => (
