@@ -196,6 +196,7 @@ export function parseItinerary(text: string, start?: string): PlanDraft[] {
     inTips = false;
     slot = undefined;
   };
+  const guessed = new WeakSet<PlanDraft>();
   const push = (p: Omit<PlanDraft, 'day' | 'date'> & { day?: number; date?: string }) => {
     let title = stripDeco(p.title).replace(/^[:\-–—|,.\s]+/, '').replace(/[:\-–—|,\s]+$/, '');
     let memo = p.memo;
@@ -212,7 +213,9 @@ export function parseItinerary(text: string, start?: string): PlanDraft[] {
       place = place ?? pl[2].trim();
     }
     if (!title || title.length < 2) return;
-    out.push({ day: p.day ?? day, date: p.date ?? date, time: p.time, endTime: p.endTime, title: title.slice(0, 60), memo: memo ? memo.slice(0, 400) : undefined, place: place ?? placeOf(title) ?? (memo ? placeOf(memo) : undefined) });
+    const d: PlanDraft = { day: p.day ?? day, date: p.date ?? date, time: p.time, endTime: p.endTime, title: title.slice(0, 60), memo: memo ? memo.slice(0, 400) : undefined, place: place ?? placeOf(title) ?? (memo ? placeOf(memo) : undefined) };
+    if (!place && d.place) guessed.add(d); // タイトルから推測した場所（あとで「場所：」の行があればそちらを優先）
+    out.push(d);
   };
   const addMemo = (txt: string) => {
     const last = out[out.length - 1];
@@ -220,7 +223,11 @@ export function parseItinerary(text: string, start?: string): PlanDraft[] {
     const t = stripDeco(txt);
     if (!t) return;
     if (PLACE_LABEL.test(t)) {
-      last.place = last.place ?? t.replace(PLACE_LABEL, '').trim().slice(0, 120);
+      // 「場所：」「住所：」と書いてあれば、タイトルから推測した場所より優先する
+      if (!last.place || guessed.has(last)) {
+        last.place = t.replace(PLACE_LABEL, '').trim().slice(0, 120);
+        guessed.delete(last);
+      }
       return;
     }
     last.memo = [last.memo, t.replace(MEMO_LABEL, (m) => m.replace(/\s*:\s*$/, ': '))].filter(Boolean).join('\n').slice(0, 400);
