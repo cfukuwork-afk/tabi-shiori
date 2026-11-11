@@ -85,6 +85,8 @@ import { exportBackup, importBackup, mergeBackup } from './src/backup';
 import { findPrice } from './src/parse';
 import { SERVER } from './src/sync';
 import { InboxItem } from './src/data';
+import { activityLinks, hotelLinks, FindLink } from './src/affiliate';
+import { syncTripActivity, updateNextWidget, widgetsAvailable } from './src/liveWidgets';
 
 /** 選んだ写真をアプリの中にコピー（元の写真を消しても、圏外でも見られるように） */
 function keepImage(uri: string) {
@@ -235,6 +237,20 @@ function Main() {
   useEffect(() => {
     if (ready) rescheduleAll(trips, settings.notify);
   }, [trips, settings.notify, settings.lang, ready]);
+  // ホーム画面ウィジェット・ロック画面のライブアクティビティ（App Store 版のみ）
+  useEffect(() => {
+    if (!ready || !widgetsAvailable) return;
+    const tm = setTimeout(() => {
+      updateNextWidget(trips);
+      syncTripActivity(trips);
+    }, 800);
+    return () => clearTimeout(tm);
+  }, [trips, settings.lang, ready]);
+  useEffect(() => {
+    if (!widgetsAvailable) return;
+    const sub = AppState.addEventListener('change', (st) => st === 'active' && (updateNextWidget(tripsRef.current), syncTripActivity(tripsRef.current)));
+    return () => sub.remove();
+  }, []);
 
   setLang(settings.lang);
   setMapApp(settings.mapApp ?? 'ask');
@@ -1267,7 +1283,9 @@ function JoinSheet({ initialCode, myName, onClose, onJoin }: { initialCode: stri
 /* ---------------- 行きたい場所 ---------------- */
 function WishSection({ trip, onChange, onToPlan }: { trip: Trip; onChange: (fn: (t: Trip) => Trip) => void; onToPlan: (w: Wish) => void }) {
   const [edit, setEdit] = useState<Wish | 'new' | null>(null);
-  const list = trip.wishes ?? [];
+  const me = trip.myId ?? 'me';
+  // いいねの多い順（同じなら新しい順）
+  const list = [...(trip.wishes ?? [])].sort((a, b) => (b.likes?.length ?? 0) - (a.likes?.length ?? 0));
   return (
     <View style={{ marginBottom: 18 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -1293,10 +1311,34 @@ function WishSection({ trip, onChange, onToPlan }: { trip: Trip; onChange: (fn: 
                     <Icon name={pf.icon} size={26} color={C.sub} />
                   </View>
                 )}
+                {trip.members.length > 1 && (
+                  <Pressable
+                    hitSlop={8}
+                    style={s.likeBtn}
+                    onPress={() =>
+                      onChange((tr) => ({
+                        ...tr,
+                        wishes: (tr.wishes ?? []).map((x) => {
+                          if (x.id !== w.id) return x;
+                          const l = x.likes ?? [];
+                          return { ...x, likes: l.includes(me) ? l.filter((i) => i !== me) : [...l, me] };
+                        }),
+                      }))
+                    }
+                  >
+                    <Icon name={w.likes?.includes(me) ? 'heart' : 'heart-outline'} size={15} color={w.likes?.includes(me) ? C.pink : C.ink} />
+                    {!!w.likes?.length && <Text style={s.likeText}>{w.likes.length}</Text>}
+                  </Pressable>
+                )}
                 <View style={{ padding: 10 }}>
                   <Text style={s.wishTitle} numberOfLines={2}>
                     {w.title || pf.name}
                   </Text>
+                  {!!w.likes?.length && trip.members.length > 1 && (
+                    <Text style={[s.hint, { fontSize: 10, marginTop: 2 }]} numberOfLines={1}>
+                      ♥ {w.likes.map((i) => trip.members.find((m) => m.id === i)?.name ?? '').filter(Boolean).join('・')}
+                    </Text>
+                  )}
                   {!!pf.name && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
                       <Icon name={pf.icon} size={11} color={C.sub} />
@@ -1313,6 +1355,7 @@ function WishSection({ trip, onChange, onToPlan }: { trip: Trip; onChange: (fn: 
       )}
       {edit && (
         <WishSheet
+          city={tripCity(trip.bookings)}
           wish={edit === 'new' ? undefined : edit}
           onClose={() => setEdit(null)}
           onSave={(w) => {
@@ -1343,7 +1386,9 @@ function WishSheet({
   onSave,
   onDelete,
   onToPlan,
+  city,
 }: {
+  city?: string;
   wish?: Wish;
   initialUrl?: string;
   onClose: () => void;
@@ -1425,6 +1470,7 @@ function WishSheet({
             <Icon name="image-outline" size={22} color={C.sub} />
           </Pressable>
         </ScrollView>
+        {!!wish && !!w.title.trim() && <FindRow title={t('findTickets')} links={activityLinks(w.title.trim(), city)} />}
         <Pressable style={[s.primary, !(w.title || w.url) && { opacity: 0.35 }]} disabled={!(w.title || w.url)} onPress={() => onSave({ ...w, title: w.title.trim() || pf.name })}>
           <Text style={s.primaryText}>{t('save')}</Text>
         </Pressable>
@@ -1591,9 +1637,18 @@ function BookingsTab({ trip, rate, onOpen, onInbox, onDropInbox }: { trip: Trip;
         <PlanTab trip={trip} onOpen={onOpen} />
       </>
     );
+  const city = tripCity(trip.bookings) ?? (trip.bookings.find((b) => b.type === 'flight' && b.to)?.to ? placeQuery(trip.bookings.find((b) => b.type === 'flight' && b.to)!, 'to')?.replace(/\s*(International\s*)?Airport.*$/i, '') : undefined);
+  const { start: rs, end: re } = tripRange(trip);
+  const noHotel = !trip.bookings.some((b) => b.type === 'hotel') && rs && re && rs !== re && rs >= todayStr();
   return (
     <>
       {inbox}
+      {noHotel && !!city && (
+        <View style={[s.card, { marginBottom: 6 }]}>
+          <Text style={s.tlTitle}>{t('noHotelYet')}</Text>
+          <FindRow title={t('findHotel', { city })} links={hotelLinks(city, rs, re)} />
+        </View>
+      )}
       {TYPES.filter((ty) => trip.bookings.some((b) => b.type === ty.id)).map((ty) => (
         <View key={ty.id} style={{ marginBottom: 14 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 18, marginBottom: 8 }}>
@@ -2068,6 +2123,25 @@ function PackTab({ trip, onChange }: { trip: Trip; onChange: (fn: (t: Trip) => T
         </View>
       </View>
     </>
+  );
+}
+
+/** 予約サイトで探す（提携リンク） */
+function FindRow({ title, links }: { title: string; links: FindLink[] }) {
+  if (!links.length) return null;
+  return (
+    <View style={{ marginTop: 12 }}>
+      <Text style={[s.hint, { marginBottom: 6, fontWeight: '800' }]}>{title}</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+        {links.map((l) => (
+          <Pressable key={l.id} onPress={() => Linking.openURL(l.url)} style={s.typeChip}>
+            <Icon name="open-outline" size={13} color={C.sub} />
+            <Text style={s.chipText}>{l.name}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <Text style={[s.hint, { fontSize: 10, marginTop: 4 }]}>{t('affNote')}</Text>
+    </View>
   );
 }
 
@@ -2702,6 +2776,7 @@ function BookingDetail({
           )}
           {!!b.memo && <Info k={t('memo')} v={b.memo} />}
         </View>
+        {(b.type === 'plan' || (b.type === 'ticket' && !b.code)) && !!b.title && <FindRow title={t('findTickets')} links={activityLinks(b.title, tripCity(trip.bookings))} />}
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
           <Pressable style={[s.secondary, { flex: 1 }]} onPress={onEdit}>
             <Icon name="create-outline" size={17} />
@@ -2924,6 +2999,8 @@ function sampleTrip(st: Settings): Trip {
 }
 
 const s = StyleSheet.create({
+  likeBtn: { position: 'absolute', top: 8, right: 8, flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: C.card, borderRadius: 14, paddingHorizontal: 8, paddingVertical: 5 },
+  likeText: { fontSize: 12, fontWeight: '800', color: C.ink },
   iconBtn: { width: 48, borderRadius: 14, backgroundColor: C.chip, alignItems: 'center', justifyContent: 'center' },
   wxPill: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 'auto', backgroundColor: C.card, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3 },
   wxText: { fontSize: 12, fontWeight: '800', color: C.ink, fontVariant: ['tabular-nums'] },

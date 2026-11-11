@@ -18,7 +18,8 @@
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryUsageDescription": "予約のスクショや旅行の写真を選ぶために写真ライブラリを使います。",
         "NSLocationWhenInUseUsageDescription": "旅行の地図に現在地を表示するために位置情報を使います。",
-        "NSCameraUsageDescription": "レシートや搭乗券を撮って読み取るためにカメラを使います。"
+        "NSCameraUsageDescription": "レシートや搭乗券を撮って読み取るためにカメラを使います。",
+        "NSSupportsLiveActivities": true
       }
     },
     "web": {
@@ -63,6 +64,26 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "旅行の地図に現在地を表示するために位置情報を使います。"
+        }
+      ],
+      [
+        "expo-widgets",
+        {
+          "widgets": [
+            {
+              "name": "NextTrip",
+              "displayName": "次の予定",
+              "description": "次の予定・あと何日・予約番号",
+              "ios": {
+                "supportedFamilies": [
+                  "systemSmall",
+                  "systemMedium",
+                  "accessoryRectangular"
+                ],
+                "initialLayout": "./src/widgets/NextWidget.tsx"
+              }
+            }
+          ]
         }
       ]
     ],

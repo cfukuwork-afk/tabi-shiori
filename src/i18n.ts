@@ -236,6 +236,15 @@ const ja = {
   rateManual: "（手入力のレート）",
   rateAuto: "（空なら自動のレート）",
   rate: "レート",
+  affNote: "予約サイトのページが開きます（提携リンクを含みます）",
+  findTickets: "チケット・ツアーを探す",
+  noHotelYet: "まだ宿の予約がありません",
+  findHotel: "{city} の宿を探す",
+  wToday: "今日",
+  wTomorrow: "明日",
+  inDays: "あと{n}日",
+  widgetEmpty: "次の旅行を追加しよう",
+  leaveIn: "出発まで",
 };
 type Dict = typeof ja;
 const en: Dict = {
@@ -470,6 +479,15 @@ const en: Dict = {
   rateManual: "(manual rate)",
   rateAuto: "(blank = auto rate)",
   rate: "Rate",
+  affNote: "Opens the booking site (may include affiliate links)",
+  findTickets: "Find tickets & tours",
+  noHotelYet: "No place to stay yet",
+  findHotel: "Find a stay in {city}",
+  wToday: "Today",
+  wTomorrow: "Tomorrow",
+  inDays: "In {n} days",
+  widgetEmpty: "Add your next trip",
+  leaveIn: "Departs in",
 };
 const TYPE_NAMES: Record<Lang, Record<string, string>> = {
   ja: { flight: '飛行機', train: '電車', bus: 'バス', hotel: 'ホテル', car: 'レンタカー', ticket: 'チケット', food: 'お店', plan: '予定', other: 'その他' },
