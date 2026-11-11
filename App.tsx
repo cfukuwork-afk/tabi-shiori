@@ -20,6 +20,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { openMap, placeQuery, setMapApp, tripCity, MapApp } from './src/maps';
 import { bookingTz, arrivalTz, fillTimezones } from './src/geo';
@@ -200,7 +201,15 @@ function Main() {
 
   useEffect(() => {
     (async () => {
-      const [tr, st] = await Promise.all([loadTrips(), loadSettings()]);
+      const [tr0, st] = await Promise.all([loadTrips(), loadSettings()]);
+      let tr = tr0;
+      // 【確認用・一時的】Expo Go にお試し旅行を1回だけ入れる（TestFlight に出す前に消す）
+      if (st.onboarded && !(await AsyncStorage.getItem('ts.demo.once.v1'))) {
+        await AsyncStorage.setItem('ts.demo.once.v1', '1');
+        setLang(st.lang);
+        tr = [sampleTrip(st), pastSample(st), londonSample(st), ...tr];
+        saveTrips(tr);
+      }
       setTrips(tr);
       setSettings(st);
       setRate(await loadRate(st.home));
