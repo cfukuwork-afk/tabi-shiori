@@ -43,20 +43,20 @@ export default function NativeMap({ points, lines, badges = [] }: { points: MapP
         const k = `${i}-${l.style}-${l.coords.length}`;
         switch (l.style) {
           case 'flight':
-            return <Polyline key={k} coordinates={c} strokeColor={l.color} strokeWidth={2} lineDashPattern={[10, 8]} geodesic />;
+            return <Polyline key={k} coordinates={c} strokeColor={l.color} strokeWidth={3.5} lineDashPattern={[12, 8]} geodesic />;
           case 'train':
             // 線路のように：太い線の上に白の破線
             return [
-              <Polyline key={k + 'a'} coordinates={c} strokeColor={l.color} strokeWidth={6} lineCap="round" />,
-              <Polyline key={k + 'b'} coordinates={c} strokeColor="#FFFFFF" strokeWidth={2} lineDashPattern={[6, 6]} />,
+              <Polyline key={k + 'a'} coordinates={c} strokeColor={l.color} strokeWidth={8} lineCap="round" />,
+              <Polyline key={k + 'b'} coordinates={c} strokeColor="#FFFFFF" strokeWidth={3} lineDashPattern={[8, 8]} />,
             ];
           case 'bus':
-            return <Polyline key={k} coordinates={c} strokeColor={l.color} strokeWidth={5} lineCap="round" />;
+            return <Polyline key={k} coordinates={c} strokeColor={l.color} strokeWidth={7} lineCap="round" />;
           case 'walk':
-            return <Polyline key={k} coordinates={c} strokeColor={l.color} strokeWidth={4} lineCap="round" lineDashPattern={[1, 7]} />;
+            return <Polyline key={k} coordinates={c} strokeColor={l.color} strokeWidth={6} lineCap="round" lineDashPattern={[1, 9]} />;
           case 'car':
           case 'ride':
-            return <Polyline key={k} coordinates={c} strokeColor={l.color} strokeWidth={3.5} lineCap="round" lineJoin="round" />;
+            return <Polyline key={k} coordinates={c} strokeColor={l.color} strokeWidth={6} lineCap="round" lineJoin="round" />;
           default:
             return <Polyline key={k} coordinates={c} strokeColor={l.color} strokeWidth={1.5} lineDashPattern={[4, 4]} />;
         }
@@ -70,8 +70,8 @@ export default function NativeMap({ points, lines, badges = [] }: { points: MapP
       ))}
       {points.map((p) => (
         <Marker key={p.key} coordinate={{ latitude: p.lat, longitude: p.lng }} title={p.title} onCalloutPress={p.onPress} tracksViewChanges={track}>
-          <View style={{ minWidth: 28, height: 28, paddingHorizontal: 5, borderRadius: 14, backgroundColor: p.color, borderWidth: 2, borderColor: '#fff', alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ color: '#fff', fontWeight: '900', fontSize: 11 }}>{p.label}</Text>
+          <View style={{ minWidth: 30, height: 30, paddingHorizontal: 6, borderRadius: 15, backgroundColor: '#FFFFFF', borderWidth: 3, borderColor: p.color, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 3, shadowOffset: { width: 0, height: 1 } }}>
+            <Text style={{ color: '#15171C', fontWeight: '900', fontSize: 12 }}>{p.label}</Text>
           </View>
         </Marker>
       ))}

@@ -41,7 +41,7 @@ export function tripStops(trip: Trip): Stop[] {
 }
 
 type Seg = { key: string; day: string; mode: LineStyle; a: Geo; b: Geo };
-const MODE_COLOR: Record<LineStyle, string> = { flight: '#3B5BDB', train: '#1F9D74', bus: '#B07D00', walk: '#FF5B3A', car: '#7048E8', ride: '#0B7285' };
+const MODE_COLOR: Record<LineStyle, string> = { flight: '#2F6BFF', train: '#00A86B', bus: '#F59F00', walk: '#FF3D7F', car: '#7B2FF7', ride: '#0096C7' };
 const MODE_KEY: Record<LineStyle, 'mFlight' | 'mTrain' | 'mBus' | 'mWalk' | 'mCar' | 'mRide'> = { flight: 'mFlight', train: 'mTrain', bus: 'mBus', walk: 'mWalk', car: 'mCar', ride: 'mRide' };
 const MODE_ICON: Record<LineStyle, string> = { flight: 'airplane', train: 'train', bus: 'bus', walk: 'walk', car: 'car', ride: 'subway' };
 
@@ -115,15 +115,24 @@ export default function MapTab({ trip, onOpen }: { trip: Trip; onOpen: (b: Booki
       for (const st of order) {
         if (off) return;
         if (st.q in found) continue;
-        let g: Geo | null;
+        let g: Geo | null = null;
         if (isMove(st)) g = await locate(st.q, null, true);
         else {
           const ref = refOf(st);
-          g = await locate(st.q, looksLikeAddress(st.q) ? null : ref);
-          // 前後の予定から100km以上離れていたら別の町の可能性が高い → 近くに絞って探し直し、だめなら出さない
-          if (g && ref && distKm(g, ref) > 100) {
-            const g2 = await searchPlace(st.q, ref);
-            g = g2 && distKm(g2, ref) <= 100 ? g2 : null;
+          // 「名前, 住所」で見つからなければ、住所だけ → 名前だけ（近くに絞って）の順に試す
+          const v = st.b.from?.trim();
+          const alts = [st.q, ...(v && v !== st.q ? [v] : []), ...(ref && st.b.title && st.b.title !== st.q ? [st.b.title] : [])];
+          for (const q of alts) {
+            let c = await locate(q, looksLikeAddress(q) ? null : ref);
+            // 前後の予定から100km以上離れていたら別の町の可能性が高い → 近くに絞って探し直し、だめなら次の候補
+            if (c && ref && distKm(c, ref) > 100) {
+              const c2 = await searchPlace(q, ref);
+              c = c2 && distKm(c2, ref) <= 100 ? c2 : null;
+            }
+            if (c) {
+              g = c;
+              break;
+            }
           }
         }
         found[st.q] = g;
@@ -256,8 +265,8 @@ export default function MapTab({ trip, onOpen }: { trip: Trip; onOpen: (b: Booki
                 </View>
               )}
               <Pressable style={st.row} onPress={() => openMap(s.q)} onLongPress={() => onOpen(s.b)}>
-                <View style={[st.num, { backgroundColor: pinColor(s) }]}>
-                  <Text style={st.numText}>{label(s)}</Text>
+                <View style={[st.num, { borderColor: pinColor(s) }]}>
+                  <Text style={[st.numText, { color: pinColor(s) }]}>{label(s)}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={st.title} numberOfLines={2}>
@@ -303,7 +312,7 @@ function makeSt() {
   routeText: { color: C.onInk, fontWeight: '800', fontSize: 15 },
   dayHead: { fontSize: 13, fontWeight: '900', color: C.ink, marginTop: 14, marginBottom: 6 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.card, borderRadius: 16, padding: 12, marginBottom: 6, borderWidth: 1, borderColor: C.line },
-  num: { minWidth: 30, height: 26, paddingHorizontal: 5, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  num: { minWidth: 32, height: 28, paddingHorizontal: 5, borderRadius: 14, borderWidth: 2.5, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center' },
   numText: { color: C.onInk, fontWeight: '900', fontSize: 13 },
   title: { fontWeight: '800', color: C.ink, fontSize: 14 },
   sub: { color: C.sub, fontSize: 12, marginTop: 2 },
