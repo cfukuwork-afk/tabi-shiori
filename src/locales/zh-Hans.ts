@@ -54,6 +54,7 @@ export default {
   toBudgetApp: '发送到记账（World Budget Book）', toBudgetHint: '把你付的预订和花费导出为 CSV，可在 World Budget Book 的设置 →「选择 Wise CSV」导入', findEsim: '找 eSIM',
   wxClear: '晴', wxPartly: '晴间多云', wxCloudy: '多云', wxFog: '雾', wxRain: '雨', wxSnow: '雪', wxStorm: '雷雨',
   mFlight: '飞机', mTrain: '火车', mBus: '巴士', mWalk: '步行', mCar: '汽车', mRide: '电车·汽车（市内）',
-  sugTitle: '旅行准备（推荐）', sugFlight: '查找机票', sugTransfer: '预订机场接送', sugCar: '查找租车', sugLuggage: '退房后寄存行李', sugAirhelp: '了解延误・取消的赔偿', inspireTitle: '去{city}看看吗？', inspireSub: '下一次旅行的灵感', inspireFind: '查看{city}的体验・机票', city_seoul: '首尔', city_taipei: '台北', city_bangkok: '曼谷', city_singapore: '新加坡', city_paris: '巴黎', city_london: '伦敦', city_barcelona: '巴塞罗那', city_honolulu: '檀香山', city_sydney: '悉尼', city_newyork: '纽约',
-  inspireNear: '离你去过的国家很近', inspireSetting: '在首页显示推荐目的地',
+  sugFlight: '查找机票', sugTransfer: '预订机场接送', sugCar: '查找租车', sugLuggage: '退房后寄存行李', sugAirhelp: '了解延误・取消的赔偿', inspireFind: '查看{city}的体验・机票', city_seoul: '首尔', city_taipei: '台北', city_bangkok: '曼谷', city_singapore: '新加坡', city_paris: '巴黎', city_london: '伦敦', city_barcelona: '巴塞罗那', city_honolulu: '檀香山', city_sydney: '悉尼', city_newyork: '纽约',
+  inspireSetting: '在首页显示推荐目的地',
+  adHotelKicker: '还没有订住宿', adHotelTitle: '{city}住哪里？', adHotelSub: '{n}晚 · 按日期查空房', adHotelBtn: '在{site}看房间', sugTitle: '这趟旅行用得上', adFlightT: '机票还没订？趁早', adFlightS: '比较每天的最低价', adActT: '在{city}玩什么？', adActS: '热门行程与门票', adTransferT: '落地直接去酒店', adTransferS: '提前预订机场接送', adCarT: '{n}天的话，开车走远点', adCarS: '比较当地租车', adLuggageT: '退房后也轻松', adLuggageS: '在车站或市区寄存行李', adAirhelpT: '航班延误或取消？', adAirhelpS: '1分钟查查能否获赔', inspireTitle: '下一站，{city}。', inspireSub: '今日推荐', inspireNear: '你去过的国家附近', inspireLine: '{country} · 机票和体验一起看', inspireBtnDo: '看看体验', inspireBtnFly: '机票',
 } as Record<string, string>;

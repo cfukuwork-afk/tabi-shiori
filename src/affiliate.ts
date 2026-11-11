@@ -7,7 +7,7 @@ export const PARTNER = {
   agoda: '', // Agoda の cid
   tripcom: '', // Trip.com の Allianceid
   airalo: '', // Airalo の紹介コード
-  rakuten: '', // 楽天トラベル（楽天アフィリエイトID）
+  rakuten: '59674a62.6f5d1f31.59674a63.cf344897', // 楽天トラベル（楽天アフィリエイトID）
 };
 
 export type FindLink = { id: string; name: string; url: string };
@@ -52,7 +52,7 @@ export function hotelLinks(city: string, checkin?: string, checkout?: string, do
   const d = checkin && checkout ? `&checkin=${checkin}&checkout=${checkout}` : '';
   const rk = `https://search.travel.rakuten.co.jp/ds/hotellist/Japan-${enc(city)}`;
   return [
-    ...(domestic ? [{ id: 'rakuten', name: '楽天トラベル', url: PARTNER.rakuten ? `https://hb.afl.rakuten.co.jp/hgc/${PARTNER.rakuten}/?pc=${enc(rk)}` : `https://kw.travel.rakuten.co.jp/keyword/Search.do?f_query=${enc(city)}` }] : []),
+    ...(domestic ? [{ id: 'rakuten', name: '楽天トラベル', url: PARTNER.rakuten ? `https://hb.afl.rakuten.co.jp/hgc/${PARTNER.rakuten}/?pc=${enc(rk)}&m=${enc(rk)}` : `https://kw.travel.rakuten.co.jp/keyword/Search.do?f_query=${enc(city)}` }] : []),
     { id: 'booking', name: 'Booking.com', url: `https://www.booking.com/searchresults.html?ss=${enc(city)}${d}${PARTNER.booking ? `&aid=${PARTNER.booking}` : ''}` },
     { id: 'agoda', name: 'Agoda', url: `https://www.agoda.com/search?text=${enc(city)}${checkin ? `&checkIn=${checkin}` : ''}${PARTNER.agoda ? `&cid=${PARTNER.agoda}` : ''}` },
   ];

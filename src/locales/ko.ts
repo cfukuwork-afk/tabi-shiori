@@ -54,6 +54,7 @@ export default {
   toBudgetApp: '가계부로 보내기 (World Budget Book)', toBudgetHint: '내가 낸 예약과 지출을 CSV로 만들어요. World Budget Book의 설정 →「Wise CSV 선택」에서 불러올 수 있어요', findEsim: 'eSIM 찾기',
   wxClear: '맑음', wxPartly: '구름 조금', wxCloudy: '흐림', wxFog: '안개', wxRain: '비', wxSnow: '눈', wxStorm: '뇌우',
   mFlight: '비행기', mTrain: '기차', mBus: '버스', mWalk: '도보', mCar: '자동차', mRide: '전철·차 (시내)',
-  sugTitle: '여행 준비 (추천)', sugFlight: '항공권 찾기', sugTransfer: '공항 픽업 예약', sugCar: '렌터카 찾기', sugLuggage: '체크아웃 후 짐 맡기기', sugAirhelp: '지연・결항 보상 알아보기', inspireTitle: '{city}에 가 보는 건 어때요?', inspireSub: '다음 여행 아이디어', inspireFind: '{city} 체험・항공권 보기', city_seoul: '서울', city_taipei: '타이베이', city_bangkok: '방콕', city_singapore: '싱가포르', city_paris: '파리', city_london: '런던', city_barcelona: '바르셀로나', city_honolulu: '호놀룰루', city_sydney: '시드니', city_newyork: '뉴욕',
-  inspireNear: '가 본 나라와 가까운 곳', inspireSetting: '홈에 추천 여행지 표시',
+  sugFlight: '항공권 찾기', sugTransfer: '공항 픽업 예약', sugCar: '렌터카 찾기', sugLuggage: '체크아웃 후 짐 맡기기', sugAirhelp: '지연・결항 보상 알아보기', inspireFind: '{city} 체험・항공권 보기', city_seoul: '서울', city_taipei: '타이베이', city_bangkok: '방콕', city_singapore: '싱가포르', city_paris: '파리', city_london: '런던', city_barcelona: '바르셀로나', city_honolulu: '호놀룰루', city_sydney: '시드니', city_newyork: '뉴욕',
+  inspireSetting: '홈에 추천 여행지 표시',
+  adHotelKicker: '아직 숙소가 없어요', adHotelTitle: '{city}, 어디서 묵을까요?', adHotelSub: '{n}박 · 날짜로 빈방 확인', adHotelBtn: '{site}에서 객실 보기', sugTitle: '이번 여행에 있으면 편해요', adFlightT: '항공권, 아직이라면 지금', adFlightS: '날짜별 최저가 비교', adActT: '{city}에서 뭐 하지?', adActS: '인기 투어・티켓 예약', adTransferT: '도착하면 바로 호텔로', adTransferS: '공항 픽업 미리 예약', adCarT: '{n}일이면 차로 멀리', adCarS: '현지 렌터카 비교', adLuggageT: '체크아웃 후에도 가볍게', adLuggageS: '역・시내에서 짐 맡기기', adAirhelpT: '지연・결항됐다면', adAirhelpS: '보상 가능한지 1분 확인', inspireTitle: '다음은 {city}로.', inspireSub: '오늘의 추천', inspireNear: '여행했던 나라 근처', inspireLine: '{country} · 항공권과 체험 한눈에', inspireBtnDo: '체험 보기', inspireBtnFly: '항공권',
 } as Record<string, string>;

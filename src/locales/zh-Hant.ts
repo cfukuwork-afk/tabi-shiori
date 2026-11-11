@@ -54,6 +54,7 @@ export default {
   toBudgetApp: '傳送到記賬（World Budget Book）', toBudgetHint: '把你付的預訂和花費匯出為 CSV，可在 World Budget Book 的設定 →「選擇 Wise CSV」匯入', findEsim: '找 eSIM',
   wxClear: '晴', wxPartly: '晴間多雲', wxCloudy: '多雲', wxFog: '霧', wxRain: '雨', wxSnow: '雪', wxStorm: '雷雨',
   mFlight: '飛機', mTrain: '火車', mBus: '巴士', mWalk: '步行', mCar: '汽車', mRide: '電車·汽車（市內）',
-  sugTitle: '旅行準備（推薦）', sugFlight: '尋找機票', sugTransfer: '預訂機場接送', sugCar: '尋找租車', sugLuggage: '退房後寄放行李', sugAirhelp: '了解延誤・取消的賠償', inspireTitle: '去{city}看看嗎？', inspireSub: '下一次旅行的靈感', inspireFind: '查看{city}的體驗・機票', city_seoul: '首爾', city_taipei: '台北', city_bangkok: '曼谷', city_singapore: '新加坡', city_paris: '巴黎', city_london: '倫敦', city_barcelona: '巴塞隆納', city_honolulu: '檀香山', city_sydney: '雪梨', city_newyork: '紐約',
-  inspireNear: '離你去過的國家很近', inspireSetting: '在首頁顯示推薦目的地',
+  sugFlight: '尋找機票', sugTransfer: '預訂機場接送', sugCar: '尋找租車', sugLuggage: '退房後寄放行李', sugAirhelp: '了解延誤・取消的賠償', inspireFind: '查看{city}的體驗・機票', city_seoul: '首爾', city_taipei: '台北', city_bangkok: '曼谷', city_singapore: '新加坡', city_paris: '巴黎', city_london: '倫敦', city_barcelona: '巴塞隆納', city_honolulu: '檀香山', city_sydney: '雪梨', city_newyork: '紐約',
+  inspireSetting: '在首頁顯示推薦目的地',
+  adHotelKicker: '還沒有訂住宿', adHotelTitle: '{city}住哪裡？', adHotelSub: '{n}晚 · 依日期查空房', adHotelBtn: '在{site}看房間', sugTitle: '這趟旅行用得上', adFlightT: '機票還沒訂？趁早', adFlightS: '比較每天的最低價', adActT: '在{city}玩什麼？', adActS: '熱門行程與門票', adTransferT: '落地直接去飯店', adTransferS: '提前預訂機場接送', adCarT: '{n}天的話，開車走遠點', adCarS: '比較當地租車', adLuggageT: '退房後也輕鬆', adLuggageS: '在車站或市區寄放行李', adAirhelpT: '航班延誤或取消？', adAirhelpS: '1分鐘查查能否獲賠', inspireTitle: '下一站，{city}。', inspireSub: '今日推薦', inspireNear: '你去過的國家附近', inspireLine: '{country} · 機票和體驗一起看', inspireBtnDo: '看看體驗', inspireBtnFly: '機票',
 } as Record<string, string>;

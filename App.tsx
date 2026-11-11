@@ -92,6 +92,7 @@ import { SERVER } from './src/sync';
 import { InboxItem } from './src/data';
 import { TZ_CC, countriesOf, flag } from './src/countries';
 import { NEAR, PLACES } from './src/places';
+import { useCityPhoto } from './src/cityPhoto';
 import { dropVaultImage, keepVaultImage, loadVault, saveVault, unlock, VaultDoc } from './src/vault';
 import { myTz } from './src/airports';
 import { isPdf, isPkpass, keepFile, readPkpass, TicketFile } from './src/pkpass';
@@ -1703,10 +1704,14 @@ function BookingsTab({ trip, rate, onOpen, onInbox, onDropInbox }: { trip: Trip;
     <>
       {inbox}
       {noHotel && !!city && (
-        <View style={[s.card, { marginBottom: 6 }]}>
-          <Text style={s.tlTitle}>{t('noHotelYet')}</Text>
-          <FindRow title={t('findHotel', { city })} links={hotelLinks(city, rs, re, /[぀-ヿ一-鿿]/.test(city))} />
-        </View>
+        <AdHero
+          photo={city}
+          kicker={t('adHotelKicker')}
+          title={t('adHotelTitle', { city })}
+          sub={t('adHotelSub', { n: daysBetween(rs!, re!) })}
+          actions={[t('adHotelBtn', { site: 'Booking.com' }), 'Agoda']}
+          links={hotelLinks(city, rs, re, /[぀-ヿ一-鿿]/.test(city))}
+        />
       )}
       <Suggest trip={trip} city={city} />
       {TYPES.filter((ty) => trip.bookings.some((b) => b.type === ty.id)).map((ty) => (
@@ -2258,25 +2263,78 @@ function Suggest({ trip, city }: { trip: Trip; city?: string }) {
   const hotels = trip.bookings.filter((b) => b.type === 'hotel' && !b.cancelled);
   // チェックアウトした日に、あとで電車・飛行機で出発する → 荷物を預ける
   const luggage = hotels.some((h) => h.end && trip.bookings.some((b) => (b.type === 'flight' || b.type === 'train' || b.type === 'bus') && b.start === h.end && (b.startTime ?? '00:00') >= '14:00'));
-  const rows: { title: string; links: FindLink[] }[] = [];
-  if (!has('flight') && !has('train')) rows.push({ title: t('sugFlight'), links: flightLinks() });
-  if (has('flight')) rows.push({ title: t('sugTransfer'), links: transferLinks() });
-  if (!has('car') && days >= 3) rows.push({ title: t('sugCar'), links: carLinks() });
-  if (luggage) rows.push({ title: t('sugLuggage'), links: luggageLinks(city) });
-  if (has('flight')) rows.push({ title: t('sugAirhelp'), links: [airhelpLink()] });
-  if (!rows.length) return null;
+  const tiles: AdTile[] = [];
+  if (!has('flight') && !has('train')) tiles.push({ key: 'fl', icon: 'airplane', bg: '#2F6BFF', title: t('adFlightT'), sub: t('adFlightS'), links: flightLinks() });
+  if (city) tiles.push({ key: 'act', icon: 'ticket', bg: '#FF5B3A', title: t('adActT', { city }), sub: t('adActS'), links: activityLinks('', city) });
+  if (has('flight')) tiles.push({ key: 'tr', icon: 'car-sport', bg: '#00A86B', title: t('adTransferT'), sub: t('adTransferS'), links: transferLinks() });
+  if (!has('car') && days >= 3) tiles.push({ key: 'car', icon: 'key', bg: '#7B2FF7', title: t('adCarT', { n: days }), sub: t('adCarS'), links: carLinks() });
+  if (luggage) tiles.push({ key: 'lug', icon: 'briefcase', bg: '#F59F00', title: t('adLuggageT'), sub: t('adLuggageS'), links: luggageLinks(city) });
+  if (has('flight')) tiles.push({ key: 'air', icon: 'shield-checkmark', bg: '#15171C', title: t('adAirhelpT'), sub: t('adAirhelpS'), links: [airhelpLink()] });
+  if (!tiles.length) return null;
   return (
-    <View style={[s.card, { marginBottom: 6 }]}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+    <View style={{ marginTop: 6, marginBottom: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
         <Text style={[s.tlTitle, { flex: 1 }]}>{t('sugTitle')}</Text>
-        <Text style={[s.hint, { fontSize: 10, fontWeight: '800' }]}>PR</Text>
+        <Text style={s.prTag}>PR</Text>
       </View>
-      {rows.map((r) => (
-        <FindRow key={r.title} title={r.title} links={r.links} />
-      ))}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 8 }}>
+        {tiles.map((x) => (
+          <Pressable key={x.key} onPress={() => x.links[0] && Linking.openURL(x.links[0].url)} style={({ pressed }) => [s.adTile, { backgroundColor: x.bg, opacity: pressed ? 0.85 : 1 }]}>
+            <View style={s.adTileIcon}>
+              <Icon name={x.icon} size={22} color="#fff" />
+            </View>
+            <Text style={s.adTileTitle} numberOfLines={2}>{x.title}</Text>
+            <Text style={s.adTileSub} numberOfLines={2}>{x.sub}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 'auto', gap: 4 }}>
+              <Text style={s.adTileBrand} numberOfLines={1}>{x.links.map((l) => l.name).slice(0, 2).join(' · ')}</Text>
+              <Icon name="arrow-forward" size={14} color="#fff" />
+            </View>
+          </Pressable>
+        ))}
+      </ScrollView>
     </View>
   );
 }
+type AdTile = { key: string; icon: string; bg: string; title: string; sub: string; links: FindLink[] };
+
+/** 写真つきの大きな広告カード（宿がない旅・おすすめの行き先） */
+function AdHero({ photo, kicker, title, sub, links, badge, onClose, top, actions }: {
+  photo?: string; kicker: string; title: string; sub: string; links: FindLink[]; badge?: string; onClose?: () => void; top?: number; actions?: string[];
+}) {
+  const url = useCityPhoto(photo);
+  if (!links.length) return null;
+  return (
+    <View style={[s.adHero, { marginTop: top ?? 0 }]}>
+      {url ? <Image source={{ uri: url }} style={StyleSheet.absoluteFill} resizeMode="cover" /> : <Image source={COVER_FALLBACK} style={StyleSheet.absoluteFill} resizeMode="cover" />}
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(10,12,18,0.18)' }]} />
+      <View style={s.adHeroShade} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        {!!badge && <Text style={{ fontSize: 18 }}>{badge}</Text>}
+        <Text style={s.adHeroKicker}>{kicker}</Text>
+        <View style={{ flex: 1 }} />
+        <Text style={[s.prTag, s.prTagOnPhoto]}>PR</Text>
+        {!!onClose && (
+          <Pressable hitSlop={12} onPress={onClose} style={s.adHeroClose}>
+            <Icon name="close" size={15} color="#fff" />
+          </Pressable>
+        )}
+      </View>
+      <View style={{ marginTop: 'auto' }}>
+        <Text style={s.adHeroTitle}>{title}</Text>
+        <Text style={s.adHeroSub}>{sub}</Text>
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+          {links.slice(0, 2).map((l, i) => (
+            <Pressable key={l.id} onPress={() => Linking.openURL(l.url)} style={({ pressed }) => [i === 0 ? s.adBtn : s.adBtn2, pressed && { opacity: 0.8 }]}>
+              <Text style={i === 0 ? s.adBtnText : s.adBtn2Text} numberOfLines={1}>{actions?.[i] ?? l.name}</Text>
+              {i === 0 && <Icon name="arrow-forward" size={14} color="#15171C" />}
+            </Pressable>
+          ))}
+        </View>
+      </View>
+    </View>
+  );
+}
+const COVER_FALLBACK = require('./assets/covers/window.jpg');
 
 // ホームの「〇〇に行きませんか？」：行ったことのある国に近い地域の、まだ行っていない国を日ごとに選ぶ（100か国・500都市）
 let inspireClosed = false; // × で閉じたら、次にアプリを開くまで出さない
@@ -2303,21 +2361,20 @@ function Inspire({ trips }: { trips: Trip[] }) {
     country = new (Intl as any).DisplayNames([localeOf(getLang())], { type: 'region' }).of(pick.cc) ?? pick.cc;
   } catch {}
   return (
-    <View style={[s.card, { marginTop: 18 }]}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-        <Text style={{ fontSize: 22 }}>{flag(pick.cc)}</Text>
-        <Text style={[s.tlTitle, { flex: 1 }]}>{t('inspireTitle', { city: name })}</Text>
-        <Text style={[s.hint, { fontSize: 10, fontWeight: '800' }]}>PR</Text>
-        <Pressable hitSlop={10} onPress={() => {
-          inspireClosed = true;
-          setClosed(true);
-        }}>
-          <Icon name="close" size={16} color={C.sub} />
-        </Pressable>
-      </View>
-      <Text style={[s.hint, { marginTop: 2 }]}>{`${country}${dot()}${pick.near ? t('inspireNear') : t('inspireSub')}`}</Text>
-      <FindRow title={t('inspireFind', { city: name })} links={inspireLinks(pick.city[0])} />
-    </View>
+    <AdHero
+      top={18}
+      photo={pick.city[0]}
+      badge={flag(pick.cc)}
+      kicker={pick.near ? t('inspireNear') : t('inspireSub')}
+      title={t('inspireTitle', { city: name })}
+      sub={t('inspireLine', { country })}
+      actions={[t('inspireBtnDo'), t('inspireBtnFly')]}
+      links={inspireLinks(pick.city[0])}
+      onClose={() => {
+        inspireClosed = true;
+        setClosed(true);
+      }}
+    />
   );
 }
 const TZ_HOME = () => TZ_CC[myTz() ?? ''] ?? '';
@@ -3541,6 +3598,23 @@ function makeStyles() {
   optIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: C.chip, alignItems: 'center', justifyContent: 'center' },
   note: { backgroundColor: C.mintSoft, borderRadius: 14, padding: 12, marginBottom: 12 },
   noteText: { color: C.mint, fontWeight: '800', fontSize: 13 },
+  prTag: { fontSize: 10, fontWeight: '900', color: C.sub, borderWidth: 1, borderColor: C.line, borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1, overflow: 'hidden' },
+  prTagOnPhoto: { color: '#fff', borderColor: 'rgba(255,255,255,0.6)', backgroundColor: 'rgba(0,0,0,0.25)' },
+  adHero: { height: 236, borderRadius: 22, overflow: 'hidden', padding: 16, marginBottom: 10, backgroundColor: '#22252B' },
+  adHeroShade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '70%', backgroundColor: 'rgba(8,10,15,0.48)' },
+  adHeroKicker: { color: '#fff', fontSize: 12, fontWeight: '800', letterSpacing: 0.4, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 4 },
+  adHeroClose: { width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center', marginLeft: 6 },
+  adHeroTitle: { color: '#fff', fontSize: 28, fontWeight: '900', letterSpacing: -0.5, lineHeight: 33, textShadowColor: 'rgba(0,0,0,0.45)', textShadowRadius: 8 },
+  adHeroSub: { color: 'rgba(255,255,255,0.92)', fontSize: 14, fontWeight: '600', marginTop: 4 },
+  adBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 11, flexShrink: 1 },
+  adBtnText: { color: '#15171C', fontWeight: '900', fontSize: 15 },
+  adBtn2: { borderRadius: 14, paddingHorizontal: 16, paddingVertical: 11, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.75)', flexShrink: 1 },
+  adBtn2Text: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  adTile: { width: 168, height: 168, borderRadius: 20, padding: 14 },
+  adTileIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  adTileTitle: { color: '#fff', fontSize: 16, fontWeight: '900', lineHeight: 20 },
+  adTileSub: { color: 'rgba(255,255,255,0.88)', fontSize: 12, fontWeight: '600', marginTop: 3, lineHeight: 16 },
+  adTileBrand: { color: 'rgba(255,255,255,0.85)', fontSize: 11, fontWeight: '800', flexShrink: 1 },
   typeChip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 20, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, paddingHorizontal: 11, paddingVertical: 7 },
   two: { flexDirection: 'row', gap: 8 },
   dateRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.line },

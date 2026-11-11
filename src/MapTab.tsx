@@ -13,6 +13,8 @@ import { openRoute } from './maps';
 
 export type Stop = { key: string; day: string; n: number; time?: string; title: string; sub: string; q: string; b: Booking; color: string };
 
+const BACK_TO_HOTEL = /(ホテル|宿|旅館|hotel|hôtel|hostel|호텔|숙소|酒店|飯店)/i;
+
 /** 地図に出す地点を、日付と時間の順に並べる */
 export function tripStops(trip: Trip): Stop[] {
   const city = tripCity(trip.bookings);
@@ -32,6 +34,10 @@ export function tripStops(trip: Trip): Stop[] {
         add(b, placeQuery(b, 'to'), b.to ?? '', b.endTime);
       } else if (b.type === 'car' && edge === 'end') {
         add(b, placeQuery(b, b.to ? 'to' : 'from', city), b.to ?? b.from ?? '', time);
+      } else if (!b.from?.trim() && b.type !== 'hotel' && BACK_TO_HOTEL.test(b.title ?? '')) {
+        // 「ホテルに戻る」など：その夜に泊まるホテルの場所を使う
+        const h = trip.bookings.find((x) => x.type === 'hotel' && !x.cancelled && x.start <= date && (x.end ?? x.start) >= date);
+        add(b, h ? placeQuery(h, 'from', city) : placeQuery(b, 'from', city), h?.title ?? '', time);
       } else {
         add(b, placeQuery(b, 'from', city), b.from ?? '', time);
       }
@@ -48,22 +54,26 @@ const MODE_ICON: Record<LineStyle, string> = { flight: 'airplane', train: 'train
 /** となりあう地点の区間と、その移動手段 */
 function segments(list: Stop[], geo: Record<string, Geo | null>, trip: Trip): Seg[] {
   const out: Seg[] = [];
-  for (let i = 1; i < list.length; i++) {
-    const p = list[i - 1];
-    const s = list[i];
-    if (p.day !== s.day) continue;
-    const a = geo[p.q];
+  // 場所が見つからなかった予定は飛ばして、同じ日の「直前に見つかった地点」とつなぐ
+  //（以前は隣どうしが両方見つかったときだけ線を引いていたので、途中が1つ欠けると線が全部消えていた）
+  let p: Stop | null = null;
+  for (const s of list) {
+    if (p && p.day !== s.day) p = null;
     const b = geo[s.q];
-    if (!a || !b || distKm(a, b) < 0.03) continue;
+    if (!b) continue;
+    const a = p ? geo[p.q] : null;
+    const prev = p;
+    p = s;
+    if (!prev || !a || distKm(a, b) < 0.03) continue;
     let mode: LineStyle;
-    if (p.b.id === s.b.id && (s.b.type === 'flight' || s.b.type === 'train' || s.b.type === 'bus')) mode = s.b.type;
+    if (prev.b.id === s.b.id && (s.b.type === 'flight' || s.b.type === 'train' || s.b.type === 'bus')) mode = s.b.type;
     else if (distKm(a, b) <= 1.5) mode = 'walk';
     else {
       // その日にレンタカーを借りていれば車、そうでなければ電車・バスなど
       const car = trip.bookings.some((x) => x.type === 'car' && !x.cancelled && x.start <= s.day && (x.end ?? x.start) >= s.day);
       mode = car ? 'car' : 'ride';
     }
-    out.push({ key: `${p.key}>${s.key}`, day: s.day, mode, a, b });
+    out.push({ key: `${prev.key}>${s.key}`, day: s.day, mode, a, b });
   }
   return out;
 }
