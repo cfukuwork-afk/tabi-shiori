@@ -136,6 +136,7 @@ export async function searchPlace(q: string, near?: { lat: number; lng: number }
 /** 地図の地点を探す：住所は端末の地図、名前は近くに絞って地図データ → だめなら端末の地図 */
 export async function locate(q: string, near?: { lat: number; lng: number } | null, station = false): Promise<Geo | null> {
   if (looksLikeAddress(q)) return (await geocode(q)) ?? (await searchPlace(q, near));
-  if (station) return (await geocode(q)) ?? (await searchPlace(q, near));
+  // 駅・空港は地図データ（OpenStreetMap）の方が正確。端末の地図は駅前の通りなど少しずれた所を返すことがある
+  if (station) return (await searchPlace(q, near)) ?? (await geocode(q));
   return (await searchPlace(q, near)) ?? (await geocode(q));
 }
