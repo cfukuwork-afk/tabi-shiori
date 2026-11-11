@@ -2,7 +2,7 @@
 // 登録後に下の ID を入れるだけで有効になる
 export const PARTNER = {
   klook: '', // Klook アフィリエイトの aid
-  gyg: '', // GetYourGuide の partner_id
+  gyg: 'LCIKN6S', // GetYourGuide の partner_id
   booking: '', // Booking.com の aid（2025年から CJ 経由の登録。リンクの形が変わる場合はここで直す）
   agoda: '', // Agoda の cid
   tripcom: '', // Trip.com の Allianceid
@@ -42,7 +42,7 @@ export function activityLinks(title: string, city?: string): FindLink[] {
     { id: 'klook', name: 'Klook', url: tp('klook', `https://www.klook.com/search/result/?query=${enc(q)}`) },
     { id: 'tiqets', name: 'Tiqets', url: tp('tiqets', `https://www.tiqets.com/en/search?q=${enc(q)}`) },
     { id: 'kkday', name: 'KKday', url: tp('kkday', `https://www.kkday.com/en/product/productlist?keyword=${enc(q)}`) },
-    { id: 'gyg', name: 'GetYourGuide', url: `https://www.getyourguide.com/s/?q=${enc(q)}${PARTNER.gyg ? `&partner_id=${PARTNER.gyg}` : ''}` },
+    { id: 'gyg', name: 'GetYourGuide', url: `https://www.getyourguide.com/s/?q=${enc(q)}${PARTNER.gyg ? `&partner_id=${PARTNER.gyg}&utm_medium=online_publisher` : ''}` },
   ];
 }
 
