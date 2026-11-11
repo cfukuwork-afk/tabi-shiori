@@ -521,7 +521,7 @@ function Memories({ trips, onOpen }: { trips: Trip[]; onOpen: (id: string) => vo
                     )}
                     <View style={s.memShade} />
                     <View style={{ position: 'absolute', left: 14, right: 14, bottom: 12 }}>
-                      <Text style={s.memName} numberOfLines={1}>
+                      <Text style={s.memName} numberOfLines={2}>
                         {tr.name}
                       </Text>
                       <Text style={s.memSub}>
@@ -548,7 +548,7 @@ function TripCard({ trip, rate, onPress }: { trip: Trip; rate: RateInfo; onPress
     <Pressable style={({ pressed }) => [s.tripCard, pressed && { opacity: 0.85 }]} onPress={onPress}>
       <Cover trip={trip} />
       <View style={{ flex: 1 }}>
-        <Text style={s.tripName} numberOfLines={1}>
+        <Text style={s.tripName} numberOfLines={2}>
           {trip.name}
         </Text>
         <Text style={s.hint}>
@@ -647,7 +647,7 @@ const cityFont = (a: string, b: string) => {
 const PassCell = ({ k, v, flex = 1 }: { k: string; v: string; flex?: number }) => (
   <View style={{ flex }}>
     <Text style={s.passK}>{k}</Text>
-    <Text style={s.passV} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+    <Text style={s.passV} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8}>
       {v}
     </Text>
   </View>
@@ -708,7 +708,7 @@ function TripScreen({
           </View>
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={s.tripHeadName} numberOfLines={1}>
+          <Text style={s.tripHeadName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
             {trip.name}
           </Text>
           <Text style={s.hint}>
@@ -856,12 +856,12 @@ function PlanTab({ trip, onOpen, onJournal, onAddPlan }: { trip: Trip; onOpen: (
                 <Pressable onPress={() => onOpen(b)} style={({ pressed }) => [s.tlCard, pressed && { opacity: 0.85 }]}>
                   <TypeBadge type={b.type} size={34} />
                   <View style={{ flex: 1 }}>
-                    <Text style={s.tlTitle} numberOfLines={1}>
+                    <Text style={s.tlTitle} numberOfLines={2}>
                       {b.title || typeName(b.type)}
                     </Text>
                     {!!edge && <Text style={[s.tlEdge, { color: ty.color }]}>{edge}</Text>}
                     {(b.from || b.to) && it.edge !== 'end' ? (
-                      <Text style={s.hint} numberOfLines={1}>
+                      <Text style={s.hint} numberOfLines={2}>
                         {b.from}
                         {b.to && b.type !== 'car' ? `  →  ${b.to}` : ''}
                       </Text>
@@ -932,7 +932,7 @@ function BookingsTab({ trip, rate, onOpen }: { trip: Trip; rate: RateInfo; onOpe
               .map((b, i) => (
                 <Pressable key={b.id} onPress={() => onOpen(b)} style={[s.tlRow, i > 0 && s.tlLine]}>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.tlTitle} numberOfLines={1}>
+                    <Text style={s.tlTitle} numberOfLines={2}>
                       {b.title || typeName(b.type)}
                     </Text>
                     <Text style={s.hint}>
@@ -1199,7 +1199,7 @@ function ExpenseBox({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onCh
                 <Icon name={EXP_CATS.find((x) => x.id === e.cat)?.icon ?? 'ellipsis-horizontal'} size={15} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={s.tlTitle} numberOfLines={1}>
+                <Text style={s.tlTitle} numberOfLines={2}>
                   {e.title}
                 </Text>
                 <Text style={s.hint}>
@@ -1347,7 +1347,7 @@ function PickTripSheet({ trips, onClose, onPick }: { trips: Trip[]; onClose: () 
       {trips.map((tr) => (
         <Pressable key={tr.id} style={s.option} onPress={() => onPick(tr.id)}>
           <Cover trip={tr} size={40} />
-          <Text style={[s.tlTitle, { flex: 1 }]} numberOfLines={1}>
+          <Text style={[s.tlTitle, { flex: 1 }]} numberOfLines={2}>
             {tr.name}
           </Text>
           <Icon name="chevron-forward" size={18} color={C.sub} />
