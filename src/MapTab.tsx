@@ -38,6 +38,9 @@ export function tripStops(trip: Trip): Stop[] {
   return out;
 }
 
+// 日ごとの色（全日程のときの線とピン）
+const DAY_COLORS = ['#FF5B3A', '#3B5BDB', '#1F9D74', '#7048E8', '#D6336C', '#B07D00', '#0B7285', '#E8590C', '#495057'];
+
 export default function MapTab({ trip, onOpen }: { trip: Trip; onOpen: (b: Booking) => void }) {
   const stops = useMemo(() => tripStops(trip), [trip]);
   const days = useMemo(() => [...new Set(stops.map((s) => s.day))], [stops]);
@@ -62,15 +65,22 @@ export default function MapTab({ trip, onOpen }: { trip: Trip; onOpen: (b: Booki
     };
   }, [stops.map((s) => s.q).join('|')]);
 
-  const shown = day === 'all' ? stops : stops.filter((s) => s.day === day);
+  const all = day === 'all';
+  const shown = all ? stops : stops.filter((s) => s.day === day);
+  const dayNo = (d: string) => days.indexOf(d) + 1;
+  const dayColor = (d: string) => DAY_COLORS[(dayNo(d) - 1) % DAY_COLORS.length];
+  // 全日程では「日-順番」（例：2-3 = 2日目の3番目）、1日だけのときは順番だけ
+  const label = (s: Stop) => (all ? `${dayNo(s.day)}-${s.n}` : String(s.n));
+  const pinColor = (s: Stop) => (all ? dayColor(s.day) : C.ink);
   const points = shown
     .map((s) => ({ s, g: geo[s.q] }))
     .filter((x): x is { s: Stop; g: Geo } => !!x.g)
-    .map(({ s, g }) => ({ key: s.key, lat: g.lat, lng: g.lng, label: String(s.n), color: s.color, title: s.title, onPress: () => onOpen(s.b) }));
-  // 線は日ごとに引く（日をまたいだ移動は飛行機・電車の線で分かる）
-  const lines = (day === 'all' ? days : [day]).map((d) =>
-    shown.filter((s) => s.day === d && geo[s.q]).map((s) => ({ lat: geo[s.q]!.lat, lng: geo[s.q]!.lng })),
-  );
+    .map(({ s, g }) => ({ key: s.key, lat: g.lat, lng: g.lng, label: label(s), color: pinColor(s), title: `${label(s)}  ${s.title}`, onPress: () => onOpen(s.b) }));
+  // 線は日ごとに引く。全日程では日ごとに色を変える
+  const lines = (all ? days : [day]).map((d) => ({
+    color: all ? dayColor(d) : C.pink,
+    coords: shown.filter((s) => s.day === d && geo[s.q]).map((s) => ({ lat: geo[s.q]!.lat, lng: geo[s.q]!.lng })),
+  }));
   const missing = shown.filter((s) => s.q in geo && !geo[s.q]);
   const route = routeUrl(shown.map((s) => s.q));
 
@@ -106,10 +116,15 @@ export default function MapTab({ trip, onOpen }: { trip: Trip; onOpen: (b: Booki
           const newDay = i === 0 || shown[i - 1].day !== s.day;
           return (
             <View key={s.key}>
-              {newDay && <Text style={st.dayHead}>{`${t('dayN', { n: days.indexOf(s.day) + 1 })}  ${prettyDate(s.day)}`}</Text>}
+              {newDay && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14, marginBottom: 6 }}>
+                  {all && <View style={{ width: 14, height: 4, borderRadius: 2, backgroundColor: dayColor(s.day) }} />}
+                  <Text style={[st.dayHead, { marginTop: 0, marginBottom: 0 }]}>{`${t('dayN', { n: dayNo(s.day) })}  ${prettyDate(s.day)}`}</Text>
+                </View>
+              )}
               <Pressable style={st.row} onPress={() => openMap(s.q)} onLongPress={() => onOpen(s.b)}>
-                <View style={[st.num, { backgroundColor: s.color }]}>
-                  <Text style={st.numText}>{s.n}</Text>
+                <View style={[st.num, { backgroundColor: pinColor(s) }]}>
+                  <Text style={st.numText}>{label(s)}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={st.title} numberOfLines={2}>
@@ -145,7 +160,7 @@ const st = StyleSheet.create({
   routeText: { color: '#fff', fontWeight: '800', fontSize: 15 },
   dayHead: { fontSize: 13, fontWeight: '900', color: C.ink, marginTop: 14, marginBottom: 6 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.card, borderRadius: 16, padding: 12, marginBottom: 6, borderWidth: 1, borderColor: C.line },
-  num: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  num: { minWidth: 30, height: 26, paddingHorizontal: 5, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   numText: { color: '#fff', fontWeight: '900', fontSize: 13 },
   title: { fontWeight: '800', color: C.ink, fontSize: 14 },
   sub: { color: C.sub, fontSize: 12, marginTop: 2 },

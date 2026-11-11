@@ -64,6 +64,9 @@ export const EXP_CATS: { id: ExpenseCat; icon: string }[] = [
 /** 旅行中の出費 */
 export type Expense = { id: string; title: string; cat: ExpenseCat; amount: number; currency: string; date: string; paidBy?: string; splitWith?: string[] };
 
+/** 行きたい場所（SNSで見つけた所など） */
+export type Wish = { id: string; title: string; url?: string; memo?: string; image?: string; photos?: string[]; createdAt: number };
+
 export type Trip = {
   id: string;
   name: string;
@@ -77,6 +80,7 @@ export type Trip = {
   budget?: number; // 旅行の予算（母国通貨）
   expenses?: Expense[]; // 旅行中の出費（食事・お土産など）
   journal?: Record<string, { text?: string; photos?: string[] }>; // 日ごとの思い出
+  wishes?: Wish[];
   createdAt: number;
 };
 

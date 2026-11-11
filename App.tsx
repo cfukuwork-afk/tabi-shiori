@@ -22,9 +22,10 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { openMap, placeQuery, setMapApp, tripCity, MapApp } from './src/maps';
+import { openMap, openRoute, placeQuery, setMapApp, tripCity } from './src/maps';
 import { bookingTz, arrivalTz, fillTimezones } from './src/geo';
-import MapTab from './src/MapTab';
+import MapTab, { tripStops } from './src/MapTab';
+import { fetchMeta, firstUrl, platformOf } from './src/wish';
 import {
   Booking,
   BookingType,
@@ -42,6 +43,7 @@ import {
   Settings,
   TYPES,
   Trip,
+  Wish,
   daysBetween,
   fallbackRates,
   fetchRates,
@@ -173,9 +175,17 @@ function Main() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [newTrip, setNewTrip] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [adding, setAdding] = useState<{ tripId: string; edit?: Booking; initial?: { text?: string; image?: string; planDate?: string } } | null>(null);
+  const [adding, setAdding] = useState<{ tripId: string; edit?: Booking; initial?: { text?: string; image?: string; planDate?: string; planTitle?: string; planMemo?: string; planFrom?: string } } | null>(null);
   const [detail, setDetail] = useState<{ tripId: string; id: string } | null>(null);
   const [incoming, setIncoming] = useState<{ text?: string; image?: string } | null>(null);
+  const [wishIn, setWishIn] = useState<{ tripId: string; url: string } | null>(null);
+  // SNSのリンクだけが送られてきたときは「行きたい場所」に入れる（予約メールではない）
+  const linkOnly = (x: { text?: string; image?: string } | null) => {
+    const u = firstUrl(x?.text);
+    if (!u || x?.image) return undefined;
+    const rest = (x!.text ?? '').replace(u, '').trim();
+    return rest.length < 120 && !/(予約|booking|confirmation|reservation|check-?in|搭乗|便)/i.test(rest) ? u : undefined;
+  };
   const [settleIn, setSettleIn] = useState<{ n: string; c: string; p: { f: string; t: string; a: number }[] } | null>(null);
   const url = ExpoLinking.useURL();
   useEffect(() => {
@@ -258,7 +268,7 @@ function Main() {
             setOpenId(null);
           }}
           onAdd={() => setAdding({ tripId: trip.id })}
-          onAddPlan={(d) => setAdding({ tripId: trip.id, initial: { planDate: d } })}
+          onAddPlan={(d, extra) => setAdding({ tripId: trip.id, initial: { planDate: d, ...(extra ?? {}) } })}
           onShare={() => Share.share({ message: itineraryText(trip) })}
           onOpen={(b) => setDetail({ tripId: trip.id, id: b.id })}
         />
@@ -300,7 +310,11 @@ function Main() {
           trips={trips.filter((x) => !isPast(x))}
           onClose={() => setIncoming(null)}
           onPick={(id) => {
-            if (id) {
+            const link = linkOnly(incoming);
+            if (id && link) {
+              setOpenId(id);
+              setWishIn({ tripId: id, url: link });
+            } else if (id) {
               setAdding({ tripId: id, initial: incoming });
             } else {
               const tr: Trip = {
@@ -314,9 +328,21 @@ function Main() {
               };
               updateTrips((all) => [tr, ...all]);
               setOpenId(tr.id);
-              setAdding({ tripId: tr.id, initial: incoming });
+              if (link) setWishIn({ tripId: tr.id, url: link });
+              else setAdding({ tripId: tr.id, initial: incoming });
             }
             setIncoming(null);
+          }}
+        />
+      )}
+
+      {wishIn && (
+        <WishSheet
+          initialUrl={wishIn.url}
+          onClose={() => setWishIn(null)}
+          onSave={(w) => {
+            updateTrip(wishIn.tripId, (tr) => ({ ...tr, wishes: [w, ...(tr.wishes ?? [])] }));
+            setWishIn(null);
           }}
         />
       )}
@@ -745,7 +771,7 @@ function TripScreen({
   onShare,
   onAddPlan,
 }: {
-  onAddPlan: (date: string) => void;
+  onAddPlan: (date: string, extra?: { planTitle?: string; planMemo?: string; planFrom?: string }) => void;
   onShare: () => void;
   trip: Trip;
   rate: RateInfo;
@@ -826,6 +852,13 @@ function TripScreen({
         keyboardDismissMode="interactive"
         automaticallyAdjustKeyboardInsets
       >
+        {tab === 'plan' && (
+          <WishSection
+            trip={trip}
+            onChange={onChange}
+            onToPlan={(w) => onAddPlan(tripDays(trip)[0] ?? todayStr(), { planTitle: w.title, planMemo: [w.url, w.memo].filter(Boolean).join('\n') || undefined })}
+          />
+        )}
         {tab === 'plan' && <PlanTab trip={trip} onOpen={onOpen} onJournal={setJournalDay} onAddPlan={onAddPlan} />}
         {tab === 'bookings' && <BookingsTab trip={trip} rate={rate} onOpen={onOpen} />}
         {tab === 'map' && <MapTab trip={trip} onOpen={onOpen} />}
@@ -911,6 +944,190 @@ function JournalSheet({
         <Pressable style={s.primary} onPress={() => onSave({ text: text.trim() || undefined, photos: photos.length ? photos : undefined })}>
           <Text style={s.primaryText}>{t('save')}</Text>
         </Pressable>
+      </ScrollView>
+    </Sheet>
+  );
+}
+
+/* ---------------- 行きたい場所 ---------------- */
+function WishSection({ trip, onChange, onToPlan }: { trip: Trip; onChange: (fn: (t: Trip) => Trip) => void; onToPlan: (w: Wish) => void }) {
+  const [edit, setEdit] = useState<Wish | 'new' | null>(null);
+  const list = trip.wishes ?? [];
+  return (
+    <View style={{ marginBottom: 18 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <Text style={[s.sec, { marginTop: 0, marginBottom: 0 }]}>{`${t('wishes').toUpperCase()}${list.length ? `  ${list.length}` : ''}`}</Text>
+        <Pressable onPress={() => setEdit('new')} hitSlop={8} style={s.addPlan}>
+          <Icon name="add" size={15} color={C.sub} />
+          <Text style={s.addPlanText}>{t('addWish')}</Text>
+        </Pressable>
+      </View>
+      {list.length === 0 ? (
+        <Text style={[s.hint, { fontSize: 12, lineHeight: 18 }]}>{t('wishHint')}</Text>
+      ) : (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }} style={{ flexGrow: 0 }}>
+          {list.map((w) => {
+            const pf = platformOf(w.url);
+            const img = w.photos?.[0] ?? w.image;
+            return (
+              <Pressable key={w.id} style={s.wishCard} onPress={() => setEdit(w)}>
+                {img ? (
+                  <Image source={imgSrc(img)} style={s.wishImg} />
+                ) : (
+                  <View style={[s.wishImg, { alignItems: 'center', justifyContent: 'center' }]}>
+                    <Icon name={pf.icon} size={26} color={C.sub} />
+                  </View>
+                )}
+                <View style={{ padding: 10 }}>
+                  <Text style={s.wishTitle} numberOfLines={2}>
+                    {w.title || pf.name}
+                  </Text>
+                  {!!pf.name && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                      <Icon name={pf.icon} size={11} color={C.sub} />
+                      <Text style={[s.hint, { fontSize: 11 }]} numberOfLines={1}>
+                        {pf.name}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      )}
+      {edit && (
+        <WishSheet
+          wish={edit === 'new' ? undefined : edit}
+          onClose={() => setEdit(null)}
+          onSave={(w) => {
+            onChange((tr) => {
+              const cur = tr.wishes ?? [];
+              return { ...tr, wishes: cur.some((x) => x.id === w.id) ? cur.map((x) => (x.id === w.id ? w : x)) : [w, ...cur] };
+            });
+            setEdit(null);
+          }}
+          onDelete={(id) => {
+            onChange((tr) => ({ ...tr, wishes: (tr.wishes ?? []).filter((x) => x.id !== id) }));
+            setEdit(null);
+          }}
+          onToPlan={(w) => {
+            setEdit(null);
+            onToPlan(w);
+          }}
+        />
+      )}
+    </View>
+  );
+}
+
+function WishSheet({
+  wish,
+  initialUrl,
+  onClose,
+  onSave,
+  onDelete,
+  onToPlan,
+}: {
+  wish?: Wish;
+  initialUrl?: string;
+  onClose: () => void;
+  onSave: (w: Wish) => void;
+  onDelete?: (id: string) => void;
+  onToPlan?: (w: Wish) => void;
+}) {
+  const [w, setW] = useState<Wish>(wish ?? { id: uid(), title: '', url: initialUrl, createdAt: Date.now() });
+  const [sure, setSure] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const lookup = async (url?: string) => {
+    if (!url || !/^https?:/.test(url)) return;
+    setLoading(true);
+    const m = await fetchMeta(url);
+    setLoading(false);
+    setW((x) => ({ ...x, title: x.title || m.title || '', image: x.image ?? m.image }));
+  };
+  useEffect(() => {
+    if (initialUrl && !wish) lookup(initialUrl);
+  }, []);
+  const pf = platformOf(w.url);
+  return (
+    <Sheet visible onClose={onClose} tall>
+      <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 30 }}>
+        <Text style={s.sheetTitle}>{wish ? w.title || t('wishes') : t('addWish')}</Text>
+        <Text style={s.label}>{t('wishUrl')}</Text>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TextInput
+            style={[s.input, { flex: 1 }]}
+            value={w.url ?? ''}
+            onChangeText={(v) => setW({ ...w, url: v.trim() || undefined })}
+            onEndEditing={() => lookup(w.url)}
+            placeholder="https://"
+            placeholderTextColor={C.sub}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+          />
+          <Pressable
+            style={s.smallBtn}
+            onPress={async () => {
+              const txt = await Clipboard.getStringAsync();
+              const u = firstUrl(txt);
+              if (u) {
+                setW((x) => ({ ...x, url: u }));
+                lookup(u);
+              }
+            }}
+          >
+            <Icon name="clipboard-outline" size={18} color="#fff" />
+          </Pressable>
+        </View>
+        {!!w.url && (
+          <Pressable onPress={() => Linking.openURL(w.url!)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>
+            <Icon name={pf.icon} size={15} color={C.pink} />
+            <Text style={{ color: C.pink, fontWeight: '800' }}>{`${t('openLink')}${pf.name ? ` · ${pf.name}` : ''}`}</Text>
+          </Pressable>
+        )}
+        {loading && <Text style={[s.hint, { marginTop: 6 }]}>…</Text>}
+        <Text style={s.label}>{t('wishTitle')}</Text>
+        <TextInput style={s.input} value={w.title} onChangeText={(v) => setW({ ...w, title: v })} placeholderTextColor={C.sub} />
+        <Text style={s.label}>{t('wishMemo')}</Text>
+        <TextInput style={[s.input, { minHeight: 80, textAlignVertical: 'top' }]} value={w.memo ?? ''} onChangeText={(v) => setW({ ...w, memo: v || undefined })} multiline placeholderTextColor={C.sub} />
+        <Text style={s.label}>{t('photos')}</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ flexGrow: 0 }}>
+          {!!w.image && !w.photos?.length && <Image source={{ uri: w.image }} style={s.ticketThumb} />}
+          {(w.photos ?? []).map((p) => (
+            <Pressable key={p} onLongPress={() => setW({ ...w, photos: w.photos!.filter((x) => x !== p) })}>
+              <Image source={imgSrc(p)} style={s.ticketThumb} />
+            </Pressable>
+          ))}
+          <Pressable
+            style={s.ticketAdd}
+            onPress={async () => {
+              const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, quality: 0.8 });
+              if (!r.canceled) setW((x) => ({ ...x, photos: [...(x.photos ?? []), ...r.assets.map((a) => keepImage(a.uri))] }));
+            }}
+          >
+            <Icon name="image-outline" size={22} color={C.sub} />
+          </Pressable>
+        </ScrollView>
+        <Pressable style={[s.primary, !(w.title || w.url) && { opacity: 0.35 }]} disabled={!(w.title || w.url)} onPress={() => onSave({ ...w, title: w.title.trim() || pf.name })}>
+          <Text style={s.primaryText}>{t('save')}</Text>
+        </Pressable>
+        {wish && (
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+            {onToPlan && (
+              <Pressable style={[s.secondary, { flex: 1 }]} onPress={() => onToPlan({ ...w, title: w.title.trim() || pf.name })}>
+                <Icon name="flag-outline" size={16} />
+                <Text style={s.secondaryText}>{t('toPlan')}</Text>
+              </Pressable>
+            )}
+            {onDelete && (
+              <Pressable style={[s.secondary, { flex: 1 }]} onPress={() => (sure ? onDelete(w.id) : setSure(true))}>
+                <Text style={[s.secondaryText, sure && { color: C.pink }]}>{sure ? t('deleteSure') : t('delete')}</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
       </ScrollView>
     </Sheet>
   );
@@ -1531,7 +1748,7 @@ function AddBookingSheet({
   onSave,
   initial,
 }: {
-  initial?: { text?: string; image?: string; planDate?: string };
+  initial?: { text?: string; image?: string; planDate?: string; planTitle?: string; planMemo?: string; planFrom?: string };
   trip: Trip;
   edit?: Booking;
   home: string;
@@ -1545,7 +1762,7 @@ function AddBookingSheet({
   const [b, setB] = useState<Booking>(
     edit ??
       (initial?.planDate
-        ? { id: uid(), type: 'plan', title: '', start: initial.planDate, currency: home, createdAt: Date.now() }
+        ? { id: uid(), type: 'plan', title: initial.planTitle ?? '', start: initial.planDate, memo: initial.planMemo, from: initial.planFrom, currency: home, createdAt: Date.now() }
         : { id: uid(), type: 'flight', title: '', start: tripRange(trip).start ?? todayStr(), currency: home, createdAt: Date.now() }),
   );
   const set = (p: Partial<Booking>) => setB((x) => ({ ...x, ...p }));
@@ -1975,6 +2192,20 @@ function BookingDetail({
             <Info k={placeLabels(b.type)[0]} v={b.title} q={placeQuery(b, 'from', tripCity(trip.bookings))} />
           )}
           {!!b.to && <Info k={(placeLabels(b.type)[1] ?? t('to')).replace(/（.*）| \(.*\)/, '')} v={b.to} q={placeQuery(b, 'to')} />}
+          {(() => {
+            // ひとつ前の予定の場所 → この予定の場所（出発地は前の予定から決まる）
+            const stops = tripStops(trip);
+            const i = stops.findIndex((x) => x.b.id === b.id);
+            if (i <= 0 || b.type === 'flight') return null;
+            const prev = stops[i - 1];
+            if (prev.q === stops[i].q) return null;
+            return (
+              <Pressable onPress={() => openRoute(prev.q, stops[i].q)} style={s.howTo}>
+                <Icon name="walk-outline" size={16} color={C.pink} />
+                <Text style={s.howToText} numberOfLines={2}>{`${t('howToGet')}：${prev.title} → ${stops[i].title}`}</Text>
+              </Pressable>
+            );
+          })()}
           {b.type !== 'flight' && (() => {
             const tz = bookingTz(b, trip);
             const st = tzToMyTime(tz, b.start, b.startTime);
@@ -2221,6 +2452,11 @@ const s = StyleSheet.create({
   passK: { color: 'rgba(255,255,255,0.5)', fontSize: 10.5, fontWeight: '800', letterSpacing: 1 },
   passV: { color: '#fff', fontSize: 16, fontWeight: '800', marginTop: 3 },
   passCode: { color: '#fff', fontSize: 28, fontWeight: '900', letterSpacing: 3, marginTop: 2, fontVariant: ['tabular-nums'] },
+  wishCard: { width: 150, backgroundColor: C.card, borderRadius: 16, borderWidth: 1, borderColor: C.line, overflow: 'hidden' },
+  wishImg: { width: 150, height: 100, backgroundColor: C.chip },
+  wishTitle: { fontWeight: '800', color: C.ink, fontSize: 13, lineHeight: 17 },
+  howTo: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12, borderTopWidth: 1, borderColor: C.line },
+  howToText: { color: C.pink, fontWeight: '800', flex: 1, fontSize: 13 },
   ticketPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6 },
   ticketPillText: { color: C.ink, fontWeight: '800', fontSize: 12 },
   viewerClose: { position: 'absolute', top: 54, right: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(21,23,28,0.7)', alignItems: 'center', justifyContent: 'center' },

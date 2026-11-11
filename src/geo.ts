@@ -22,32 +22,41 @@ async function loadCache() {
 const saveCache = () => AsyncStorage.setItem(KEY, JSON.stringify(cache ?? {})).catch(() => {});
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** 1件ずつ順番に調べる（たくさん同時に聞くと止められるため） */
-export function geocode(q: string): Promise<Geo | null> {
+/** 1件ずつ順番に調べる（たくさん同時に聞くと止められるため）。withTz のときだけタイムゾーンも調べる */
+export function geocode(q: string, withTz = false): Promise<Geo | null> {
   const job = queue.then(async () => {
     const c = await loadCache();
-    if (q in c) return c[q];
+    const hit = c[q];
+    if (hit === null) return null;
+    if (hit && (!withTz || hit.tz)) return hit;
     if (Platform.OS === 'web') return null;
-    let out: Geo | null = null;
+    const Location = require('expo-location');
+    let out: Geo | null = hit ?? null;
     let failed = false;
-    try {
-      const Location = require('expo-location');
-      const r = await Location.geocodeAsync(q);
-      if (r?.[0]) {
-        out = { lat: r[0].latitude, lng: r[0].longitude };
+    if (!out) {
+      for (let attempt = 0; attempt < 3; attempt++) {
         try {
-          const rev = await Location.reverseGeocodeAsync({ latitude: out.lat, longitude: out.lng });
-          if (rev?.[0]?.timezone) out.tz = rev[0].timezone;
-        } catch {}
+          const r = await Location.geocodeAsync(q);
+          out = r?.[0] ? { lat: r[0].latitude, lng: r[0].longitude } : null;
+          failed = false;
+          break;
+        } catch {
+          failed = true; // 調べすぎ・圏外のときは少し待ってもう一度
+          await sleep(1500 * (attempt + 1));
+        }
       }
-    } catch {
-      failed = true; // 圏外などで調べられなかったときは覚えない（あとでもう一度調べる）
+    }
+    if (out && withTz && !out.tz) {
+      try {
+        const rev = await Location.reverseGeocodeAsync({ latitude: out.lat, longitude: out.lng });
+        if (rev?.[0]?.timezone) out = { ...out, tz: rev[0].timezone };
+      } catch {}
     }
     if (!failed) {
       c[q] = out;
       saveCache();
     }
-    await sleep(250);
+    await sleep(350);
     return out;
   });
   queue = job.catch(() => null);
@@ -90,7 +99,7 @@ export async function fillTimezones(trip: Trip): Promise<Record<string, string>>
     if (!b.from && b.type !== 'train' && b.type !== 'bus') continue;
     const q = placeQuery(b, 'from');
     if (!q) continue;
-    const g = await geocode(q);
+    const g = await geocode(q, true);
     if (g?.tz) out[b.id] = g.tz;
   }
   return out;

@@ -34,10 +34,12 @@ export function placeQuery(b: Booking, which: 'from' | 'to', hint?: string): str
 
 /** 旅行先の街（ホテルの住所の後ろの部分）。名前だけの予定を地図で探すときに添える */
 export function tripCity(bookings: Booking[]): string | undefined {
-  const h = bookings.find((b) => b.type === 'hotel' && b.from && b.from.includes(','));
+  const h = bookings.find((b) => b.type === 'hotel' && b.from && /[,、]/.test(b.from));
   if (!h) return undefined;
-  const parts = h.from!.split(',').map((x) => x.trim()).filter(Boolean);
-  return parts.slice(-2).join(', ').replace(/^\d{3,6}\s*/, '') || undefined;
+  const parts = h.from!.split(/[,、]/).map((x) => x.replace(/\b\d{3,6}(-\d{3,4})?\b/g, '').replace(/〒/g, '').trim()).filter((x) => x && !/\d/.test(x));
+  if (!parts.length) return undefined;
+  // 「…, Paris, France」なら「Paris, France」、「…, Paris」なら「Paris」
+  return parts.length >= 2 ? parts.slice(-2).join(', ') : parts[parts.length - 1];
 }
 
 const appleUrl = (q: string) => `https://maps.apple.com/?q=${encodeURIComponent(q)}`;
@@ -75,4 +77,24 @@ export function routeUrl(points: string[]): string | undefined {
     `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(dest)}` +
     (way.length ? `&waypoints=${encodeURIComponent(way.join('|'))}` : '')
   );
+}
+
+/** 2地点の行き方を地図アプリで開く */
+export function openRoute(from: string, to: string) {
+  const apple = `https://maps.apple.com/?saddr=${encodeURIComponent(from)}&daddr=${encodeURIComponent(to)}`;
+  const google = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(from)}&destination=${encodeURIComponent(to)}`;
+  const go = (app: 'apple' | 'google') => Linking.openURL(app === 'apple' ? apple : google);
+  if (MAP_APP !== 'ask' || Platform.OS === 'web') return go(MAP_APP === 'apple' ? 'apple' : 'google');
+  if (Platform.OS === 'ios') {
+    ActionSheetIOS.showActionSheetWithOptions(
+      { options: [t('appleMaps'), t('googleMaps'), t('cancel')], cancelButtonIndex: 2, title: `${from} → ${to}` },
+      (i) => (i === 0 ? go('apple') : i === 1 ? go('google') : undefined),
+    );
+    return;
+  }
+  Alert.alert(`${from} → ${to}`, undefined, [
+    { text: t('appleMaps'), onPress: () => go('apple') },
+    { text: t('googleMaps'), onPress: () => go('google') },
+    { text: t('cancel'), style: 'cancel' },
+  ]);
 }
