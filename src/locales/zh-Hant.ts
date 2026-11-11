@@ -55,4 +55,5 @@ export default {
   wxClear: '晴', wxPartly: '晴間多雲', wxCloudy: '多雲', wxFog: '霧', wxRain: '雨', wxSnow: '雪', wxStorm: '雷雨',
   mFlight: '飛機', mTrain: '火車', mBus: '巴士', mWalk: '步行', mCar: '汽車', mRide: '電車·汽車（市內）',
   sugTitle: '旅行準備（推薦）', sugFlight: '尋找機票', sugTransfer: '預訂機場接送', sugCar: '尋找租車', sugLuggage: '退房後寄放行李', sugAirhelp: '了解延誤・取消的賠償', inspireTitle: '去{city}看看嗎？', inspireSub: '下一次旅行的靈感', inspireFind: '查看{city}的體驗・機票', city_seoul: '首爾', city_taipei: '台北', city_bangkok: '曼谷', city_singapore: '新加坡', city_paris: '巴黎', city_london: '倫敦', city_barcelona: '巴塞隆納', city_honolulu: '檀香山', city_sydney: '雪梨', city_newyork: '紐約',
+  inspireNear: '離你去過的國家很近', inspireSetting: '在首頁顯示推薦目的地',
 } as Record<string, string>;

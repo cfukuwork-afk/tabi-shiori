@@ -72,7 +72,7 @@ import {
   typeOf,
   uid,
 } from './src/data';
-import { LANGS, bracket, dot, paren, prettyDate, range, setLang, t, typeName } from './src/i18n';
+import { LANGS, bracket, dot, getLang, localeOf, paren, prettyDate, range, setLang, t, typeName } from './src/i18n';
 import { parseBooking } from './src/parse';
 import { CURRENCIES, CUR_COUNTRIES, findCurrency } from './src/currencies';
 import { C, applyTheme, cleanNum, isDark, shadow } from './src/theme';
@@ -90,7 +90,8 @@ import { findPrice } from './src/parse';
 import { parseItinerary, PlanDraft } from './src/itinerary';
 import { SERVER } from './src/sync';
 import { InboxItem } from './src/data';
-import { countriesOf, flag } from './src/countries';
+import { TZ_CC, countriesOf, flag } from './src/countries';
+import { NEAR, PLACES } from './src/places';
 import { dropVaultImage, keepVaultImage, loadVault, saveVault, unlock, VaultDoc } from './src/vault';
 import { myTz } from './src/airports';
 import { isPdf, isPkpass, keepFile, readPkpass, TicketFile } from './src/pkpass';
@@ -409,6 +410,7 @@ function Main() {
         />
       ) : (
         <Home
+          showInspire={settings.inspire !== false}
           trips={trips}
           rate={rate}
           onOpen={setOpenId}
@@ -610,6 +612,7 @@ function Main() {
 
 /* ---------------- ホーム ---------------- */
 function Home({
+  showInspire,
   trips,
   rate,
   onOpen,
@@ -617,6 +620,7 @@ function Home({
   onSettings,
   onOpenBooking,
 }: {
+  showInspire: boolean;
   trips: Trip[];
   rate: RateInfo;
   onOpen: (id: string) => void;
@@ -677,7 +681,7 @@ function Home({
         .map((tr) => (
           <TripCard key={tr.id} trip={tr} rate={rate} onPress={() => onOpen(tr.id)} />
         ))}
-      <Inspire trips={trips} />
+      {showInspire && <Inspire trips={trips} />}
       <Memories trips={sorted.filter((tr) => isPast(tr))} onOpen={onOpen} />
       <YearSummary trips={trips} rate={rate} />
     </ScrollView>
@@ -2277,34 +2281,41 @@ function Suggest({ trip, city }: { trip: Trip; city?: string }) {
   );
 }
 
-// ホームの「〇〇に行きませんか？」（日ごとに入れ替え。× で7日間出さない）
-const INSPIRE = ['seoul', 'taipei', 'bangkok', 'singapore', 'paris', 'london', 'barcelona', 'honolulu', 'sydney', 'newyork'];
+// ホームの「〇〇に行きませんか？」：行ったことのある国に近い地域の、まだ行っていない国を日ごとに選ぶ（100か国・500都市）
 function Inspire({ trips }: { trips: Trip[] }) {
-  const [hidden, setHidden] = useState(true);
-  useEffect(() => {
-    AsyncStorage.getItem('ts.inspire.hide').then((d) => setHidden(!!d && d > todayStr()));
-  }, []);
-  if (hidden) return null;
-  const day = Math.floor(Date.now() / 86400000);
-  const key = INSPIRE[day % INSPIRE.length];
-  const name = t(('city_' + key) as any);
+  const pick = useMemo(() => {
+    const been = new Set([...countriesOf(trips, myTz()), TZ_HOME()]);
+    const regions = new Set(PLACES.filter((p) => been.has(p[0])).map((p) => p[1]));
+    const near = new Set([...regions].flatMap((r) => NEAR[r]));
+    // 重み：行った地域の近く×3、行った地域×2、そのほか×1（行った国は出さない）
+    const pool = PLACES.filter((p) => !been.has(p[0])).flatMap((p) => Array(regions.size ? (near.has(p[1]) ? 3 : regions.has(p[1]) ? 2 : 1) : 1).fill(p));
+    if (!pool.length) return null;
+    const day = Math.floor(Date.now() / 86400000);
+    const rnd = (n: number, salt: number) => ((day * 9301 + salt * 49297) % 233280) / 233280 * n;
+    const c = pool[Math.floor(rnd(pool.length, 7))];
+    const city = c[2][Math.floor(rnd(c[2].length, 13))];
+    return { cc: c[0], city, near: regions.size > 0 && near.has(c[1]) };
+  }, [trips]);
+  if (!pick) return null;
+  const ja = getLang() === 'ja';
+  const name = ja ? pick.city[1] : pick.city[0];
+  let country = pick.cc;
+  try {
+    country = new (Intl as any).DisplayNames([localeOf(getLang())], { type: 'region' }).of(pick.cc) ?? pick.cc;
+  } catch {}
   return (
     <View style={[s.card, { marginTop: 18 }]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <Text style={{ fontSize: 22 }}>{flag(pick.cc)}</Text>
         <Text style={[s.tlTitle, { flex: 1 }]}>{t('inspireTitle', { city: name })}</Text>
         <Text style={[s.hint, { fontSize: 10, fontWeight: '800' }]}>PR</Text>
-        <Pressable hitSlop={10} onPress={() => {
-          setHidden(true);
-          AsyncStorage.setItem('ts.inspire.hide', shiftDate(todayStr(), 7)).catch(() => {});
-        }}>
-          <Icon name="close" size={16} color={C.sub} />
-        </Pressable>
       </View>
-      <Text style={[s.hint, { marginTop: 2 }]}>{t('inspireSub')}</Text>
-      <FindRow title={t('inspireFind', { city: name })} links={inspireLinks(name)} />
+      <Text style={[s.hint, { marginTop: 2 }]}>{`${country}${dot()}${pick.near ? t('inspireNear') : t('inspireSub')}`}</Text>
+      <FindRow title={t('inspireFind', { city: name })} links={inspireLinks(pick.city[0])} />
     </View>
   );
 }
+const TZ_HOME = () => TZ_CC[myTz() ?? ''] ?? '';
 
 function FindRow({ title, links }: { title: string; links: FindLink[] }) {
   if (!links.length) return null;
@@ -3299,6 +3310,14 @@ function SettingsBody({ settings, onChange }: { settings: Settings; onChange: (s
         {(['auto', 'light', 'dark'] as const).map((v) => (
           <Pressable key={v} onPress={() => onChange({ ...settings, theme: v })} style={[s.typeChip, (settings.theme ?? 'auto') === v && { backgroundColor: C.ink, borderColor: C.ink }]}>
             <Text style={[s.chipText, (settings.theme ?? 'auto') === v && { color: C.onInk }]}>{v === 'auto' ? t('themeAuto') : v === 'light' ? t('themeLight') : t('themeDark')}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <Text style={s.label}>{t('inspireSetting')}</Text>
+      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+        {([true, false] as const).map((v) => (
+          <Pressable key={String(v)} onPress={() => onChange({ ...settings, inspire: v })} style={[s.typeChip, (settings.inspire !== false) === v && { backgroundColor: C.ink, borderColor: C.ink }]}>
+            <Text style={[s.chipText, (settings.inspire !== false) === v && { color: C.onInk }]}>{v ? 'ON' : 'OFF'}</Text>
           </Pressable>
         ))}
       </View>

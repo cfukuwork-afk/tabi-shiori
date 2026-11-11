@@ -55,4 +55,5 @@ export default {
   wxClear: 'Dégagé', wxPartly: 'Partiellement nuageux', wxCloudy: 'Nuageux', wxFog: 'Brouillard', wxRain: 'Pluie', wxSnow: 'Neige', wxStorm: 'Orage',
   mFlight: 'Avion', mTrain: 'Train', mBus: 'Bus', mWalk: 'À pied', mCar: 'Voiture', mRide: 'Transports/voiture (en ville)',
   sugTitle: 'Préparer le voyage (suggestions)', sugFlight: 'Chercher des vols', sugTransfer: 'Réserver un transfert aéroport', sugCar: 'Chercher une voiture de location', sugLuggage: 'Déposer ses bagages après le départ de l’hôtel', sugAirhelp: 'Vérifier l’indemnisation en cas de retard ou d’annulation', inspireTitle: 'Et si vous alliez à {city} ?', inspireSub: 'Une idée pour votre prochain voyage', inspireFind: 'Activités et vols pour {city}', city_seoul: 'Séoul', city_taipei: 'Taipei', city_bangkok: 'Bangkok', city_singapore: 'Singapour', city_paris: 'Paris', city_london: 'Londres', city_barcelona: 'Barcelone', city_honolulu: 'Honolulu', city_sydney: 'Sydney', city_newyork: 'New York',
+  inspireNear: 'Près des pays déjà visités', inspireSetting: 'Afficher des idées de destinations sur l’accueil',
 } as Record<string, string>;

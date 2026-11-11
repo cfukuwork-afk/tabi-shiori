@@ -98,7 +98,7 @@ export type Trip = {
   createdAt: number;
 };
 
-export type Settings = { home: string; myName: string; lang: Lang; onboarded: boolean; notify: boolean; mapApp?: 'ask' | 'apple' | 'google'; theme?: 'auto' | 'light' | 'dark' };
+export type Settings = { inspire?: boolean; home: string; myName: string; lang: Lang; onboarded: boolean; notify: boolean; mapApp?: 'ask' | 'apple' | 'google'; theme?: 'auto' | 'light' | 'dark' };
 
 export type RateInfo = { base: string; rates: Record<string, number>; updatedAt: number };
 
