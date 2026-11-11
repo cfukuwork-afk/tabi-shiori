@@ -106,6 +106,14 @@ function itineraryText(trip: Trip) {
   return lines.join('\n');
 }
 
+/** アプリに入れてある写真（お試し旅行の表紙） */
+const BUNDLED: Record<string, any> = {
+  'asset:paris': require('./assets/covers/paris.jpg'),
+  'asset:kyoto': require('./assets/covers/kyoto.jpg'),
+  'asset:london': require('./assets/covers/london.jpg'),
+};
+const imgSrc = (u: string) => BUNDLED[u] ?? { uri: u };
+
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 const Icon = ({ name, size = 18, color = C.ink }: { name: string; size?: number; color?: string }) => (
   <Ionicons name={name as IconName} size={size} color={color} />
@@ -122,7 +130,7 @@ const TypeBadge = ({ type, size = 38 }: { type: BookingType; size?: number }) =>
 /** 旅行の表紙（色＋頭文字） */
 const Cover = ({ trip, size = 52 }: { trip: { name: string; emoji: string; cover?: string }; size?: number }) =>
   trip.cover ? (
-    <Image source={{ uri: trip.cover }} style={{ width: size, height: size, borderRadius: size * 0.3, backgroundColor: C.chip }} />
+    <Image source={imgSrc(trip.cover)} style={{ width: size, height: size, borderRadius: size * 0.3, backgroundColor: C.chip }} />
   ) : (
     <View style={{ width: size, height: size, borderRadius: size * 0.3, backgroundColor: coverOf(trip), alignItems: 'center', justifyContent: 'center' }}>
       <Text style={{ color: '#fff', fontWeight: '900', fontSize: size * 0.34, letterSpacing: 0.5 }}>{monogram(trip.name)}</Text>
@@ -348,7 +356,7 @@ function Main() {
         onDone={(s, sample) => {
           changeSettings({ ...s, onboarded: true });
           askPermission();
-          if (sample) updateTrips((all) => [sampleTrip(s), pastSample(s), ...all]);
+          if (sample) updateTrips((all) => [sampleTrip(s), pastSample(s), londonSample(s), ...all]);
         }}
       />
     </View>
@@ -502,7 +510,7 @@ function Memories({ trips, onOpen }: { trips: Trip[]; onOpen: (id: string) => vo
                 return (
                   <Pressable key={tr.id} onPress={() => onOpen(tr.id)} style={({ pressed }) => [s.memCard, pressed && { opacity: 0.9 }]}>
                     {img ? (
-                      <Image source={{ uri: img }} style={StyleSheet.absoluteFill} />
+                      <Image source={imgSrc(img)} style={[StyleSheet.absoluteFill, { width: "100%", height: "100%" }]} resizeMode="cover" />
                     ) : (
                       <View style={[StyleSheet.absoluteFill, { backgroundColor: coverOf(tr), alignItems: 'center', justifyContent: 'center' }]}>
                         <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 64, fontWeight: '900' }}>{monogram(tr.name)}</Text>
@@ -785,7 +793,7 @@ function JournalSheet({
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {photos.map((p) => (
             <Pressable key={p} onLongPress={() => setPhotos(photos.filter((x) => x !== p))}>
-              <Image source={{ uri: p }} style={s.memThumb} />
+              <Image source={imgSrc(p)} style={s.memThumb} />
             </Pressable>
           ))}
           <Pressable
@@ -884,7 +892,7 @@ function JournalBlock({ entry, onPress }: { entry?: { text?: string; photos?: st
           {!!entry?.photos?.length && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
               {entry.photos.map((p) => (
-                <Image key={p} source={{ uri: p }} style={s.journalPhoto} />
+                <Image key={p} source={imgSrc(p)} style={s.journalPhoto} />
               ))}
             </ScrollView>
           )}
@@ -1625,7 +1633,7 @@ function AddBookingSheet({
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {(b.photos ?? []).map((p) => (
               <Pressable key={p} onLongPress={() => set({ photos: b.photos!.filter((x) => x !== p) })}>
-                <Image source={{ uri: p }} style={s.thumb} />
+                <Image source={imgSrc(p)} style={s.thumb} />
               </Pressable>
             ))}
             <Pressable style={[s.thumb, s.thumbAdd]} onPress={addPhoto}>
@@ -1834,7 +1842,7 @@ function BookingDetail({
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
             {b.photos.map((p) => (
               <Pressable key={p} onPress={() => setZoom(p)}>
-                <Image source={{ uri: p }} style={s.photoBig} />
+                <Image source={imgSrc(p)} style={s.photoBig} />
               </Pressable>
             ))}
           </View>
@@ -1852,7 +1860,7 @@ function BookingDetail({
       </ScrollView>
       <Modal visible={!!zoom} transparent onRequestClose={() => setZoom(null)}>
         <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', justifyContent: 'center' }} onPress={() => setZoom(null)}>
-          {zoom && <Image source={{ uri: zoom }} style={{ width: '100%', height: '85%' }} resizeMode="contain" />}
+          {zoom && <Image source={imgSrc(zoom)} style={{ width: '100%', height: '85%' }} resizeMode="contain" />}
         </Pressable>
       </Modal>
     </Sheet>
@@ -1917,9 +1925,7 @@ function WelcomeSheet({ visible, settings, onDone }: { visible: boolean; setting
   return (
     <Modal visible={visible} animationType="fade">
       <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 28, backgroundColor: C.bg }}>
-        <View style={s.logoBig}>
-          <Icon name="airplane" size={40} color="#fff" />
-        </View>
+        <Image source={require('./assets/icon.png')} style={[s.logoBig, { overflow: 'hidden' }]} />
         <Text style={[s.appTitle, { textAlign: 'center', fontSize: 34, marginTop: 18 }]}>{t('appName')}</Text>
         <Text style={[s.hint, { textAlign: 'center', fontSize: 15, lineHeight: 23, marginTop: 10 }]}>{t('welcomeText')}</Text>
         <View style={{ marginTop: 20 }}>
@@ -1944,6 +1950,7 @@ function pastSample(st: Settings): Trip {
     id: uid(),
     name: ja ? '京都 週末旅' : 'Kyoto weekend',
     emoji: '#0B7285',
+    cover: 'asset:kyoto',
     members: [{ id: 'me', name: st.myName || t('me') }],
     bookings: [
       { id: uid(), type: 'train', title: ja ? 'のぞみ 21号' : 'Nozomi 21', start: a, startTime: '08:00', endTime: '10:15', from: ja ? '東京' : 'Tokyo', to: ja ? '京都' : 'Kyoto', price: 14170, currency: 'JPY', createdAt: 1 },
@@ -1957,6 +1964,27 @@ function pastSample(st: Settings): Trip {
     createdAt: Date.now() - 1,
   };
 }
+function londonSample(st: Settings): Trip {
+  const ja = st.lang === 'ja';
+  const a = shiftDate(todayStr(), -95);
+  return {
+    id: uid(),
+    name: ja ? 'ロンドン 3日間' : 'London, 3 days',
+    emoji: '#D6336C',
+    cover: 'asset:london',
+    members: [{ id: 'me', name: st.myName || t('me') }],
+    bookings: [
+      { id: uid(), type: 'flight', title: 'NH 211', start: a, startTime: '11:40', endTime: '16:35', from: 'HND', to: 'LHR', code: '5Y8K2M', seat: '34K', price: 128400, currency: 'JPY', createdAt: 1 },
+      { id: uid(), type: 'hotel', title: 'The Hoxton, Holborn', start: a, startTime: '15:00', end: shiftDate(a, 3), endTime: '12:00', from: '199-206 High Holborn, London', price: 540, currency: 'GBP', createdAt: 2 },
+      { id: uid(), type: 'plan', title: ja ? '大英博物館' : 'British Museum', start: shiftDate(a, 1), startTime: '10:00', endTime: '13:00', from: 'Great Russell St, London', createdAt: 3 },
+    ],
+    checklist: [],
+    journal: {
+      [shiftDate(a, 1)]: { text: ja ? '雨上がりの街がきれいだった。パブでフィッシュアンドチップス。' : 'The streets after the rain were lovely. Fish and chips at a pub.' },
+    },
+    createdAt: Date.now() - 2,
+  };
+}
 function sampleTrip(st: Settings): Trip {
   const base = shiftDate(todayStr(), 20);
   const d = (n: number) => shiftDate(base, n);
@@ -1965,6 +1993,7 @@ function sampleTrip(st: Settings): Trip {
     id: uid(),
     name: ja ? 'パリ 3泊' : 'Paris, 3 nights',
     emoji: '#FF5B3A',
+    cover: 'asset:paris',
     members: [
       { id: 'me', name: st.myName || t('me') },
       { id: 'm2', name: ja ? 'ゆき' : 'Yuki' },
