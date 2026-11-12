@@ -68,6 +68,8 @@ export async function pickAnyFile(types: string[]): Promise<{ name: string; uri:
 
 export const esc = (x: unknown) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 export const csvCell = (x: unknown) => {
-  const s = String(x ?? '');
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  let s = String(x ?? '');
+  // 「=」「+」「-」「@」で始まる文字は表計算ソフトで数式として動くので、先頭に ' をつける（数値はそのまま）
+  if (typeof x !== 'number' && /^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };

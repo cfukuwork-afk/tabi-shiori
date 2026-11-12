@@ -1,7 +1,14 @@
 // 旅行の共有（共同編集）：サーバーとのやりとり・写真の送受信
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-import { Trip } from './data';
+import { Trip, normalizeTrip } from './data';
+
+// サーバーから来た旅行を、アプリが落ちない形に（壊れていたら同期しない）
+const safe = (x: any): Trip => {
+  const t = normalizeTrip(x);
+  if (!t) throw new Error('bad trip');
+  return t;
+};
 
 export const SERVER = process.env.EXPO_PUBLIC_TF_SERVER || 'https://tripfold.160-251-171-249.sslip.io';
 const K_PHOTOS = 'ts.photomap.v1';
@@ -125,6 +132,7 @@ export async function startShare(trip: Trip): Promise<Trip> {
 /** 共有コードで旅行を取りに行く（参加するとき） */
 export async function fetchShared(code: string): Promise<{ trip: Trip; rev: number }> {
   const res = await call(`/v1/trips/${normCode(code)}`);
+  res.trip = safe(res.trip);
   await downloadPhotos(res.trip);
   return { trip: res.trip, rev: res.rev };
 }
@@ -140,11 +148,13 @@ export async function syncTrip(trip: Trip): Promise<{ trip: Trip; rev: number; p
   if (sh.dirty) {
     const up = await uploadPhotos(trip, sh.code);
     const res = await call(`/v1/trips/${sh.code}`, { method: 'PUT', body: JSON.stringify({ trip: strip(up) }) });
+    res.trip = safe(res.trip);
     await downloadPhotos(res.trip);
     return { trip: res.trip, rev: res.rev, pushed: true };
   }
   const res = await call(`/v1/trips/${sh.code}?rev=${sh.rev}`);
   if (res.unchanged) return null;
+  res.trip = safe(res.trip);
   await downloadPhotos(res.trip);
   return { trip: res.trip, rev: res.rev, pushed: false };
 }

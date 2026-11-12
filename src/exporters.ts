@@ -53,7 +53,7 @@ function lines(trip: Trip, r: RateInfo) {
   return [
     ...trip.bookings.filter((b) => b.price && !b.cancelled).map((b) => ({ date: b.start, title: b.title, amount: b.price!, cur: b.currency || r.base, home: toHome(b.price!, b.currency || r.base, r), by: name(b.paidBy), split: (b.splitWith?.length ? b.splitWith : trip.members.map((m) => m.id)).map(name).join(' / ') })),
     ...(trip.expenses ?? []).map((e) => ({ date: e.date, title: e.title, amount: e.amount, cur: e.currency, home: expHome(e, r), by: name(e.paidBy), split: (e.splitWith?.length ? e.splitWith : trip.members.map((m) => m.id)).map(name).join(' / ') })),
-  ].sort((a, b) => a.date.localeCompare(b.date));
+  ].sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
 }
 
 export function settleHtml(trip: Trip, r: RateInfo) {

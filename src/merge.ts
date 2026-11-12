@@ -12,8 +12,8 @@ export function stamp(prev: Trip | undefined, next: Trip, at = Date.now()): Trip
   const tomb = { ...(next.tomb ?? prev.tomb ?? {}) };
   let changed = false;
   for (const key of COLLECTIONS) {
-    const before = new Map(((prev as any)[key] ?? []).map((x: any) => [x.id, x]));
-    const after: any[] = (next as any)[key] ?? [];
+    const before = new Map(((prev as any)[key] ?? []).filter((x: any) => x?.id).map((x: any) => [x.id, x]));
+    const after: any[] = ((next as any)[key] ?? []).filter((x: any) => x?.id);
     const ids = new Set(after.map((x) => x.id));
     out[key] = after.map((x) => {
       const old: any = before.get(x.id);

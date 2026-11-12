@@ -124,7 +124,28 @@ async function writeJSON(key: string, value: unknown) {
 
 
 export const DEFAULT_SETTINGS: Settings = { home: currencyFromLocale(), myName: '', lang: detectLang(), onboarded: false, notify: true };
-export const loadTrips = () => readJSON<Trip[]>(K_TRIPS, []);
+/** 壊れた・古い形の旅行データを、アプリが落ちない形に直す（バックアップの読み込み・共有の受信でも使う） */
+export function normalizeTrip(x: any): Trip | null {
+  if (!x || typeof x !== 'object' || typeof x.id !== 'string' || !x.id) return null;
+  const arr = (v: any) => (Array.isArray(v) ? v.filter((i) => i && typeof i === 'object' && typeof i.id === 'string') : []);
+  const members = arr(x.members).map((m: any) => ({ ...m, name: String(m.name ?? '') }));
+  return {
+    ...x,
+    name: String(x.name ?? ''),
+    emoji: String(x.emoji ?? ''),
+    members: members.length ? members : [{ id: 'me', name: '' }],
+    bookings: arr(x.bookings).map((b: any) => ({ ...b, type: TYPES.some((t) => t.id === b.type) ? b.type : 'other', title: String(b.title ?? ''), start: typeof b.start === 'string' ? b.start : '' })),
+    checklist: arr(x.checklist).map((c: any) => ({ ...c, text: String(c.text ?? '') })),
+    expenses: x.expenses == null ? x.expenses : arr(x.expenses).filter((e: any) => typeof e.amount === 'number' && isFinite(e.amount)),
+    inbox: x.inbox == null ? x.inbox : arr(x.inbox),
+    wishes: x.wishes == null ? x.wishes : arr(x.wishes),
+    journal: x.journal && typeof x.journal === 'object' ? x.journal : undefined,
+  };
+}
+export const loadTrips = async () => {
+  const raw = await readJSON<any>(K_TRIPS, []);
+  return (Array.isArray(raw) ? raw : []).map(normalizeTrip).filter(Boolean) as Trip[];
+};
 export const saveTrips = (v: Trip[]) => writeJSON(K_TRIPS, v);
 export const loadSettings = async () => ({ ...DEFAULT_SETTINGS, ...(await readJSON<Partial<Settings>>(K_SETTINGS, {})) });
 export const saveSettings = (s: Settings) => writeJSON(K_SETTINGS, s);
@@ -166,8 +187,11 @@ export function toHome(amount: number, cur: string, r: RateInfo): number {
 const commas = (s: string) => s.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 export const fmtMoney = (n: number, code: string) => {
   const c = findCurrency(code);
+  if (!isFinite(n)) n = 0; // 壊れた値で「¥NaN」と出さない
   const [i, d] = Math.abs(n).toFixed(c.decimals).split('.');
-  return `${n < 0 ? '-' : ''}${c.symbol}${commas(i)}${d ? '.' + d : ''}`;
+  // 丸めると0になる小さなマイナス（-0.004 → -$0.00）にはマイナスをつけない
+  const neg = n < 0 && /[1-9]/.test(i + (d ?? ''));
+  return `${neg ? '-' : ''}${c.symbol}${commas(i)}${d ? '.' + d : ''}`;
 };
 
 export const todayStr = () => {
@@ -184,6 +208,32 @@ export const shiftDate = (s: string, n: number) => {
 };
 export const daysBetween = (a: string, b: string) => Math.round((parseDate(b).getTime() - parseDate(a).getTime()) / 86400000);
 export const isDate = (s?: string) => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
+const half = (s: string) => s.replace(/[０-９：．／－]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+/** 手で打った日付を YYYY-MM-DD に（2026/12/3・2026.12.03・全角も）。カレンダーにない日は undefined */
+export function normDate(s?: string): string | undefined {
+  const m = half(s ?? '').trim().match(/^(\d{4})\s*[-\/.年]\s*(\d{1,2})\s*[-\/.月]\s*(\d{1,2})\s*日?$/);
+  if (!m) return undefined;
+  const [y, mo, d] = [+m[1], +m[2], +m[3]];
+  const t = new Date(Date.UTC(y, mo - 1, d));
+  if (t.getUTCFullYear() !== y || t.getUTCMonth() !== mo - 1 || t.getUTCDate() !== d) return undefined;
+  return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+/** 手で打った時刻を HH:MM に（9:30・930・9.30・9時30分・9h30・9:30pm・全角も）。読めなければ undefined */
+export function normTime(s?: string): string | undefined {
+  let x = half(s ?? '').trim().toLowerCase().replace(/\s+/g, '');
+  if (!x) return undefined;
+  const pm = /(pm|午後)/.test(x);
+  const am = /(am|午前)/.test(x);
+  x = x.replace(/(am|pm|午前|午後)/g, '');
+  let m = x.match(/^(\d{1,2})(?:[:.h時](\d{1,2})?分?)?$/) ?? x.match(/^(\d{1,2})(\d{2})$/);
+  if (!m) return undefined;
+  let h = +m[1];
+  const mi = m[2] ? +m[2] : 0;
+  if (pm && h < 12) h += 12;
+  if (am && h === 12) h = 0;
+  if (h > 23 || mi > 59) return undefined;
+  return `${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')}`;
+}
 
 /** 旅行の期間（手入力がなければ予約から自動で） */
 export function tripRange(t: Trip): { start?: string; end?: string } {
@@ -246,11 +296,14 @@ export function nextUp(trips: Trip[], now = todayStr()): { trip: Trip; item: Tim
 }
 
 /** 出費を母国通貨に（手で直したレートがあればそれを使う） */
-export const expHome = (e: Expense, r: RateInfo) => (e.rate && e.currency !== r.base ? e.amount * e.rate : toHome(e.amount, e.currency, r));
+export const expHome = (e: Expense, r: RateInfo) => {
+  const v = e.rate && e.rate > 0 && e.currency !== r.base ? e.amount * e.rate : toHome(e.amount, e.currency, r);
+  return isFinite(v) ? v : 0;
+};
 /** 費用の合計（母国通貨）。キャンセルした予約は数えない */
 export function tripTotal(t: Trip, r: RateInfo) {
   return (
-    t.bookings.reduce((s, b) => s + (b.price && !b.cancelled ? toHome(b.price, b.currency || r.base, r) : 0), 0) +
+    t.bookings.reduce((s, b) => s + (b.price && isFinite(b.price) && !b.cancelled ? toHome(b.price, b.currency || r.base, r) : 0), 0) +
     (t.expenses ?? []).reduce((s, e) => s + expHome(e, r), 0)
   );
 }
@@ -266,10 +319,13 @@ export function settle(t: Trip, r: RateInfo) {
     ...(t.expenses ?? []).map((e) => ({ price: e.amount, currency: e.currency, paidBy: e.paidBy, splitWith: e.splitWith, home: expHome(e, r) })),
   ];
   items.forEach((b) => {
-    if (!b.price) return;
+    if (!b.price || !isFinite(b.price)) return;
     const v = b.home ?? toHome(b.price, b.currency || r.base, r);
+    if (!isFinite(v)) return;
     const payer = b.paidBy && ids.includes(b.paidBy) ? b.paidBy : ids[0];
-    const among = (b.splitWith && b.splitWith.length ? b.splitWith : ids).filter((i) => ids.includes(i));
+    // 割る人がみんなメンバーから外されていたら、全員で割る（お金が計算から消えないように）
+    const sel = [...new Set(b.splitWith ?? [])].filter((i) => ids.includes(i));
+    const among = sel.length ? sel : ids;
     if (!payer || !among.length) return;
     paid[payer] += v;
     among.forEach((i) => (owe[i] += v / among.length));

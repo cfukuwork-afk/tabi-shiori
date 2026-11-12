@@ -1,7 +1,7 @@
 // バックアップ：旅行と写真を1つのファイルに書き出す／読み込む（機種変更・アプリの削除に備える）
 import { Platform } from 'react-native';
 import { Directory, File as FSFile, Paths } from 'expo-file-system';
-import { Trip } from './data';
+import { Trip, normalizeTrip } from './data';
 import { pickTextFile, shareTextFile } from './files';
 
 type BackupFile = { app: 'tripfold'; v: 1; at: number; trips: Trip[]; files: Record<string, string> };
@@ -64,7 +64,9 @@ export async function importBackup(): Promise<Trip[] | null> {
       } catch {}
     }
   }
-  return JSON.parse(json) as Trip[];
+  const trips = (JSON.parse(json) as any[]).map(normalizeTrip).filter(Boolean) as Trip[];
+  if (!trips.length && data.trips.length) throw new Error('bad');
+  return trips;
 }
 
 /** 読み込んだ旅行を今の旅行と合わせる（同じ旅行は読み込んだ方で置き換え） */

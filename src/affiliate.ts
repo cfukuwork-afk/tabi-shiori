@@ -35,7 +35,8 @@ const TP_BRAND: Record<string, { c: string; p: string }> = {
 };
 const tp = (brand: keyof typeof TP_BRAND, url: string) =>
   `https://tp.media/r?campaign_id=${TP_BRAND[brand].c}&marker=${TP.marker}&p=${TP_BRAND[brand].p}&trs=${TP.trs}&u=${enc(url)}`;
-const q2 = (title: string, city?: string) => [title, city].filter(Boolean).join(' ').trim();
+// 検索語は長すぎるとサイト側でエラーになるので150文字まで
+const q2 = (title: string, city?: string) => [title, city].filter(Boolean).join(' ').trim().slice(0, 150);
 const CJK = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/;
 /** 日本語などの都市名を英語にする（おすすめ都市のデータから。ないときはそのまま） */
 let JA2EN: Record<string, string> | null = null;
@@ -66,6 +67,7 @@ export function activityLinks(title: string, city?: string): FindLink[] {
 
 /** 宿を探す（日付があれば入れる）。国内なら楽天トラベルも */
 export function hotelLinks(city: string, checkin?: string, checkout?: string, domestic = false, cc?: string): FindLink[] {
+  city = (city ?? '').trim().slice(0, 150);
   if (!city) return [];
   // Booking.com は「Kingston」だけだとイギリスの Kingston upon Thames になる。国がわかるときは「都市, 国」で探す
   let ss = city;

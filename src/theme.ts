@@ -47,8 +47,11 @@ export const shadow = {
 };
 
 export const cleanNum = (t: string, decimals: number) => {
-  let v = t.replace(decimals > 0 ? /[^0-9.]/g : /[^0-9]/g, '');
+  // ヨーロッパの端末はキーボードの小数点が「,」になる。全角数字も半角に
+  let v = t.replace(/[０-９．，]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0)).replace(/,/g, '.');
+  v = v.replace(decimals > 0 ? /[^0-9.]/g : /[^0-9]/g, '');
   const i = v.indexOf('.');
-  if (i >= 0) v = v.slice(0, i + 1) + v.slice(i + 1).replace(/\./g, '').slice(0, decimals);
-  return v;
+  // 整数部分は12けたまで（それより大きいと 1e+20 のような表示になる）
+  const int = (i >= 0 ? v.slice(0, i) : v).slice(0, 12);
+  return i >= 0 ? int + '.' + v.slice(i + 1).replace(/\./g, '').slice(0, decimals) : int;
 };

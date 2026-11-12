@@ -55,6 +55,8 @@ import {
   fetchRates,
   fmtMoney,
   isDate,
+  normDate,
+  normTime,
   loadRate,
   loadSettings,
   loadTrips,
@@ -536,7 +538,8 @@ function Main() {
             setAdding(null);
           }}
           onSaveMany={(list) => {
-            updateTrip(adding.tripId, (tr) => ({ ...tr, bookings: [...tr.bookings, ...list] }));
+            // 2回押しても同じ予定が二重にならないように
+            updateTrip(adding.tripId, (tr) => ({ ...tr, bookings: [...tr.bookings, ...list.filter((x) => !tr.bookings.some((y) => y.id === x.id))] }));
             setAdding(null);
           }}
           onLater={(src) => {
@@ -1758,6 +1761,7 @@ function BookingsTab({ trip, rate, onOpen, onInbox, onDropInbox }: { trip: Trip;
 function MoneyTab({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onChange: (fn: (t: Trip) => Trip) => void }) {
   const total = tripTotal(trip, rate);
   const [name, setName] = useState('');
+  const [delM, setDelM] = useState<string | null>(null);
   const st = settle(trip, rate);
   const nameOf = (id: string) => trip.members.find((m) => m.id === id)?.name ?? '?';
   const byType = TYPES.map((ty) => ({
@@ -1819,15 +1823,26 @@ function MoneyTab({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onChan
           {trip.members.map((m) => (
             <Pressable
               key={m.id}
-              onLongPress={() =>
-                m.id !== 'me' && onChange((tr) => ({ ...tr, members: tr.members.filter((x) => x.id !== m.id) }))
-              }
-              style={s.chip}
+              // 長押し → もう一度押すと削除（すぐ消えないように）。払った分は「自分」の支払いに移す
+              onLongPress={() => m.id !== 'me' && m.id !== trip.myId && setDelM(m.id)}
+              onPress={() => {
+                if (delM !== m.id) return setDelM(null);
+                setDelM(null);
+                const rest = trip.members.filter((x) => x.id !== m.id);
+                const to = rest.find((x) => x.id === (trip.myId ?? 'me'))?.id ?? rest[0]?.id;
+                const fix = <T extends { paidBy?: string; splitWith?: string[] }>(x: T): T => ({
+                  ...x,
+                  paidBy: x.paidBy === m.id ? to : x.paidBy,
+                  splitWith: x.splitWith?.includes(m.id) ? x.splitWith.filter((i) => i !== m.id) : x.splitWith,
+                });
+                onChange((tr) => ({ ...tr, members: tr.members.filter((x) => x.id !== m.id), bookings: tr.bookings.map(fix), expenses: tr.expenses?.map(fix) }));
+              }}
+              style={[s.chip, delM === m.id && { backgroundColor: C.pinkSoft, borderColor: C.pink }]}
             >
               <View style={s.avatar}>
-                <Text style={s.avatarText}>{m.name.slice(0, 1).toUpperCase()}</Text>
+                <Text style={s.avatarText}>{(Array.from(m.name)[0] ?? '?').toUpperCase()}</Text>
               </View>
-              <Text style={s.chipText}>{m.name}</Text>
+              <Text style={[s.chipText, delM === m.id && { color: C.pink }]}>{delM === m.id ? t('deleteSure') : m.name}</Text>
             </Pressable>
           ))}
         </View>
@@ -2588,6 +2603,11 @@ function AddBookingSheet({
         : { id: uid(), type: 'flight', title: '', start: tripRange(trip).start ?? todayStr(), currency: home, paidBy: trip.myId, createdAt: Date.now() }),
   );
   const set = (p: Partial<Booking>) => setB((x) => ({ ...x, ...p }));
+  const [priceTxt, setPriceTxt] = useState(b.price != null ? String(b.price) : '');
+  // 読み取りなどで金額が外から変わったら、入力欄も合わせる
+  useEffect(() => {
+    if ((b.price ?? NaN) !== parseFloat(priceTxt) && !(b.price == null && priceTxt === '')) setPriceTxt(b.price != null ? String(b.price) : '');
+  }, [b.price]);
   const applyParsed = (raw: string, photo?: string) => {
     setSrc({ text: photo ? undefined : raw, image: photo });
     applyFields(parseBooking(raw), photo);
@@ -2843,10 +2863,13 @@ function AddBookingSheet({
             <TextInput
               style={[s.input, { flex: 1 }]}
               keyboardType="decimal-pad"
-              value={b.price != null ? String(b.price) : ''}
+              value={priceTxt}
               onChangeText={(v) => {
+                // 入力中の文字はそのまま持つ（数字だけを持つと「12.」の「.」が消えて小数が打てない）
                 const c = cleanNum(v, cur.decimals);
-                set({ price: c ? parseFloat(c) : undefined });
+                setPriceTxt(c);
+                const n = parseFloat(c);
+                set({ price: isFinite(n) ? n : undefined });
               }}
               placeholder="0"
               placeholderTextColor={C.sub}
@@ -2873,6 +2896,7 @@ function AddBookingSheet({
                       onPress={() => {
                         const base = b.splitWith?.length ? b.splitWith : trip.members.map((x) => x.id);
                         const next = on ? base.filter((x) => x !== m.id) : [...base, m.id];
+                        if (!next.length) return; // 最後の1人は外せない（0人にすると「全員」に戻ってしまう）
                         set({ splitWith: next.length === trip.members.length ? undefined : next });
                       }}
                       style={[s.typeChip, on && { backgroundColor: C.mintSoft, borderColor: C.mint }]}
@@ -2909,7 +2933,7 @@ function AddBookingSheet({
               <Text style={s.hint}>{t('addPhoto')}</Text>
             </Pressable>
           </View>
-          <Pressable style={[s.primary, !b.start && { opacity: 0.4 }]} disabled={!b.start} onPress={() => onSave(b)}>
+          <Pressable style={[s.primary, !normDate(b.start) && { opacity: 0.4 }]} disabled={!normDate(b.start)} onPress={() => onSave(tidyBooking(b))}>
             <Text style={s.primaryText}>{t('save')}</Text>
           </Pressable>
         </ScrollView>
@@ -2963,6 +2987,15 @@ function Field({
   );
 }
 
+/** 保存する前に、手で打った日付・時刻をそろえる（2026/12/3 → 2026-12-03、9:30 → 09:30）。終わりが始まりより前なら入れ替える */
+function tidyBooking(b: Booking): Booking {
+  const out: Booking = { ...b, start: normDate(b.start) ?? b.start, end: normDate(b.end), startTime: normTime(b.startTime), endTime: normTime(b.endTime), title: b.title.trim() };
+  if (out.end && out.end < out.start) {
+    [out.start, out.end] = [out.end, out.start];
+    [out.startTime, out.endTime] = [out.endTime, out.startTime];
+  }
+  return out;
+}
 function DateField({ label, value, onChange, optional }: { label: string; value: string; onChange: (v: string) => void; optional?: boolean }) {
   return (
     <View style={{ flex: 1.5 }}>
@@ -2983,7 +3016,11 @@ function DateField({ label, value, onChange, optional }: { label: string; value:
           <Icon name="chevron-forward" size={16} color={C.ink} />
         </Pressable>
       </View>
-      {isDate(value) && <Text style={[s.hint, { marginTop: 2, textAlign: 'center' }]}>{prettyDate(value)}</Text>}
+      {normDate(value) ? (
+        <Text style={[s.hint, { marginTop: 2, textAlign: 'center' }]}>{prettyDate(normDate(value)!)}</Text>
+      ) : (
+        !!value && <Text style={[s.hint, { marginTop: 2, textAlign: 'center', color: C.pink }]}>YYYY-MM-DD</Text>
+      )}
     </View>
   );
 }

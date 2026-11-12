@@ -13,6 +13,8 @@ const MONTHS: Record<string, number> = {
   okt: 10, dez: 12, mär: 3, mrz: 3, déc: 12, févr: 2, avr: 4, juil: 7, ene: 1, dic: 12, ago: 8, set: 9, out: 10, mag: 5, giu: 6, lug: 7, ott: 10,
 };
 const MON_RE = '(' + Object.keys(MONTHS).sort((a, b) => b.length - a.length).join('|') + ')';
+// 英語のふつうの単語と同じ月の略語（Check-out 5 → 10月5日 にならないように、年がついているときだけ月として読む）
+const AMBIG_MON = new Set(['out', 'set', 'ago', 'mag']);
 const pad = (n: number) => String(n).padStart(2, '0');
 
 type Found = { date: string; index: number; line: string };
@@ -28,6 +30,8 @@ export function findDates(text: string, today = new Date()): Found[] {
       const cand = new Date(yy, m - 1, d);
       if (cand.getTime() < today.getTime() - 86400000 * 30) yy += 1;
     }
+    // 2月31日・4月31日・うるう年でない2月29日など、カレンダーにない日は読まない
+    if (new Date(Date.UTC(yy, m - 1, d)).getUTCDate() !== d) return;
     const line = text.slice(text.lastIndexOf('\n', index) + 1, text.indexOf('\n', index) === -1 ? undefined : text.indexOf('\n', index));
     out.push({ date: `${yy}-${pad(m)}-${pad(d)}`, index, line });
   };
@@ -36,9 +40,9 @@ export function findDates(text: string, today = new Date()): Found[] {
   const r1 = /(20\d{2})\s?[\/\-.年년]\s?(\d{1,2})\s?[\/\-.月월]\s?(\d{1,2})\s?[日일]?/g; // 2026-02-14 / 2026年2月14日
   while ((m = r1.exec(text))) add(+m[1], +m[2], +m[3], m.index);
   const r2 = new RegExp(`(?<![\\d:])(\\d{1,2})(?:st|nd|rd|th|er|º)?\\.?(?:[\\s\\-]|de\\s)*${mon}\\.?,?(?:[\\s\\-]|de\\s)*(20\\d{2}|\\d{2}(?!\\d|:))?`, 'gi'); // 14 Feb 2026 / 24JUN26 / 15 de diciembre de 2026
-  while ((m = r2.exec(text))) add(m[3] ? +m[3] : null, MONTHS[m[2].toLowerCase()], +m[1], m.index);
+  while ((m = r2.exec(text))) if (m[3] || !AMBIG_MON.has(m[2].toLowerCase())) add(m[3] ? +m[3] : null, MONTHS[m[2].toLowerCase()], +m[1], m.index);
   const r3 = new RegExp(`(?<![a-zà-ÿ])${mon}\\.?\\s+(\\d{1,2})(?!\\d|:)(?:st|nd|rd|th)?,?\\s*(20\\d{2})?`, 'gi'); // Feb 14, 2026
-  while ((m = r3.exec(text))) add(m[3] ? +m[3] : null, MONTHS[m[1].toLowerCase()], +m[2], m.index);
+  while ((m = r3.exec(text))) if (m[3] || !AMBIG_MON.has(m[1].toLowerCase())) add(m[3] ? +m[3] : null, MONTHS[m[1].toLowerCase()], +m[2], m.index);
   const r4 = /(?<![\d\/])(\d{1,2})\s?[月월]\s?(\d{1,2})\s?[日일]/g; // 2月14日（年なし）
   while ((m = r4.exec(text))) {
     if (/20\d{2}\s?[年년]\s?$/.test(text.slice(Math.max(0, m.index - 6), m.index))) continue;
@@ -192,7 +196,12 @@ function findCode(text: string) {
 
 /** テキスト → 予約の下書き（読み取れたところだけ） */
 export function parseBooking(text: string, today = new Date()): Partial<Booking> {
-  const t = text.replace(/\r/g, '');
+  // 全角の数字・英字・記号（ＯＣＲや日本のメールに多い）を半角に。かっこ等はそのまま
+  const t = text
+    .replace(/\r/g, '')
+    .replace(/[０-９Ａ-Ｚａ-ｚ：／－．，＃＄]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+    .replace(/￥/g, '¥')
+    .replace(/\u3000/g, ' ');
   const type = guessType(t);
   const dates = findDates(t, today);
   const out: Partial<Booking> = { type, ...findPrice(t) };
