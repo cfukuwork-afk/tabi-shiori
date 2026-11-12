@@ -4,7 +4,7 @@ export const AIRPORT_TZ: Record<string, string> = {
   ICN: 'Asia/Seoul', GMP: 'Asia/Seoul', PUS: 'Asia/Seoul', TPE: 'Asia/Taipei', TSA: 'Asia/Taipei', HKG: 'Asia/Hong_Kong', MFM: 'Asia/Macau',
   PEK: 'Asia/Shanghai', PKX: 'Asia/Shanghai', PVG: 'Asia/Shanghai', SHA: 'Asia/Shanghai', CAN: 'Asia/Shanghai',
   BKK: 'Asia/Bangkok', DMK: 'Asia/Bangkok', SIN: 'Asia/Singapore', KUL: 'Asia/Kuala_Lumpur', CGK: 'Asia/Jakarta', DPS: 'Asia/Makassar',
-  MNL: 'Asia/Manila', SGN: 'Asia/Ho_Chi_Minh', HAN: 'Asia/Bangkok', DEL: 'Asia/Kolkata', BOM: 'Asia/Kolkata', DXB: 'Asia/Dubai', DOH: 'Asia/Qatar', AUH: 'Asia/Dubai', IST: 'Europe/Istanbul',
+  MNL: 'Asia/Manila', SGN: 'Asia/Ho_Chi_Minh', HAN: 'Asia/Ho_Chi_Minh', DEL: 'Asia/Kolkata', BOM: 'Asia/Kolkata', DXB: 'Asia/Dubai', DOH: 'Asia/Qatar', AUH: 'Asia/Dubai', IST: 'Europe/Istanbul',
   LHR: 'Europe/London', LGW: 'Europe/London', STN: 'Europe/London', LTN: 'Europe/London', MAN: 'Europe/London', EDI: 'Europe/London', DUB: 'Europe/Dublin',
   CDG: 'Europe/Paris', ORY: 'Europe/Paris', NCE: 'Europe/Paris', AMS: 'Europe/Amsterdam', BRU: 'Europe/Brussels', FRA: 'Europe/Berlin', MUC: 'Europe/Berlin', BER: 'Europe/Berlin',
   ZRH: 'Europe/Zurich', GVA: 'Europe/Zurich', VIE: 'Europe/Vienna', PRG: 'Europe/Prague', BUD: 'Europe/Budapest', WAW: 'Europe/Warsaw', CPH: 'Europe/Copenhagen', ARN: 'Europe/Stockholm',

@@ -65,8 +65,18 @@ export function activityLinks(title: string, city?: string): FindLink[] {
 }
 
 /** 宿を探す（日付があれば入れる）。国内なら楽天トラベルも */
-export function hotelLinks(city: string, checkin?: string, checkout?: string, domestic = false): FindLink[] {
+export function hotelLinks(city: string, checkin?: string, checkout?: string, domestic = false, cc?: string): FindLink[] {
   if (!city) return [];
+  // Booking.com は「Kingston」だけだとイギリスの Kingston upon Thames になる。国がわかるときは「都市, 国」で探す
+  let ss = city;
+  // 国は、おすすめ都市のデータにある都市ならそちらを優先（空港のタイムゾーンからだと、ハノイがタイになるなどずれる）
+  cc = PLACES.find((p) => p[2].some(([en]) => en === city))?.[0] ?? cc;
+  if (cc && !['HK', 'MO', 'SG'].includes(cc) && !/,/.test(city) && !CJK.test(city)) {
+    try {
+      const country = new (Intl as any).DisplayNames(['en'], { type: 'region' }).of(cc);
+      if (country && country !== city) ss = `${city}, ${country}`;
+    } catch {}
+  }
   const d = checkin && checkout ? `&checkin=${checkin}&checkout=${checkout}` : '';
   // 楽天トラベルのキーワード検索（日付があれば入れる）
   const [y1, m1, d1] = (checkin ?? '').split('-');
@@ -75,7 +85,7 @@ export function hotelLinks(city: string, checkin?: string, checkout?: string, do
   const rk = `https://kw.travel.rakuten.co.jp/keyword/Search.do?charset=utf-8&f_query=${enc(city)}${rkDates}`;
   return [
     ...(domestic ? [{ id: 'rakuten', name: '楽天トラベル', url: PARTNER.rakuten ? `https://hb.afl.rakuten.co.jp/hgc/${PARTNER.rakuten}/?pc=${enc(rk)}&m=${enc(rk)}` : rk }] : []),
-    { id: 'booking', name: 'Booking.com', url: `https://www.booking.com/searchresults.html?ss=${enc(city)}${d}${PARTNER.booking ? `&aid=${PARTNER.booking}` : ''}` },
+    { id: 'booking', name: 'Booking.com', url: `https://www.booking.com/searchresults.html?ss=${enc(ss)}${d}${PARTNER.booking ? `&aid=${PARTNER.booking}` : ''}` },
     // Agoda と Trip.com は、都市名の検索リンクが使えない（トップページや0件になる）。提携の承認後に都市IDつきで入れる
   ];
 }

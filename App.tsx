@@ -92,7 +92,7 @@ import { SERVER } from './src/sync';
 import { InboxItem } from './src/data';
 import { TZ_CC, countriesOf, flag } from './src/countries';
 import { NEAR, PLACES } from './src/places';
-import { AIRPORT_CITY } from './src/airports';
+import { AIRPORT_CITY, AIRPORT_TZ } from './src/airports';
 import { useCityPhoto } from './src/cityPhoto';
 import { dropVaultImage, keepVaultImage, loadVault, saveVault, unlock, VaultDoc } from './src/vault';
 import { myTz } from './src/airports';
@@ -1710,7 +1710,7 @@ function BookingsTab({ trip, rate, onOpen, onInbox, onDropInbox }: { trip: Trip;
           kicker={t('adHotelKicker')}
           title={t('adHotelTitle', { city })}
           sub={t('adHotelSub', { n: daysBetween(rs!, re!) })}
-          links={hotelLinks(city, rs, re, /[぀-ヿ一-鿿]/.test(city))}
+          links={hotelLinks(city, rs, re, /[぀-ヿ一-鿿]/.test(city), arrivalCC(trip))}
           actionOf={(l) => t('adHotelBtn', { site: l.name })}
         />
       )}
@@ -2337,6 +2337,12 @@ function AdHero({ photo, kicker, title, sub, links, badge, onClose, top, actions
 }
 const COVER_FALLBACK = require('./assets/covers/window.jpg');
 
+/** 最初の便の到着空港の国（同じ名前の都市が別の国にもあるとき、宿の検索を正しい国にするため） */
+function arrivalCC(trip: Trip): string | undefined {
+  const fl = trip.bookings.filter((b) => b.type === 'flight' && !b.cancelled && b.to).sort((a, b) => (a.start + (a.startTime ?? '')).localeCompare(b.start + (b.startTime ?? '')));
+  const code = fl[0]?.to?.trim().toUpperCase() ?? '';
+  return /^[A-Z]{3}$/.test(code) ? TZ_CC[AIRPORT_TZ[code] ?? ''] : undefined;
+}
 /** 宿がないとき、どの都市で探すか：最初の便の到着空港の都市（帰りの便の到着地＝自宅側は使わない） */
 function arrivalCity(trip: Trip): string | undefined {
   const fl = trip.bookings.filter((b) => b.type === 'flight' && !b.cancelled && b.to).sort((a, b) => (a.start + (a.startTime ?? '')).localeCompare(b.start + (b.startTime ?? '')));
