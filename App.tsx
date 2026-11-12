@@ -2349,20 +2349,31 @@ function arrivalCity(trip: Trip): string | undefined {
 
 // ホームの「〇〇に行きませんか？」：行ったことのある国に近い地域の、まだ行っていない国を日ごとに選ぶ（100か国・500都市）
 let inspireClosed = false; // × で閉じたら、次にアプリを開くまで出さない
+let inspirePick: { cc: string; city: [string, string]; near: boolean } | null = null; // 開いている間は同じ行き先
 function Inspire({ trips }: { trips: Trip[] }) {
   const [closed, setClosed] = useState(inspireClosed);
-  const pick = useMemo(() => {
-    const been = new Set([...countriesOf(trips, myTz()), TZ_HOME()]);
-    const regions = new Set(PLACES.filter((p) => been.has(p[0])).map((p) => p[1]));
-    const near = new Set([...regions].flatMap((r) => NEAR[r]));
-    // 重み：行った地域の近く×3、行った地域×2、そのほか×1（行った国は出さない）
-    const pool = PLACES.filter((p) => !been.has(p[0])).flatMap((p) => Array(regions.size ? (near.has(p[1]) ? 3 : regions.has(p[1]) ? 2 : 1) : 1).fill(p));
-    if (!pool.length) return null;
-    const day = Math.floor(Date.now() / 86400000);
-    const rnd = (n: number, salt: number) => ((day * 9301 + salt * 49297) % 233280) / 233280 * n;
-    const c = pool[Math.floor(rnd(pool.length, 7))];
-    const city = c[2][Math.floor(rnd(c[2].length, 13))];
-    return { cc: c[0], city, near: regions.size > 0 && near.has(c[1]) };
+  const [pick, setPick] = useState<{ cc: string; city: [string, string]; near: boolean } | null>(inspirePick);
+  useEffect(() => {
+    if (inspirePick) return;
+    (async () => {
+      // アプリを開くたびに新しい行き先。一巡するまで同じ都市は出さないので、全部の都市が必ず一度は出る
+      const recent: string[] = JSON.parse((await AsyncStorage.getItem('ts.inspire.seen').catch(() => null)) || '[]');
+      const been = new Set([...countriesOf(trips, myTz()), TZ_HOME()]);
+      const regions = new Set(PLACES.filter((p) => been.has(p[0])).map((p) => p[1]));
+      const near = new Set([...regions].flatMap((r) => NEAR[r]));
+      // 重み：行った地域の近く×3、行った地域×2、そのほか×1（行った国・自分の国は出さない）
+      const all = PLACES.filter((p) => !been.has(p[0])).flatMap((p) => p[2].map((city) => ({ cc: p[0], city, near: regions.size > 0 && near.has(p[1]), w: regions.size ? (near.has(p[1]) ? 3 : regions.has(p[1]) ? 2 : 1) : 1 })));
+      if (!all.length) return;
+      const fresh = all.filter((x) => !recent.includes(x.city[0]));
+      // 一巡したら最初から（直前の都市だけは続けて出さない）
+      const pool = fresh.length ? fresh : all.filter((x) => x.city[0] !== recent[0]);
+      const cycle = fresh.length ? recent : recent.slice(0, 1);
+      let r = Math.random() * pool.reduce((n, x) => n + x.w, 0);
+      const c = pool.find((x) => (r -= x.w) < 0) ?? pool[0];
+      inspirePick = { cc: c.cc, city: c.city as [string, string], near: c.near };
+      setPick(inspirePick);
+      AsyncStorage.setItem('ts.inspire.seen', JSON.stringify([c.city[0], ...cycle.filter((x) => x !== c.city[0])])).catch(() => {});
+    })();
   }, [trips]);
   if (!pick || closed) return null;
   const ja = getLang() === 'ja';
