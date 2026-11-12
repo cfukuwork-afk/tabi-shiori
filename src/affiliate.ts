@@ -1,4 +1,6 @@
 // 予約サイトへのリンク（提携ID を入れると紹介料の対象になる。空でもふつうの検索リンクとして使える）
+import { PLACES } from './places';
+import { AIRPORT_CITY } from './airports';
 // 登録後に下の ID を入れるだけで有効になる
 export const PARTNER = {
   klook: '', // Klook アフィリエイトの aid
@@ -33,6 +35,20 @@ const TP_BRAND: Record<string, { c: string; p: string }> = {
 const tp = (brand: keyof typeof TP_BRAND, url: string) =>
   `https://tp.media/r?campaign_id=${TP_BRAND[brand].c}&marker=${TP.marker}&p=${TP_BRAND[brand].p}&trs=${TP.trs}&u=${enc(url)}`;
 const q2 = (title: string, city?: string) => [title, city].filter(Boolean).join(' ').trim();
+const CJK = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/;
+/** 日本語などの都市名を英語にする（おすすめ都市のデータから。ないときはそのまま） */
+let JA2EN: Record<string, string> | null = null;
+export function cityEn(city?: string): string | undefined {
+  if (!city) return city;
+  const c = city.trim();
+  if (!CJK.test(c)) return c;
+  if (!JA2EN) {
+    JA2EN = {};
+    for (const [, , list] of PLACES) for (const [en, ja] of list) JA2EN[ja] = en;
+    Object.assign(JA2EN, { 東京: 'Tokyo', 大阪: 'Osaka', 京都: 'Kyoto', 札幌: 'Sapporo', 福岡: 'Fukuoka', 那覇: 'Naha', 名古屋: 'Nagoya', 横浜: 'Yokohama', 神戸: 'Kobe', 奈良: 'Nara', 沖縄: 'Okinawa', 北海道: 'Hokkaido', ソウル: 'Seoul', 台北: 'Taipei', 香港: 'Hong Kong', 上海: 'Shanghai', 北京: 'Beijing', ロンドン: 'London', パリ: 'Paris', ニューヨーク: 'New York', ハワイ: 'Hawaii', ホノルル: 'Honolulu' });
+  }
+  return JA2EN[c] ?? JA2EN[c.replace(/[市府県都]$/, '')] ?? c;
+}
 
 /** チケット・ツアー・体験を探す */
 export function activityLinks(title: string, city?: string): FindLink[] {
@@ -40,7 +56,8 @@ export function activityLinks(title: string, city?: string): FindLink[] {
   if (!q) return [];
   return [
     { id: 'klook', name: 'Klook', url: tp('klook', `https://www.klook.com/search/result/?query=${enc(q)}`) },
-    { id: 'tiqets', name: 'Tiqets', url: tp('tiqets', `https://www.tiqets.com/en/search?q=${enc(q)}`) },
+    // Tiqets は日本語で検索すると関係ない結果になるので、英語にできるときだけ出す
+    ...(!CJK.test(q2(title, cityEn(city))) ? [{ id: 'tiqets', name: 'Tiqets', url: tp('tiqets', `https://www.tiqets.com/en/search?q=${enc(q2(title, cityEn(city)))}`) }] : []),
     { id: 'kkday', name: 'KKday', url: tp('kkday', `https://www.kkday.com/en/product/productlist?keyword=${enc(q)}`) },
     { id: 'gyg', name: 'GetYourGuide', url: `https://www.getyourguide.com/s/?q=${enc(q)}${PARTNER.gyg ? `&partner_id=${PARTNER.gyg}&utm_medium=online_publisher` : ''}` },
   ];
@@ -89,8 +106,20 @@ export const carLinks = (): FindLink[] => [
 ];
 /** 荷物を預ける（チェックアウト後・出発前） */
 export const luggageLinks = (city?: string): FindLink[] => [
-  { id: 'radical', name: 'Radical Storage', url: tp('radical', city ? `https://radicalstorage.com/search?q=${enc(city)}` : 'https://radicalstorage.com/') },
+  // 検索ページはトップに飛ぶので、都市ページ（/luggage-storage/london）を開く
+  { id: 'radical', name: 'Radical Storage', url: tp('radical', radicalUrl(city)) },
 ];
+const radSlug = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const RADICAL_CITIES = new Set(
+  [...Object.values(AIRPORT_CITY), 'Kyoto', 'Nara', 'Kobe', 'Yokohama', 'Hiroshima', 'Florence', 'Naples', 'Porto', 'Seville', 'Valencia', 'Nice', 'Lyon', 'Marseille', 'Bordeaux', 'Edinburgh', 'Liverpool', 'Bristol', 'Oxford', 'Cambridge', 'Bath', 'York', 'Brighton', 'Glasgow', 'Hamburg', 'Cologne', 'Krakow', 'Salzburg', 'Bruges', 'Antwerp', 'Rotterdam', 'Chicago', 'Miami', 'Orlando', 'New Orleans', 'San Diego', 'Montreal', 'Quebec City', 'Rio de Janeiro', 'Buenos Aires', 'Lima', 'Cusco', 'Marrakech', 'Cairo', 'Cape Town', 'Chiang Mai', 'Phuket', 'Seoul', 'Busan', 'Hong Kong'].map((x) => radSlug(x)),
+);
+function radicalUrl(city?: string) {
+  const en = cityEn(city);
+  // 都市ページがあるのは大きな都市だけ（小さな町は404になる）。空港のある都市＋主要都市に限る
+  if (!en || CJK.test(en) || !RADICAL_CITIES.has(radSlug(en))) return 'https://radicalstorage.com/';
+  const slug = radSlug(en);
+  return slug ? `https://radicalstorage.com/luggage-storage/${slug}` : 'https://radicalstorage.com/';
+}
 /** 遅延・欠航の補償 */
 export const airhelpLink = (): FindLink => ({ id: 'airhelp', name: 'AirHelp', url: tp('airhelp', 'https://www.airhelp.com/') });
 /** 行き先のおすすめ（ホーム）：体験と航空券 */
