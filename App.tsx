@@ -295,15 +295,7 @@ function Main() {
   useEffect(() => {
     (async () => {
       const [tr0, st] = await Promise.all([loadTrips(), loadSettings(), loadPhotoMap()]);
-      let tr = tr0;
-      // 【確認用・一時的】Expo Go にお試し旅行を1回だけ入れる（TestFlight に出す前に消す）
-      if (st.onboarded && !(await AsyncStorage.getItem('ts.demo.once.v2'))) {
-        await AsyncStorage.setItem('ts.demo.once.v2', '1');
-        setLang(st.lang);
-        tr = [sampleTrip(st), pastSample(st), londonSample(st), ...tr.filter((x) => x.share || !x.cover?.startsWith('asset:'))];
-        saveTrips(tr);
-      }
-      setTrips(tr);
+      setTrips(tr0);
       setSettings(st);
       setRate(await loadRate(st.home));
       setReady(true);
