@@ -112,7 +112,7 @@ export const looksLikeAddress = (q: string) => /\d/.test(q) && (/[,、]/.test(q)
 /** 名前（お寺・美術館・お店など）で探す。near があればその周り70kmに絞る */
 export async function searchPlace(q: string, near?: { lat: number; lng: number } | null): Promise<Geo | null> {
   const c = await loadCache();
-  const key = `n3:${q}${near ? `@${near.lat.toFixed(1)},${near.lng.toFixed(1)}` : ''}`;
+  const key = `n4:${q}${near ? `@${near.lat.toFixed(1)},${near.lng.toFixed(1)}` : ''}`;
   if (key in c) return c[key];
   try {
     const u = `${SERVER}/v1/geo/search?q=${encodeURIComponent(q)}${near ? `&lat=${near.lat}&lng=${near.lng}` : ''}`;
