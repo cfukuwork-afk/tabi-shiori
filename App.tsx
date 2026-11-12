@@ -2377,6 +2377,15 @@ function Inspire({ trips }: { trips: Trip[] }) {
     />
   );
 }
+/** 通貨名を、選んでいる言語で（日本語以外で日本語名が出ないように） */
+const curName = (code: string, fallback: string) => {
+  if (getLang() === 'ja') return fallback;
+  try {
+    return new (Intl as any).DisplayNames([localeOf(getLang())], { type: 'currency' }).of(code) ?? fallback;
+  } catch {
+    return fallback;
+  }
+};
 const TZ_HOME = () => TZ_CC[myTz() ?? ''] ?? '';
 
 function FindRow({ title, links }: { title: string; links: FindLink[] }) {
@@ -2957,7 +2966,7 @@ function CurrencyPicker({ value, onChange }: { value: string; onChange: (c: stri
   const c = findCurrency(value);
   const qq = q.trim().toLowerCase();
   const list = qq
-    ? CURRENCIES.filter((x) => `${x.code} ${x.name} ${x.symbol} ${CUR_COUNTRIES[x.code] ?? ''}`.toLowerCase().includes(qq))
+    ? CURRENCIES.filter((x) => `${x.code} ${x.name} ${curName(x.code, x.name)} ${x.symbol} ${CUR_COUNTRIES[x.code] ?? ''}`.toLowerCase().includes(qq))
     : CURRENCIES;
   return (
     <>
@@ -2988,7 +2997,7 @@ function CurrencyPicker({ value, onChange }: { value: string; onChange: (c: stri
                   }}
                 >
                   <Text style={s.tlTitle}>{x.code}</Text>
-                  <Text style={[s.hint, { flex: 1 }]} numberOfLines={1}>{`${x.symbol.trim()}  ${x.name}`}</Text>
+                  <Text style={[s.hint, { flex: 1 }]} numberOfLines={1}>{`${x.symbol.trim()}  ${curName(x.code, x.name)}`}</Text>
                 </Pressable>
               ))}
             </ScrollView>

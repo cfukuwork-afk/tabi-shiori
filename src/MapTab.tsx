@@ -24,11 +24,14 @@ export function tripStops(trip: Trip): Stop[] {
     const add = (b: Booking, q: string | undefined, sub: string, time?: string) => {
       if (!q) return;
       const last = out[out.length - 1];
-      if (last && last.day === date && last.q === q) return; // 同じ場所が続くときはまとめる
+      // 同じ場所が続くときはまとめる（名前が違っても住所が同じなら同じ場所）
+      const place = (x: string) => x.toLowerCase().replace(/\s+/g, ' ').trim();
+      if (last && last.day === date && (last.q === q || (!!b.from?.trim() && !!last.b.from?.trim() && place(last.b.from!) === place(b.from!) && last.b.type !== 'flight'))) return;
       n += 1;
       out.push({ key: `${b.id}-${out.length}`, day: date, n, time, title: b.title || typeName(b.type), sub, q, b, color: typeOf(b.type).color });
     };
     items.forEach(({ booking: b, edge, time }) => {
+      if (b.cancelled) return; // キャンセルした予約は地図に出さない
       if (b.type === 'flight' || b.type === 'train' || b.type === 'bus') {
         add(b, placeQuery(b, 'from'), b.from ?? '', time);
         add(b, placeQuery(b, 'to'), b.to ?? '', b.endTime);
@@ -52,7 +55,7 @@ const MODE_KEY: Record<LineStyle, 'mFlight' | 'mTrain' | 'mBus' | 'mWalk' | 'mCa
 const MODE_ICON: Record<LineStyle, string> = { flight: 'airplane', train: 'train', bus: 'bus', walk: 'walk', car: 'car', ride: 'subway' };
 
 /** となりあう地点の区間と、その移動手段 */
-function segments(list: Stop[], geo: Record<string, Geo | null>, trip: Trip): Seg[] {
+export function segments(list: Stop[], geo: Record<string, Geo | null>, trip: Trip): Seg[] {
   const out: Seg[] = [];
   // 場所が見つからなかった予定は飛ばして、同じ日の「直前に見つかった地点」とつなぐ
   //（以前は隣どうしが両方見つかったときだけ線を引いていたので、途中が1つ欠けると線が全部消えていた）
@@ -66,7 +69,10 @@ function segments(list: Stop[], geo: Record<string, Geo | null>, trip: Trip): Se
     p = s;
     if (!prev || !a || distKm(a, b) < 0.03) continue;
     let mode: LineStyle;
-    if (prev.b.id === s.b.id && (s.b.type === 'flight' || s.b.type === 'train' || s.b.type === 'bus')) mode = s.b.type;
+    const same = prev.b.id === s.b.id && (s.b.type === 'flight' || s.b.type === 'train' || s.b.type === 'bus');
+    // 移動手段がわからないまま遠く（300km以上）離れた2点は、まっすぐ結ばない（海を渡る線になるため）
+    if (!same && distKm(a, b) > 300) continue;
+    if (same) mode = s.b.type as LineStyle;
     else if (distKm(a, b) <= 1.5) mode = 'walk';
     else {
       // その日にレンタカーを借りていれば車、そうでなければ電車・バスなど

@@ -60,7 +60,7 @@ const stripLead = (s: string) =>
     .replace(/^[#>\s]+/, '')
     .replace(/^(?:[-*•・●○◆◇■□▶▷►→✓✔└├┗┣]+\s*)+/, '')
     .replace(new RegExp(`^[${CIRCLED}]\\s*`), '')
-    .replace(/^\d{1,2}[.)]\s+(?=\D)/, '')
+    .replace(/^\d{1,2}[.)]\s+(?=\D|\d{1,2}\s*(?:[:h時]|am|pm))/i, '')
     .replace(/^\(\d{1,2}\)\s*/, '')
     .trim();
 
@@ -117,7 +117,9 @@ function toHHMM(pre: string | undefined, h: string, mi: string | undefined, ap: 
   if (hh > 24 || mm > 59) return null;
   return `${pad(hh % 24)}:${pad(mm)}`;
 }
-function readTime(s: string): { time?: string; endTime?: string; rest: string } | null {
+function readTime(s0: string): { time?: string; endTime?: string; rest: string } | null {
+  // 「9.30」「14.15-16.00」（ヨーロッパの書き方）は「9:30」として読む
+  const s = s0.replace(/^(\d{1,2})\.(\d{2})(?=\s|[-~–]|[ap]\.?m|$)/i, '$1:$2').replace(/^(\d{1,2}:\d{2}\s*[-~–]\s*\d{1,2})\.(\d{2})(?=\s|$)/, '$1:$2');
   const m = s.match(TIME_AT);
   if (!m || !m[2]) return null;
   const bare1 = m[3] === undefined && !/[:h時시点]/i.test(m[0].slice(0, m[0].indexOf(m[2]) + m[2].length + 2));
@@ -153,7 +155,7 @@ function readSlot(s: string): { time: string; rest: string } | null {
   return null;
 }
 
-const PLACE_LABEL = /^(?:場所|住所|所在地|最寄り?駅?|アクセス|location|address|where|venue|adresse|lieu|dirección|ubicación|indirizzo|luogo|endereço|local|ort|주소|장소|地址|地点)\s*[:]\s*/i;
+const PLACE_LABEL = /^(?:場所|住所|所在地|最寄り?駅?|アクセス|集合場所|location|address|where|venue|place|meeting point|adresse|lieu|dirección|ubicación|indirizzo|luogo|endereço|local|ort|주소|장소|地址|地点)\s*[:]\s*/i;
 const MEMO_LABEL = /^(?:料金|費用|予算|値段|入場料|所要時間|ポイント|ヒント|メモ|備考|注意|cost|price|budget|fee|tip|tips|note|notes|why|duration|prix|coût|precio|kosten|preis|prezzo|preço|비용|요금|팁|费用|价格|提示)\s*[:]\s*/i;
 const TIPS_HEAD = /^(?:tips?|notes?|budget|cost|summary|packing|getting around|transport(?:ation)?|before you go|general|extra|bonus|持ち物|予算|費用|注意|ポイント|まとめ|補足|移動|交通|おすすめ|준비물|예산|팁|小贴士|预算|注意事项)(?=$|[\s:(（\-&、,])/i;
 

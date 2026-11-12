@@ -212,6 +212,8 @@ export const memoryPhotos = (t: Trip) => Object.values(t.journal ?? {}).flatMap(
 
 /** しおり用：日付ごとの予定（ホテル・レンタカーは開始日と終了日の両方に出す） */
 export type TimelineItem = { booking: Booking; edge: 'start' | 'end' | 'single'; time?: string };
+// 時刻のないホテル・レンタカーは、ふつうの時間帯で並べる（チェックアウトは朝・チェックインは午後）
+const sortTime = (it: TimelineItem) => it.time ?? (it.booking.type === 'hotel' ? (it.edge === 'end' ? '10:00' : it.edge === 'start' ? '15:00' : '99') : it.booking.type === 'car' ? (it.edge === 'end' ? '18:00' : '09:00') : '99');
 export function timeline(t: Trip): { date: string; items: TimelineItem[] }[] {
   const map = new Map<string, TimelineItem[]>();
   const push = (d: string, it: TimelineItem) => map.set(d, [...(map.get(d) ?? []), it]);
@@ -225,7 +227,7 @@ export function timeline(t: Trip): { date: string; items: TimelineItem[] }[] {
   });
   return [...map.entries()]
     .sort(([a], [b]) => (a < b ? -1 : 1))
-    .map(([date, items]) => ({ date, items: items.sort((x, y) => (x.time ?? '99').localeCompare(y.time ?? '99')) }));
+    .map(([date, items]) => ({ date, items: items.sort((x, y) => sortTime(x).localeCompare(sortTime(y))) }));
 }
 
 /** 次の予定（今日以降でいちばん近いもの） */

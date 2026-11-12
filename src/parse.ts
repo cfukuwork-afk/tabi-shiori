@@ -33,15 +33,15 @@ export function findDates(text: string, today = new Date()): Found[] {
   };
   const mon = MON_RE + '(?![a-zà-ÿ])';
   let m: RegExpExecArray | null;
-  const r1 = /(20\d{2})[\/\-.年]\s?(\d{1,2})[\/\-.月]\s?(\d{1,2})日?/g; // 2026-02-14 / 2026年2月14日
+  const r1 = /(20\d{2})\s?[\/\-.年년]\s?(\d{1,2})\s?[\/\-.月월]\s?(\d{1,2})\s?[日일]?/g; // 2026-02-14 / 2026年2月14日
   while ((m = r1.exec(text))) add(+m[1], +m[2], +m[3], m.index);
   const r2 = new RegExp(`(?<![\\d:])(\\d{1,2})(?:st|nd|rd|th|er|º)?\\.?(?:[\\s\\-]|de\\s)*${mon}\\.?,?(?:[\\s\\-]|de\\s)*(20\\d{2}|\\d{2}(?!\\d|:))?`, 'gi'); // 14 Feb 2026 / 24JUN26 / 15 de diciembre de 2026
   while ((m = r2.exec(text))) add(m[3] ? +m[3] : null, MONTHS[m[2].toLowerCase()], +m[1], m.index);
   const r3 = new RegExp(`(?<![a-zà-ÿ])${mon}\\.?\\s+(\\d{1,2})(?!\\d|:)(?:st|nd|rd|th)?,?\\s*(20\\d{2})?`, 'gi'); // Feb 14, 2026
   while ((m = r3.exec(text))) add(m[3] ? +m[3] : null, MONTHS[m[1].toLowerCase()], +m[2], m.index);
-  const r4 = /(?<![\d\/])(\d{1,2})月\s?(\d{1,2})日/g; // 2月14日（年なし）
+  const r4 = /(?<![\d\/])(\d{1,2})\s?[月월]\s?(\d{1,2})\s?[日일]/g; // 2月14日（年なし）
   while ((m = r4.exec(text))) {
-    if (/20\d{2}年\s?$/.test(text.slice(Math.max(0, m.index - 6), m.index))) continue;
+    if (/20\d{2}\s?[年년]\s?$/.test(text.slice(Math.max(0, m.index - 6), m.index))) continue;
     add(null, +m[1], +m[2], m.index);
   }
   const r5 = /(?<![\d\/.])(\d{1,2})[\/.](\d{1,2})[\/.](20\d{2})/g; // 14/02/2026・14.02.2026（ヨーロッパ式）
@@ -112,7 +112,15 @@ const WEAK = /(price|料金|運賃|fare|金額|代金|cost)/i;
 const PENALTY = /(per night|\/\s?night|1泊あたり|1泊|avg|average|daily rate|per day|\bx\s?\d|×|割引|クーポン|discount|coupon|手数料|概算|うち|cleaning|清掃|サービス料|service fee|taxes|booking fee|消費税(?!込)|税金|deposit|保証金|refund|返金|ポイント|points|saved|節約)/i;
 
 /** 合計金額らしいもの：「お支払い金額」＞「合計」＞「料金」の順、1泊あたり・割引・手数料の行は避ける */
-export function findPrice(text: string): { price?: number; currency?: string } {
+export function findPrice(text0: string): { price?: number; currency?: string } {
+  // 「1万2000円」「3.5万円」→ 12000円・35000円
+  const text = text0.replace(/(\d+(?:\.\d+)?)\s?万\s?(\d{1,4})?(?=\s?円)/g, (_m, a: string, b?: string) => String(Math.round(+a * 10000 + (b ? +b : 0))));
+  const r = findPriceRaw(text);
+  // 中国語の「¥」は人民元（かなが無く、简体・繁体の言葉があるとき）
+  if (r.currency === 'JPY' && !/円/.test(text) && !/[\u3040-\u30ff]/.test(text) && /(总价|總價|订单|訂單|人民币|人民幣|元|酒店|入住|退房|支付|付款)/.test(text)) r.currency = 'CNY';
+  return r;
+}
+function findPriceRaw(text: string): { price?: number; currency?: string } {
   const num = '(\\d{1,3}(?:[.,，  \u202f]\\d{3})+(?:[.,]\\d{1,2})?|\\d+(?:[.,]\\d{1,2})?)';
   const re = new RegExp(`(-|−)?(?<![A-Za-z])${CUR_RE}?\\s?${num}\\s?${SUF_RE}?(?![A-Za-z])`, 'g');
   const lines = text.split(/\n/);
@@ -141,13 +149,13 @@ export function findPrice(text: string): { price?: number; currency?: string } {
 }
 
 const KEYS: Record<BookingType, RegExp> = {
-  flight: /(flight|boarding|airline|airways|搭乗|航空|便名|フライト|出発空港|e-?ticket|terminal|gate|ryanair|easyjet|\bana\b|\bjal\b|lufthansa|emirates|peach|ピーチ|jetstar|ジェットスター|skymark|スカイマーク|zipair|airasia|vueling|wizz|klm|air france|united|delta|cathay|singapore airlines)/gi,
-  train: /(eurostar|train|rail|新幹線|列車|特急|号車|coach \d|platform|trenitalia|sncf|renfe|deutsche bahn|\bdb\b|japan rail|jr|trainline|national rail|advance single|off-peak|anytime return|\bsingle\b|standard class|first class|railcard|乗車|のぞみ|ひかり|はやぶさ|えきねっと|ex予約)/gi,
+  flight: /(flight|boarding|airline|airways|搭乗|航空|便名|フライト|항공|탑승|航班|登机|出発空港|e-?ticket|terminal|gate|ryanair|easyjet|\bana\b|\bjal\b|lufthansa|emirates|peach|ピーチ|jetstar|ジェットスター|skymark|スカイマーク|zipair|airasia|vueling|wizz|klm|air france|united|delta|cathay|singapore airlines)/gi,
+  train: /(eurostar|train|rail|新幹線|기차|열차|ktx|高铁|火车|列車|特急|号車|coach \d|platform|trenitalia|sncf|renfe|deutsche bahn|\bdb\b|japan rail|jr|trainline|national rail|advance single|off-peak|anytime return|\bsingle\b|standard class|first class|railcard|乗車|のぞみ|ひかり|はやぶさ|えきねっと|ex予約)/gi,
   bus: /(\bbus\b|coach|flixbus|national express|megabus|高速バス|夜行バス)/gi,
-  hotel: /(hotel|ホテル|check-?in|チェックイン|check-?out|チェックアウト|booking\.com|airbnb|宿泊|泊|room|客室|hostel|ゲストハウス|旅館|expedia|agoda|hilton|marriott|hyatt|ihg|accor|for stay|宿泊施設|一休|ryokan|inn\b|nights?\b)/gi,
+  hotel: /(hotel|ホテル|check-?in|チェックイン|check-?out|チェックアウト|booking\.com|airbnb|宿泊|泊|room|客室|hostel|ゲストハウス|旅館|expedia|agoda|hilton|marriott|hyatt|ihg|accor|for stay|宿泊施設|一休|ryokan|inn\b|nights?\b|호텔|체크인|체크아웃|숙소|숙박|酒店|飯店|入住|退房|民宿|hôtel|unterkunft|alojamiento|albergo)/gi,
   car: /(rental car|car hire|レンタカー|pick-?up|drop-?off|hertz|avis|europcar|sixt|enterprise|返却|受取|貸渡|貸出|車両クラス|car class|vehicle)/gi,
   ticket: /(ticket|チケット|入場|admission|museum|美術館|tour|ツアー|event|コンサート|concert|show|公演|klook|kkday|getyourguide|viator|tiqets|ユニバーサル|usj|ディズニー|disney|パス|利用日|入園|入館|テーマパーク|アクティビティ|activity|experience|skip-the-line)/gi,
-  food: /(restaurant|レストラン|reservation for|table for|予約人数|opentable|食べログ|コース)/gi,
+  food: /(restaurant|レストラン|reservation for|table for|party of \d|予約人数|opentable|食べログ|コース|resy|thefork|tablecheck|식당|레스토랑|餐厅|餐廳|bistro|trattoria|ristorante)/gi,
   plan: /$^/g,
   other: /$^/g,
 };
@@ -193,8 +201,8 @@ export function parseBooking(text: string, today = new Date()): Partial<Booking>
 
   // 日付：ラベルの近くを優先（チェックイン・出発・受取 → start、チェックアウト・到着・返却 → end）
   const H = type === 'hotel';
-  const START = new RegExp(`(check-?in|チェックイン|pick-?up|受取|貸出|outbound|往路|乗車|利用日|宿泊日|到着日|date|datum|le |visit${H ? '|arrival' : '|出発|depart'})`, 'gi');
-  const END = new RegExp(`(check-?out|チェックアウト|返却|drop-?off|return|復路${H ? '|departure' : ''})`, 'gi');
+  const START = new RegExp(`(check-?in|チェックイン|체크인|入住|pick-?up|受取|貸出|outbound|往路|乗車|利用日|宿泊日|到着日|date|datum|le |visit${H ? '|arrival' : '|出発|depart'})`, 'gi');
+  const END = new RegExp(`(check-?out|チェックアウト|체크아웃|退房|返却|drop-?off|return|復路${H ? '|departure' : ''})`, 'gi');
   const lastPos = (re: RegExp, s: string) => { let p = -1; let m: RegExpExecArray | null; re.lastIndex = 0; while ((m = re.exec(s))) p = m.index; return p; };
   const labelOf = (d: { index: number }) => {
     const ls = t.lastIndexOf('\n', d.index - 1) + 1;
@@ -203,7 +211,7 @@ export function parseBooking(text: string, today = new Date()): Partial<Booking>
     if (s < 0 && e < 0) return '';
     return e > s ? 'end' : 'start';
   };
-  const startD = (type === 'hotel' ? dates.find((d) => labelOf(d) === 'start' && /(check-?in|チェックイン|arrival|宿泊日)/i.test(d.line)) : undefined) ?? dates.find((d) => labelOf(d) === 'start') ?? dates[0];
+  const startD = (type === 'hotel' ? dates.find((d) => labelOf(d) === 'start' && /(check-?in|チェックイン|체크인|入住|arrival|宿泊日)/i.test(d.line)) : undefined) ?? dates.find((d) => labelOf(d) === 'start') ?? dates[0];
   const endD = dates.find((d) => d !== startD && labelOf(d) === 'end' && d.date >= (startD?.date ?? '')) ?? (type === 'hotel' || type === 'car' ? dates.find((d) => d.date > (startD?.date ?? '')) : undefined);
   if (startD) {
     out.start = startD.date;
@@ -242,7 +250,7 @@ export function parseBooking(text: string, today = new Date()): Partial<Booking>
     out.title = brand ? brand[1].replace(/\b\w/g, (c) => c.toUpperCase()) : firstMatch(t, /((?:のぞみ|ひかり|こだま|はやぶさ|さくら|みずほ)\s?\d+号)/);
   } else if (type === 'hotel') {
     // 「ホテル名：〇〇」「Property: 〇〇」のように項目名がついていれば、その後ろだけ
-    out.title = firstMatch(t, /(?:ホテル名|宿泊施設名?|施設名|宿名|hotel name|property(?: name)?|accommodation)\s*[:：]\s*([^\n]{2,60})/i) ?? firstMatch(t, /^\s*((?:hotel|ホテル|hostel|旅館)[^\n]{0,40}|[^\n]{0,40}(?:hotel|ホテル|inn|hostel|旅館|resort|suites))\s*$/im);
+    out.title = firstMatch(t, /(?:ホテル名|宿泊施設名?|施設名|宿名|호텔명?|숙소명?|酒店名?称?|飯店名?稱?|hotel name|property(?: name)?|accommodation)\s*[:：]\s*([^\n]{2,60})/i) ?? firstMatch(t, /^\s*((?:hotel|ホテル|hostel|旅館)[^\n]{0,40}|[^\n]{0,40}(?:hotel|ホテル|inn|hostel|旅館|resort|suites))\s*$/im);
     out.from = firstMatch(t, /(?:address|adresse|dirección|indirizzo|住所|所在地)\s*[:：]?\s*([^\n]{5,80})/i);
     const room = firstMatch(t, /(?:room type|部屋タイプ|客室)\s*[:：]?\s*([^\n]{2,40})/i);
     if (room) out.seat = room;
