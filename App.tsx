@@ -2391,7 +2391,7 @@ function Inspire({ trips }: { trips: Trip[] }) {
       title={t('inspireTitle', { city: name })}
       sub={t('inspireLine', { country })}
       actions={[t('inspireBtnDo'), t('inspireBtnFly')]}
-      links={inspireLinks(pick.city[0])}
+      links={inspireLinks(pick.city[0], pick.cc)}
       onClose={() => {
         inspireClosed = true;
         setClosed(true);

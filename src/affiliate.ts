@@ -1,6 +1,7 @@
 // 予約サイトへのリンク（提携ID を入れると紹介料の対象になる。空でもふつうの検索リンクとして使える）
 import { PLACES } from './places';
 import { AIRPORT_CITY } from './airports';
+import { INSPIRE_IATA } from './inspireIata';
 // 登録後に下の ID を入れるだけで有効になる
 export const PARTNER = {
   klook: '', // Klook アフィリエイトの aid
@@ -123,7 +124,23 @@ function radicalUrl(city?: string) {
 /** 遅延・欠航の補償 */
 export const airhelpLink = (): FindLink => ({ id: 'airhelp', name: 'AirHelp', url: tp('airhelp', 'https://www.airhelp.com/') });
 /** 行き先のおすすめ（ホーム）：体験と航空券 */
-export const inspireLinks = (city: string): FindLink[] => [
-  { id: 'klook', name: 'Klook', url: tp('klook', `https://www.klook.com/search/result/?query=${enc(city)}`) },
-  { id: 'aviasales', name: 'Aviasales', url: tp('aviasales', 'https://www.aviasales.com/') },
-];
+// 同じ名前の有名な場所が別の国にある都市（Kingston→カナダ、Santiago→スペイン 等）は、検索が別の国に飛ぶので国名で探す
+const AMBIGUOUS = new Set(['Kingston', 'Trinidad', 'San José', 'Santiago', 'Salvador', 'Cartagena', 'Cork', 'Bath', 'Split', 'Sur', 'Flores', 'Salento', 'Copacabana', 'Cuenca', 'Saint-Louis', 'La Paz', 'Sucre', 'Baños', 'Stanley', 'Ella', 'Paro', 'Mendoza', 'Tutong', 'Addu', 'Fontvieille', 'Comino']);
+// アジア・オセアニアは Klook、それ以外（ヨーロッパ・中東・アフリカ・南北アメリカ）は GetYourGuide のほうが品ぞろえが多い
+const KLOOK_REGIONS = new Set(['ea', 'sea', 'sa', 'oc']);
+export function inspireLinks(city: string, cc?: string): FindLink[] {
+  const place = PLACES.find((p) => p[0] === cc);
+  let country = cc ?? '';
+  try {
+    country = cc ? new (Intl as any).DisplayNames(['en'], { type: 'region' }).of(cc) ?? cc : '';
+  } catch {}
+  const q = AMBIGUOUS.has(city) && country ? country : city;
+  const act: FindLink =
+    place && !KLOOK_REGIONS.has(place[1])
+      ? { id: 'gyg', name: 'GetYourGuide', url: `https://www.getyourguide.com/s/?q=${enc(q)}${PARTNER.gyg ? `&partner_id=${PARTNER.gyg}&utm_medium=online_publisher` : ''}` }
+      : { id: 'klook', name: 'Klook', url: tp('klook', `https://www.klook.com/search/result/?query=${enc(q)}`) };
+  // 航空券：行き先の空港を入れて開く（出発地は Aviasales が現在地から自動で入れる）
+  const iata = INSPIRE_IATA[city];
+  const fly: FindLink = { id: 'aviasales', name: 'Aviasales', url: tp('aviasales', iata ? `https://www.aviasales.com/?destination=${iata}` : 'https://www.aviasales.com/') };
+  return [act, fly];
+}
