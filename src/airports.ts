@@ -95,3 +95,20 @@ export const AIRPORT_NAME: Record<string, string> = {
   GRU: 'São Paulo/Guarulhos International Airport', SYD: 'Sydney Airport', MEL: 'Melbourne Airport', BNE: 'Brisbane Airport', PER: 'Perth Airport', CNS: 'Cairns Airport',
   AKL: 'Auckland Airport', GUM: 'Guam International Airport',
 };
+
+/** 空港コード → 宿を探すときの都市名（英語） */
+export const AIRPORT_CITY: Record<string, string> = {
+  HND: 'Tokyo', NRT: 'Tokyo', KIX: 'Osaka', ITM: 'Osaka', NGO: 'Nagoya', CTS: 'Sapporo', FUK: 'Fukuoka', OKA: 'Naha',
+  ICN: 'Seoul', GMP: 'Seoul', PUS: 'Busan', TPE: 'Taipei', TSA: 'Taipei', HKG: 'Hong Kong', MFM: 'Macau',
+  PEK: 'Beijing', PKX: 'Beijing', PVG: 'Shanghai', SHA: 'Shanghai', CAN: 'Guangzhou', BKK: 'Bangkok', DMK: 'Bangkok',
+  SIN: 'Singapore', KUL: 'Kuala Lumpur', CGK: 'Jakarta', DPS: 'Bali', MNL: 'Manila', SGN: 'Ho Chi Minh City', HAN: 'Hanoi',
+  DEL: 'New Delhi', BOM: 'Mumbai', DXB: 'Dubai', DOH: 'Doha', AUH: 'Abu Dhabi', IST: 'Istanbul',
+  LHR: 'London', LGW: 'London', STN: 'London', LTN: 'London', MAN: 'Manchester', EDI: 'Edinburgh', DUB: 'Dublin',
+  CDG: 'Paris', ORY: 'Paris', AMS: 'Amsterdam', BRU: 'Brussels', FRA: 'Frankfurt', MUC: 'Munich', BER: 'Berlin',
+  ZRH: 'Zurich', GVA: 'Geneva', VIE: 'Vienna', PRG: 'Prague', BUD: 'Budapest', WAW: 'Warsaw', CPH: 'Copenhagen',
+  ARN: 'Stockholm', OSL: 'Oslo', HEL: 'Helsinki', MAD: 'Madrid', BCN: 'Barcelona', LIS: 'Lisbon', FCO: 'Rome',
+  MXP: 'Milan', VCE: 'Venice', ATH: 'Athens', KEF: 'Reykjavik', JFK: 'New York', EWR: 'New York', LGA: 'New York',
+  BOS: 'Boston', IAD: 'Washington, D.C.', DFW: 'Dallas', DEN: 'Denver', LAX: 'Los Angeles', SFO: 'San Francisco',
+  SEA: 'Seattle', LAS: 'Las Vegas', HNL: 'Honolulu', YVR: 'Vancouver', YYZ: 'Toronto', MEX: 'Mexico City', CUN: 'Cancun',
+  GRU: 'Sao Paulo', SYD: 'Sydney', MEL: 'Melbourne', BNE: 'Brisbane', PER: 'Perth', CNS: 'Cairns', AKL: 'Auckland', GUM: 'Guam',
+};

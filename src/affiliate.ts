@@ -50,11 +50,15 @@ export function activityLinks(title: string, city?: string): FindLink[] {
 export function hotelLinks(city: string, checkin?: string, checkout?: string, domestic = false): FindLink[] {
   if (!city) return [];
   const d = checkin && checkout ? `&checkin=${checkin}&checkout=${checkout}` : '';
-  const rk = `https://search.travel.rakuten.co.jp/ds/hotellist/Japan-${enc(city)}`;
+  // 楽天トラベルのキーワード検索（日付があれば入れる）
+  const [y1, m1, d1] = (checkin ?? '').split('-');
+  const [y2, m2, d2] = (checkout ?? '').split('-');
+  const rkDates = checkin && checkout ? `&f_nen1=${y1}&f_tuki1=${+m1}&f_hi1=${+d1}&f_nen2=${y2}&f_tuki2=${+m2}&f_hi2=${+d2}` : '';
+  const rk = `https://kw.travel.rakuten.co.jp/keyword/Search.do?charset=utf-8&f_query=${enc(city)}${rkDates}`;
   return [
-    ...(domestic ? [{ id: 'rakuten', name: '楽天トラベル', url: PARTNER.rakuten ? `https://hb.afl.rakuten.co.jp/hgc/${PARTNER.rakuten}/?pc=${enc(rk)}&m=${enc(rk)}` : `https://kw.travel.rakuten.co.jp/keyword/Search.do?f_query=${enc(city)}` }] : []),
+    ...(domestic ? [{ id: 'rakuten', name: '楽天トラベル', url: PARTNER.rakuten ? `https://hb.afl.rakuten.co.jp/hgc/${PARTNER.rakuten}/?pc=${enc(rk)}&m=${enc(rk)}` : rk }] : []),
     { id: 'booking', name: 'Booking.com', url: `https://www.booking.com/searchresults.html?ss=${enc(city)}${d}${PARTNER.booking ? `&aid=${PARTNER.booking}` : ''}` },
-    { id: 'agoda', name: 'Agoda', url: `https://www.agoda.com/search?text=${enc(city)}${checkin ? `&checkIn=${checkin}` : ''}${PARTNER.agoda ? `&cid=${PARTNER.agoda}` : ''}` },
+    // Agoda と Trip.com は、都市名の検索リンクが使えない（トップページや0件になる）。提携の承認後に都市IDつきで入れる
   ];
 }
 

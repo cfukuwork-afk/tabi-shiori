@@ -92,6 +92,7 @@ import { SERVER } from './src/sync';
 import { InboxItem } from './src/data';
 import { TZ_CC, countriesOf, flag } from './src/countries';
 import { NEAR, PLACES } from './src/places';
+import { AIRPORT_CITY } from './src/airports';
 import { useCityPhoto } from './src/cityPhoto';
 import { dropVaultImage, keepVaultImage, loadVault, saveVault, unlock, VaultDoc } from './src/vault';
 import { myTz } from './src/airports';
@@ -1697,9 +1698,9 @@ function BookingsTab({ trip, rate, onOpen, onInbox, onDropInbox }: { trip: Trip;
         <PlanTab trip={trip} onOpen={onOpen} />
       </>
     );
-  const city = tripCity(trip.bookings) ?? (trip.bookings.find((b) => b.type === 'flight' && b.to)?.to ? placeQuery(trip.bookings.find((b) => b.type === 'flight' && b.to)!, 'to')?.replace(/\s*(International\s*)?Airport.*$/i, '') : undefined);
   const { start: rs, end: re } = tripRange(trip);
-  const noHotel = !trip.bookings.some((b) => b.type === 'hotel') && rs && re && rs !== re && rs >= todayStr();
+  const city = tripCity(trip.bookings) ?? arrivalCity(trip);
+  const noHotel = !trip.bookings.some((b) => b.type === 'hotel' && !b.cancelled) && rs && re && rs !== re && rs >= todayStr();
   return (
     <>
       {inbox}
@@ -1709,8 +1710,8 @@ function BookingsTab({ trip, rate, onOpen, onInbox, onDropInbox }: { trip: Trip;
           kicker={t('adHotelKicker')}
           title={t('adHotelTitle', { city })}
           sub={t('adHotelSub', { n: daysBetween(rs!, re!) })}
-          actions={[t('adHotelBtn', { site: 'Booking.com' }), 'Agoda']}
           links={hotelLinks(city, rs, re, /[぀-ヿ一-鿿]/.test(city))}
+          actionOf={(l) => t('adHotelBtn', { site: l.name })}
         />
       )}
       <Suggest trip={trip} city={city} />
@@ -2298,8 +2299,8 @@ function Suggest({ trip, city }: { trip: Trip; city?: string }) {
 type AdTile = { key: string; icon: string; bg: string; title: string; sub: string; links: FindLink[] };
 
 /** 写真つきの大きな広告カード（宿がない旅・おすすめの行き先） */
-function AdHero({ photo, kicker, title, sub, links, badge, onClose, top, actions }: {
-  photo?: string; kicker: string; title: string; sub: string; links: FindLink[]; badge?: string; onClose?: () => void; top?: number; actions?: string[];
+function AdHero({ photo, kicker, title, sub, links, badge, onClose, top, actions, actionOf }: {
+  photo?: string; kicker: string; title: string; sub: string; links: FindLink[]; badge?: string; onClose?: () => void; top?: number; actions?: string[]; actionOf?: (l: FindLink) => string;
 }) {
   const url = useCityPhoto(photo);
   if (!links.length) return null;
@@ -2325,7 +2326,7 @@ function AdHero({ photo, kicker, title, sub, links, badge, onClose, top, actions
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
           {links.slice(0, 2).map((l, i) => (
             <Pressable key={l.id} onPress={() => Linking.openURL(l.url)} style={({ pressed }) => [i === 0 ? s.adBtn : s.adBtn2, pressed && { opacity: 0.8 }]}>
-              <Text style={i === 0 ? s.adBtnText : s.adBtn2Text} numberOfLines={1}>{actions?.[i] ?? l.name}</Text>
+              <Text style={i === 0 ? s.adBtnText : s.adBtn2Text} numberOfLines={1}>{actions?.[i] ?? (actionOf ? actionOf(l) : l.name)}</Text>
               {i === 0 && <Icon name="arrow-forward" size={14} color="#15171C" />}
             </Pressable>
           ))}
@@ -2335,6 +2336,16 @@ function AdHero({ photo, kicker, title, sub, links, badge, onClose, top, actions
   );
 }
 const COVER_FALLBACK = require('./assets/covers/window.jpg');
+
+/** 宿がないとき、どの都市で探すか：最初の便の到着空港の都市（帰りの便の到着地＝自宅側は使わない） */
+function arrivalCity(trip: Trip): string | undefined {
+  const fl = trip.bookings.filter((b) => b.type === 'flight' && !b.cancelled && b.to).sort((a, b) => (a.start + (a.startTime ?? '')).localeCompare(b.start + (b.startTime ?? '')));
+  const to = fl[0]?.to?.trim();
+  if (!to) return undefined;
+  const code = to.toUpperCase();
+  if (/^[A-Z]{3}$/.test(code)) return AIRPORT_CITY[code];
+  return to.replace(/\s*(International\s*)?Airport.*$/i, '').replace(/\s*\([A-Z]{3}\)$/, '').trim() || undefined;
+}
 
 // ホームの「〇〇に行きませんか？」：行ったことのある国に近い地域の、まだ行っていない国を日ごとに選ぶ（100か国・500都市）
 let inspireClosed = false; // × で閉じたら、次にアプリを開くまで出さない
