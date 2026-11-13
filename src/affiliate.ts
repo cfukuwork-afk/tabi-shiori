@@ -106,7 +106,37 @@ export function esimLinks(country?: string): FindLink[] {
 }
 
 /** 航空券を探す */
-export const flightLinks = (): FindLink[] => [{ id: 'aviasales', name: 'Aviasales', url: tp('aviasales', 'https://www.aviasales.com/') }];
+// 複数の空港がある都市は都市コードで探す（羽田・成田の両方が出る）
+const METRO: Record<string, string> = { Tokyo: 'TYO', Osaka: 'OSA', Seoul: 'SEL', London: 'LON', Paris: 'PAR', 'New York': 'NYC', Milan: 'MIL', Rome: 'ROM', Stockholm: 'STO', Bangkok: 'BKK', Taipei: 'TPE', Shanghai: 'SHA', Beijing: 'BJS', Washington: 'WAS', Chicago: 'CHI', Sapporo: 'SPK', Nagoya: 'NGO' };
+/** 都市名（日本語でも可）→ 空港・都市コード */
+export function cityIata(city?: string): string | undefined {
+  const en = cityEn(city); if (!en) return undefined;
+  if (METRO[en]) return METRO[en];
+  if (INSPIRE_IATA[en]) return INSPIRE_IATA[en];
+  const hit = Object.entries(AIRPORT_CITY).find(([, c]) => c.toLowerCase() === en.toLowerCase());
+  return hit?.[0];
+}
+// 出発地：いま端末がいる地域（時間帯）から一番使われる都市コードを推定する。ワーホリ中ならその国から探せる
+const TZ_ORIGIN: Record<string, string> = {
+  'Asia/Tokyo': 'TYO', 'Asia/Seoul': 'SEL', 'Asia/Taipei': 'TPE', 'Asia/Hong_Kong': 'HKG', 'Asia/Shanghai': 'SHA', 'Asia/Singapore': 'SIN', 'Asia/Bangkok': 'BKK',
+  'Asia/Kuala_Lumpur': 'KUL', 'Asia/Manila': 'MNL', 'Asia/Ho_Chi_Minh': 'SGN', 'Asia/Jakarta': 'JKT', 'Asia/Kolkata': 'DEL', 'Asia/Dubai': 'DXB',
+  'Europe/London': 'LON', 'Europe/Dublin': 'DUB', 'Europe/Paris': 'PAR', 'Europe/Berlin': 'BER', 'Europe/Amsterdam': 'AMS', 'Europe/Madrid': 'MAD',
+  'Europe/Rome': 'ROM', 'Europe/Lisbon': 'LIS', 'Europe/Vienna': 'VIE', 'Europe/Zurich': 'ZRH', 'Europe/Istanbul': 'IST',
+  'America/New_York': 'NYC', 'America/Chicago': 'CHI', 'America/Los_Angeles': 'LAX', 'America/Toronto': 'YTO', 'America/Vancouver': 'YVR',
+  'Australia/Sydney': 'SYD', 'Australia/Melbourne': 'MEL', 'Australia/Brisbane': 'BNE', 'Australia/Perth': 'PER', 'Pacific/Auckland': 'AKL',
+};
+export function homeIata(): string | undefined {
+  try { return TZ_ORIGIN[Intl.DateTimeFormat().resolvedOptions().timeZone]; } catch { return undefined; }
+}
+const ddmm = (d?: string) => (d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d.slice(8, 10) + d.slice(5, 7) : '');
+/** 航空券：旅の行き先と日程を入れて、検索結果のページを直接開く（例 /search/TYO1512LON22121 = 東京12/15発→ロンドン、12/22帰り、大人1人） */
+export function flightLinks(city?: string, start?: string, end?: string): FindLink[] {
+  const to = cityIata(city), from = homeIata(), d1 = ddmm(start), d2 = ddmm(end);
+  let url = 'https://www.aviasales.com/';
+  if (to && from && from !== to && d1) url = `https://www.aviasales.com/search/${from}${d1}${to}${d2 && end !== start ? d2 : ''}1`;
+  else if (to) url = `https://www.aviasales.com/?destination=${to}`;
+  return [{ id: 'aviasales', name: 'Aviasales', url: tp('aviasales', url) }];
+}
 /** 空港からの送迎 */
 export const transferLinks = (): FindLink[] => [
   { id: 'kiwitaxi', name: 'Kiwitaxi', url: tp('kiwitaxi', 'https://kiwitaxi.com/') },

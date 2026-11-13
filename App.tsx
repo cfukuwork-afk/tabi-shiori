@@ -2272,7 +2272,7 @@ function Suggest({ trip, city }: { trip: Trip; city?: string }) {
   // チェックアウトした日に、あとで電車・飛行機で出発する → 荷物を預ける
   const luggage = hotels.some((h) => h.end && trip.bookings.some((b) => (b.type === 'flight' || b.type === 'train' || b.type === 'bus') && b.start === h.end && (b.startTime ?? '00:00') >= '14:00'));
   const tiles: AdTile[] = [];
-  if (!has('flight') && !has('train')) tiles.push({ key: 'fl', icon: 'airplane', bg: '#2F6BFF', title: t('adFlightT'), sub: t('adFlightS'), links: flightLinks() });
+  if (!has('flight') && !has('train')) tiles.push({ key: 'fl', icon: 'airplane', bg: '#2F6BFF', title: t('adFlightT'), sub: t('adFlightS'), links: flightLinks(city, start, end) });
   if (city) tiles.push({ key: 'act', icon: 'ticket', bg: '#FF5B3A', title: t('adActT', { city }), sub: t('adActS'), links: activityLinks('', city) });
   if (has('flight')) tiles.push({ key: 'tr', icon: 'car-sport', bg: '#00A86B', title: t('adTransferT'), sub: t('adTransferS'), links: transferLinks() });
   if (!has('car') && days >= 3) tiles.push({ key: 'car', icon: 'key', bg: '#7B2FF7', title: t('adCarT', { n: days }), sub: t('adCarS'), links: carLinks() });
