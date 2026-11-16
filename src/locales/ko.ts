@@ -6,7 +6,7 @@ export default {
   noExp: '아직 지출이 없어요', psAbroad: '해외', psBiz: '출장', psBeach: '해변', psCold: '추운 곳', psCamp: '캠핑', psKids: '아이 동반',
   packAbroad: '여권,ESTA·비자,여행자 보험 사본,변환 플러그,eSIM·SIM 카드,신용카드,현지 통화', packBiz: '노트북,노트북 충전기,명함,재킷,서류,이어폰',
   packBeach: '수영복,선크림,선글라스,샌들,모자,래시가드', packCold: '패딩,장갑,목도리,발열 내의,핫팩,립밤', packCamp: '텐트,침낭,랜턴,벌레 퇴치제,보조 배터리,우비', packKids: '기저귀,물티슈,여벌 옷,간식,장난감,아기 수첩',
-  yearTitle: '{y}년 여행 정리', ysTrips: '여행', ysNights: '숙박', ysPlaces: '방문지', ysFlights: '항공편', tzDiff: '시차', depMine: '출발 (내 시간)', arrMine: '도착 (내 시간)',
+  yearTitle: '{y}년 여행 정리', ysTrips: '여행', ysNights: '숙박', ysPlaces: '도시', ysCountries: '나라', ysFlights: '항공편', tzDiff: '시차', depMine: '출발 (내 시간)', arrMine: '도착 (내 시간)',
   sendSettle: '정산을 메신저로 보내기', openInApp: 'Tripfold에서 열기:', memories: '추억', coverHint: '탭해서 사진으로 표지 선택 (길게 눌러 초기화)', photosN: '장',
   journal: '이날의 추억', journalPh: '어떤 하루였나요? 먹은 것, 간 곳, 느낀 점', addMemory: '추억 남기기 (사진·메모)', freeDay: '자유 일정',
   gMorning: '좋은 아침이에요', gDay: '안녕하세요', gEvening: '좋은 저녁이에요', deleteTrip: '이 여행 삭제', paste: '붙여넣기', nextUp: '다음 일정', noNext: '예정된 일정이 없어요',

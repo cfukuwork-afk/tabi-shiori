@@ -1,3 +1,6 @@
+import Svg, { Circle, Path } from 'react-native-svg';
+import { WORLD, WORLD_H, WORLD_SPHERE, WORLD_W } from './src/worldPaths';
+import { projectNE, SMALL_CC, tripPlaces } from './src/visited';
 import { makeDemoTrips } from './src/demo';
 import { StatusBar } from 'expo-status-bar';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -93,7 +96,7 @@ import { findPrice } from './src/parse';
 import { parseItinerary, PlanDraft } from './src/itinerary';
 import { SERVER } from './src/sync';
 import { InboxItem } from './src/data';
-import { TZ_CC, countriesOf, flag } from './src/countries';
+import { TZ_CC, countriesOf, flag, tripCountries } from './src/countries';
 import { NEAR, PLACES } from './src/places';
 import { AIRPORT_CITY, AIRPORT_TZ } from './src/airports';
 import { useCityPhoto } from './src/cityPhoto';
@@ -768,48 +771,72 @@ function statusOf(tr: Trip) {
   return { label: n === 0 ? t('today') : t('daysLeft', { n }), tone: 'pink' as const };
 }
 
-function YearSummary({ trips, rate }: { trips: Trip[]; rate: RateInfo }) {
+function WorldMap({ visited }: { visited: Set<string> }) {
+  // 行った国を色付けした世界地図。小さすぎて見えない国は点で示す
+  const dots = [...visited].filter((cc) => !WORLD[cc] && SMALL_CC[cc]).map((cc) => projectNE(...SMALL_CC[cc]));
+  return (
+    <View style={{ marginTop: 14, aspectRatio: WORLD_W / WORLD_H }}>
+      <Svg width="100%" height="100%" viewBox={`0 0 ${WORLD_W} ${WORLD_H}`}>
+        <Path d={WORLD_SPHERE} fill="rgba(255,255,255,0.04)" />
+        {Object.entries(WORLD).map(([cc, d]) => (
+          <Path key={cc} d={d} fill={visited.has(cc) ? '#FF8FB1' : 'rgba(255,255,255,0.16)'} stroke="rgba(0,0,0,0.25)" strokeWidth={0.6} />
+        ))}
+        {dots.map(([x, y], k) => (
+          <Circle key={k} cx={x} cy={y} r={7} fill="#FF8FB1" stroke="#fff" strokeWidth={1.5} />
+        ))}
+      </Svg>
+    </View>
+  );
+}
+
+function YearSummary({ trips }: { trips: Trip[]; rate: RateInfo }) {
   const y = todayStr().slice(0, 4);
   const mine = trips.filter((tr) => (tripRange(tr).start ?? '').startsWith(y));
   if (!mine.length) return null;
-  const nights = mine.reduce(
-    (a, tr) => a + tr.bookings.filter((b) => b.type === 'hotel' && isDate(b.end)).reduce((x, b) => x + Math.max(0, daysBetween(b.start, b.end!)), 0),
-    0,
-  );
-  const places = new Set<string>();
-  mine.forEach((tr) => tr.bookings.forEach((b) => b.to && b.type !== 'car' && places.add(b.to.split(/[ ,(]/)[0])));
-  const flights = mine.reduce((a, tr) => a + tr.bookings.filter((b) => b.type === 'flight').length, 0);
-  const total = mine.reduce((a, tr) => a + tripTotal(tr, rate), 0);
-  const ever = countriesOf(trips.filter((tr) => isPast(tr) || (tripRange(tr).start ?? '9') <= todayStr()), myTz());
-  const msg = `${t('yearTitle', { y })}\n✈ ${t('ysTrips')} ${mine.length} / ${t('ysNights')} ${nights} / ${t('ysPlaces')} ${places.size} / ${t('ysFlights')} ${flights}${ever.length ? `\n${t('countries')} ${ever.length}  ${ever.map(flag).join('')}` : ''}\n— Tripfold`;
+  // 泊数：ホテルの泊数。ホテルがない旅は日数-1
+  const nights = mine.reduce((a, tr) => {
+    const h = tr.bookings.filter((b) => b.type === 'hotel' && !b.cancelled && isDate(b.end)).reduce((x, b) => x + Math.max(0, daysBetween(b.start, b.end!)), 0);
+    const { start, end } = tripRange(tr);
+    return a + (h || (start && end ? Math.max(0, daysBetween(start, end)) : 0));
+  }, 0);
+  const countries = new Set<string>();
+  const cities = new Map<string, { ja: string; en: string }>();
+  mine.forEach((tr) => {
+    const p = tripPlaces(tr);
+    p.countries.forEach((c) => countries.add(c));
+    p.cities.forEach((v, k) => cities.set(k, v));
+    tripCountries(tr).forEach((c) => countries.add(c));
+  });
+  const cityNames = [...cities.values()].map((c) => (getLang() === 'ja' ? c.ja : c.en));
+  const msg = `${t('yearTitle', { y })}\n${t('ysTrips')} ${mine.length} / ${t('ysCountries')} ${countries.size} / ${t('ysPlaces')} ${cities.size} / ${t('ysNights')} ${nights}${countries.size ? `\n${[...countries].map(flag).join('')}` : ''}${cityNames.length ? `\n${cityNames.join('・')}` : ''}\n— Tripfold`;
   return (
     <>
       <Text style={[s.sec, { marginTop: 14 }]}>{t('yearTitle', { y }).toUpperCase()}</Text>
       <View style={s.yearCard}>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+        <View style={{ flexDirection: 'row' }}>
           {[
             [t('ysTrips'), mine.length],
+            [t('ysCountries'), countries.size],
+            [t('ysPlaces'), cities.size],
             [t('ysNights'), nights],
-            [t('ysPlaces'), places.size],
-            [t('ysFlights'), flights],
           ].map(([k, v]) => (
-            <View key={String(k)} style={{ width: '50%', paddingVertical: 8 }}>
-              <Text style={s.yearNum}>{v}</Text>
-              <Text style={s.passK}>{String(k).toUpperCase()}</Text>
+            <View key={String(k)} style={{ flex: 1, paddingVertical: 6 }}>
+              <Text style={[s.yearNum, { fontSize: 30 }]}>{v}</Text>
+              <Text style={s.passK} numberOfLines={1}>
+                {String(k).toUpperCase()}
+              </Text>
             </View>
           ))}
         </View>
-        {ever.length > 0 && (
-          <View style={{ marginTop: 6 }}>
-            <Text style={s.passK}>{`${t('countries').toUpperCase()}  ${ever.length}`}</Text>
-            <Text style={{ fontSize: 26, letterSpacing: 2, marginTop: 4, lineHeight: 34 }}>{ever.map(flag).join(' ')}</Text>
-          </View>
+        <WorldMap visited={countries} />
+        {cityNames.length > 0 && (
+          <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12.5, fontWeight: '700', marginTop: 10, lineHeight: 19 }}>
+            {[...countries].map(flag).join(' ')}
+            {'  '}
+            {cityNames.join('・')}
+          </Text>
         )}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
-          <View>
-            <Text style={s.passK}>{t('total').toUpperCase()}</Text>
-            <Text style={[s.passV, { fontSize: 20 }]}>{fmtMoney(Math.round(total), rate.base)}</Text>
-          </View>
+        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12 }}>
           <Pressable onPress={() => Share.share({ message: msg })} style={s.yearShare}>
             <Icon name="share-outline" size={16} color="#15171C" />
             <Text style={[s.chipText, { color: '#15171C' }]}>{t('share')}</Text>

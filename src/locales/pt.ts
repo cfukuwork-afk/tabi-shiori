@@ -6,7 +6,7 @@ export default {
   noExp: 'Nenhum gasto ainda', psAbroad: 'Exterior', psBiz: 'Trabalho', psBeach: 'Praia', psCold: 'Frio', psCamp: 'Camping', psKids: 'Com crianças',
   packAbroad: 'Passaporte,ESTA / visto,Seguro viagem,Adaptador de tomada,eSIM / chip,Cartão de crédito,Dinheiro local', packBiz: 'Notebook,Carregador do notebook,Cartões de visita,Blazer,Documentos,Fones',
   packBeach: 'Roupa de banho,Protetor solar,Óculos de sol,Sandálias,Chapéu,Camiseta UV', packCold: 'Jaqueta,Luvas,Cachecol,Roupa térmica,Aquecedor de mãos,Protetor labial', packCamp: 'Barraca,Saco de dormir,Lanterna,Repelente,Bateria externa,Capa de chuva', packKids: 'Fraldas,Lenços umedecidos,Roupa extra,Lanches,Brinquedos,Caderneta de saúde',
-  yearTitle: 'Seu {y} em viagens', ysTrips: 'Viagens', ysNights: 'Noites', ysPlaces: 'Lugares', ysFlights: 'Voos', tzDiff: 'Fuso', depMine: 'Partida (seu horário)', arrMine: 'Chegada (seu horário)',
+  yearTitle: 'Seu {y} em viagens', ysTrips: 'Viagens', ysNights: 'Noites', ysPlaces: 'Cidades', ysCountries: 'Países', ysFlights: 'Voos', tzDiff: 'Fuso', depMine: 'Partida (seu horário)', arrMine: 'Chegada (seu horário)',
   sendSettle: 'Enviar o acerto', openInApp: 'Abrir no Tripfold:', memories: 'Memórias', coverHint: 'Toque para escolher uma capa (segure para remover)', photosN: 'fotos',
   journal: 'Memórias do dia', journalPh: 'Como foi o dia? O que comeu, aonde foi, como se sentiu', addMemory: 'Adicionar memória (fotos e notas)', freeDay: 'Dia livre',
   gMorning: 'BOM DIA', gDay: 'OLÁ', gEvening: 'BOA NOITE', deleteTrip: 'Excluir esta viagem', paste: 'Colar', nextUp: 'A seguir', noNext: 'Nada programado ainda',

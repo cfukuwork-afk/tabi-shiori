@@ -6,7 +6,7 @@ export default {
   noExp: '還沒有花費', psAbroad: '出國', psBiz: '出差', psBeach: '海邊', psCold: '寒冷地區', psCamp: '露營', psKids: '帶孩子',
   packAbroad: '護照,簽證,旅行保險單,轉換插頭,eSIM·SIM卡,信用卡,當地貨幣', packBiz: '膝上型電腦,電腦充電器,名片,外套,資料,耳機',
   packBeach: '泳衣,防曬霜,太陽鏡,涼鞋,帽子,防曬衣', packCold: '羽絨服,手套,圍巾,保暖內衣,暖寶寶,潤唇膏', packCamp: '帳篷,睡袋,營地燈,驅蟲劑,充電寶,雨具', packKids: '紙尿褲,溼巾,替換衣物,零食,玩具,疫苗本',
-  yearTitle: '{y}年旅行總結', ysTrips: '旅行', ysNights: '住宿', ysPlaces: '去過的地方', ysFlights: '航班', tzDiff: '時差', depMine: '出發（我的時間）', arrMine: '到達（我的時間）',
+  yearTitle: '{y}年旅行總結', ysTrips: '旅行', ysNights: '住宿', ysPlaces: '城市', ysCountries: '國家', ysFlights: '航班', tzDiff: '時差', depMine: '出發（我的時間）', arrMine: '到達（我的時間）',
   sendSettle: '透過聊天軟體傳送結算', openInApp: '在 Tripfold 中開啟：', memories: '回憶', coverHint: '點按從照片中選擇封面（長按恢復）', photosN: '張',
   journal: '這一天的回憶', journalPh: '這一天過得怎麼樣？吃了什麼、去了哪裡、有什麼感受', addMemory: '記錄回憶（照片·文字）', freeDay: '自由活動',
   gMorning: '早上好', gDay: '你好', gEvening: '晚上好', deleteTrip: '刪除此旅行', paste: '貼上', nextUp: '下一個行程', noNext: '暫無行程',

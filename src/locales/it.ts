@@ -6,7 +6,7 @@ export default {
   noExp: 'Ancora nessuna spesa', psAbroad: 'Estero', psBiz: 'Lavoro', psBeach: 'Mare', psCold: 'Freddo', psCamp: 'Campeggio', psKids: 'Con bambini',
   packAbroad: 'Passaporto,ESTA / visto,Assicurazione di viaggio,Adattatore,eSIM / SIM,Carta di credito,Contanti locali', packBiz: 'Portatile,Caricatore del portatile,Biglietti da visita,Giacca,Documenti,Auricolari',
   packBeach: 'Costume,Crema solare,Occhiali da sole,Sandali,Cappello,Maglia anti-UV', packCold: 'Piumino,Guanti,Sciarpa,Intimo termico,Scaldamani,Burrocacao', packCamp: 'Tenda,Sacco a pelo,Lanterna,Antizanzare,Power bank,Abbigliamento antipioggia', packKids: 'Pannolini,Salviette,Cambio vestiti,Merende,Giochi,Libretto sanitario',
-  yearTitle: 'Il tuo {y} in viaggio', ysTrips: 'Viaggi', ysNights: 'Notti', ysPlaces: 'Luoghi', ysFlights: 'Voli', tzDiff: 'Fuso', depMine: 'Partenza (tua ora)', arrMine: 'Arrivo (tua ora)',
+  yearTitle: 'Il tuo {y} in viaggio', ysTrips: 'Viaggi', ysNights: 'Notti', ysPlaces: 'Città', ysCountries: 'Paesi', ysFlights: 'Voli', tzDiff: 'Fuso', depMine: 'Partenza (tua ora)', arrMine: 'Arrivo (tua ora)',
   sendSettle: 'Invia i conti', openInApp: 'Apri in Tripfold:', memories: 'Ricordi', coverHint: 'Tocca per scegliere una copertina (tieni premuto per rimuoverla)', photosN: 'foto',
   journal: 'Ricordi del giorno', journalPh: 'Com’è andata? Cosa hai mangiato, dove sei stato, come ti sei sentito', addMemory: 'Aggiungi un ricordo (foto e note)', freeDay: 'Giorno libero',
   gMorning: 'BUONGIORNO', gDay: 'CIAO', gEvening: 'BUONASERA', deleteTrip: 'Elimina questo viaggio', paste: 'Incolla', nextUp: 'Prossimo', noNext: 'Ancora niente in programma',

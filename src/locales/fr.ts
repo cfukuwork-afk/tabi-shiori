@@ -6,7 +6,7 @@ export default {
   noExp: 'Aucune dépense pour l’instant', psAbroad: 'Étranger', psBiz: 'Travail', psBeach: 'Plage', psCold: 'Froid', psCamp: 'Camping', psKids: 'Avec enfants',
   packAbroad: 'Passeport,ESTA / visa,Assurance voyage,Adaptateur de prise,eSIM / carte SIM,Carte bancaire,Espèces locales', packBiz: 'Ordinateur,Chargeur d’ordinateur,Cartes de visite,Veste,Documents,Écouteurs',
   packBeach: 'Maillot de bain,Crème solaire,Lunettes de soleil,Sandales,Chapeau,T-shirt anti-UV', packCold: 'Doudoune,Gants,Écharpe,Sous-vêtements thermiques,Chaufferettes,Baume à lèvres', packCamp: 'Tente,Sac de couchage,Lampe,Anti-moustique,Batterie externe,Vêtements de pluie', packKids: 'Couches,Lingettes,Vêtements de rechange,Goûters,Jouets,Carnet de santé',
-  yearTitle: '{y} en voyages', ysTrips: 'Voyages', ysNights: 'Nuits', ysPlaces: 'Lieux', ysFlights: 'Vols', tzDiff: 'Décalage', depMine: 'Départ (votre heure)', arrMine: 'Arrivée (votre heure)',
+  yearTitle: '{y} en voyages', ysTrips: 'Voyages', ysNights: 'Nuits', ysPlaces: 'Villes', ysCountries: 'Pays', ysFlights: 'Vols', tzDiff: 'Décalage', depMine: 'Départ (votre heure)', arrMine: 'Arrivée (votre heure)',
   sendSettle: 'Envoyer les comptes', openInApp: 'Ouvrir dans Tripfold :', memories: 'Souvenirs', coverHint: 'Touchez pour choisir une couverture (appui long pour la retirer)', photosN: 'photos',
   journal: 'Souvenirs du jour', journalPh: 'Comment était la journée ? Ce que vous avez mangé, vu, ressenti', addMemory: 'Ajouter un souvenir (photos et notes)', freeDay: 'Journée libre',
   gMorning: 'BONJOUR', gDay: 'BONJOUR', gEvening: 'BONSOIR', deleteTrip: 'Supprimer ce voyage', paste: 'Coller', nextUp: 'À venir', noNext: 'Rien de prévu pour l’instant',

@@ -6,7 +6,7 @@ export default {
   noExp: 'Noch keine Ausgaben', psAbroad: 'Ausland', psBiz: 'Geschäftlich', psBeach: 'Strand', psCold: 'Kälte', psCamp: 'Camping', psKids: 'Mit Kindern',
   packAbroad: 'Reisepass,ESTA / Visum,Reiseversicherung,Steckdosenadapter,eSIM / SIM-Karte,Kreditkarte,Bargeld vor Ort', packBiz: 'Laptop,Laptop-Ladegerät,Visitenkarten,Sakko,Unterlagen,Kopfhörer',
   packBeach: 'Badesachen,Sonnencreme,Sonnenbrille,Sandalen,Hut,UV-Shirt', packCold: 'Daunenjacke,Handschuhe,Schal,Thermowäsche,Taschenwärmer,Lippenbalsam', packCamp: 'Zelt,Schlafsack,Laterne,Mückenspray,Powerbank,Regenkleidung', packKids: 'Windeln,Feuchttücher,Wechselkleidung,Snacks,Spielzeug,Impfpass',
-  yearTitle: 'Reisejahr {y}', ysTrips: 'Reisen', ysNights: 'Nächte', ysPlaces: 'Orte', ysFlights: 'Flüge', tzDiff: 'Zeitunterschied', depMine: 'Abflug (deine Zeit)', arrMine: 'Ankunft (deine Zeit)',
+  yearTitle: 'Reisejahr {y}', ysTrips: 'Reisen', ysNights: 'Nächte', ysPlaces: 'Städte', ysCountries: 'Länder', ysFlights: 'Flüge', tzDiff: 'Zeitunterschied', depMine: 'Abflug (deine Zeit)', arrMine: 'Ankunft (deine Zeit)',
   sendSettle: 'Abrechnung senden', openInApp: 'In Tripfold öffnen:', memories: 'Erinnerungen', coverHint: 'Tippen, um ein Titelbild zu wählen (lange drücken zum Zurücksetzen)', photosN: 'Fotos',
   journal: 'Erinnerungen des Tages', journalPh: 'Wie war der Tag? Was du gegessen, gesehen, gefühlt hast', addMemory: 'Erinnerung hinzufügen (Fotos & Notizen)', freeDay: 'Freier Tag',
   gMorning: 'GUTEN MORGEN', gDay: 'HALLO', gEvening: 'GUTEN ABEND', deleteTrip: 'Diese Reise löschen', paste: 'Einfügen', nextUp: 'Als Nächstes', noNext: 'Noch nichts geplant',
