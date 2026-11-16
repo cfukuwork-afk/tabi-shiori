@@ -1,3 +1,4 @@
+import { makeDemoTrips } from './src/demo';
 import { StatusBar } from 'expo-status-bar';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
@@ -444,6 +445,9 @@ function Main() {
           onNew={() => setNewTrip(true)}
           onSettings={() => setShowSettings(true)}
           onOpenBooking={(tripId, id) => setDetail({ tripId, id })}
+          onDemo={() =>
+            updateTrips((all) => (all.some((tr) => tr.id.startsWith('tpl_')) ? all.filter((tr) => !tr.id.startsWith('tpl_')) : [...makeDemoTrips(todayStr()), ...all]))
+          }
         />
       )}
 
@@ -677,6 +681,7 @@ function Home({
   onNew,
   onSettings,
   onOpenBooking,
+  onDemo,
 }: {
   trips: Trip[];
   rate: RateInfo;
@@ -684,6 +689,7 @@ function Home({
   onNew: () => void;
   onSettings: () => void;
   onOpenBooking: (tripId: string, id: string) => void;
+  onDemo?: () => void;
 }) {
   const next = useMemo(() => nextUp(trips), [trips]);
   const [tickets, setTickets] = useState<string[] | null>(null);
@@ -741,6 +747,13 @@ function Home({
       <Inspire trips={trips} />
       <Memories trips={sorted.filter((tr) => isPast(tr))} onOpen={onOpen} />
       <YearSummary trips={trips} rate={rate} />
+      {Platform.OS === 'web' && onDemo && (
+        // Web確認版だけ：おすすめのしおり4つ（実在の場所・合計100件）を入れる・消す
+        <Pressable style={[s.ghostBtn, { alignSelf: 'center', marginTop: 24 }]} onPress={onDemo}>
+          <Icon name="flask-outline" size={16} />
+          <Text style={s.ghostBtnText}>{trips.some((tr) => tr.id.startsWith('tpl_')) ? 'テスト用のしおりを消す' : 'おすすめのしおり4つ（100件）を入れる'}</Text>
+        </Pressable>
+      )}
     </ScrollView>
   );
 }
