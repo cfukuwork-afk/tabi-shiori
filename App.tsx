@@ -211,6 +211,12 @@ const pickImage = async () => {
   return !r.canceled && r.assets?.[0] ? keepImage(r.assets[0].uri) : null;
 };
 
+/* ---------- 元に戻す（まとめて追加・削除のあとに出す） ---------- */
+type UndoSnap = { tripId: string; label: string; prev: Pick<Trip, 'bookings' | 'expenses' | 'inbox'>; at: number };
+const undoBus: { push?: (u: Omit<UndoSnap, 'at'>) => void } = {};
+const snapOf = (tr: Trip): Pick<Trip, 'bookings' | 'expenses' | 'inbox'> => ({ bookings: tr.bookings, expenses: tr.expenses, inbox: tr.inbox });
+const pushUndo = (tr: Trip | undefined, label: string) => tr && undoBus.push?.({ tripId: tr.id, label, prev: snapOf(tr) });
+
 export default function App() {
   return (
     <SafeAreaProvider>
@@ -367,6 +373,18 @@ function Main() {
     return () => clearTimeout(tm);
   }, [dirtyKey]);
   const updateTrip = (id: string, fn: (t: Trip) => Trip) => updateTrips((all) => all.map((x) => (x.id === id ? fn(x) : x)));
+  const [undo, setUndo] = useState<UndoSnap | null>(null);
+  useEffect(() => {
+    undoBus.push = (u) => setUndo({ ...u, at: Date.now() });
+    return () => {
+      undoBus.push = undefined;
+    };
+  }, []);
+  useEffect(() => {
+    if (!undo) return;
+    const tm = setTimeout(() => setUndo((x) => (x === undo ? null : x)), 12000);
+    return () => clearTimeout(tm);
+  }, [undo]);
   const changeSettings = async (s: Settings) => {
     if (s.notify && !settings.notify) askPermission();
     setSettings(s);
@@ -522,6 +540,7 @@ function Main() {
           onClose={() => setAdding(null)}
           onSave={(b) => {
             const inboxId = adding.initial?.inboxId;
+            pushUndo(trips.find((x) => x.id === adding.tripId), t('undoSaved'));
             updateTrip(adding.tripId, (tr) => ({
               ...tr,
               bookings: tr.bookings.some((x) => x.id === b.id) ? tr.bookings.map((x) => (x.id === b.id ? b : x)) : [...tr.bookings, b],
@@ -531,6 +550,7 @@ function Main() {
           }}
           onSaveMany={(list) => {
             // 2回押しても同じ予定が二重にならないように
+            pushUndo(trips.find((x) => x.id === adding.tripId), t('undoAdded', { n: list.length }));
             updateTrip(adding.tripId, (tr) => ({ ...tr, bookings: [...tr.bookings, ...list.filter((x) => !tr.bookings.some((y) => y.id === x.id))] }));
             setAdding(null);
           }}
@@ -555,6 +575,7 @@ function Main() {
             setAdding({ tripId: detailTrip.id, edit: detailBooking });
           }}
           onDelete={() => {
+            pushUndo(detailTrip, t('undoDeleted', { n: 1 }));
             updateTrip(detailTrip.id, (tr) => ({ ...tr, bookings: tr.bookings.filter((x) => x.id !== detailBooking.id) }));
             setDetail(null);
           }}
@@ -562,6 +583,21 @@ function Main() {
         />
       )}
 
+      {!!undo && (
+        <View style={[s.undoBar, { bottom: insets.bottom + 96 }]}>
+          <Text style={s.undoText} numberOfLines={1}>{undo.label}</Text>
+          <Pressable
+            hitSlop={10}
+            onPress={() => {
+              const u = undo;
+              setUndo(null);
+              updateTrip(u.tripId, (tr) => ({ ...tr, ...u.prev }));
+            }}
+          >
+            <Text style={s.undoBtn}>{t('undoBtn')}</Text>
+          </Pressable>
+        </View>
+      )}
       {settleIn && (
         <Sheet visible onClose={() => setSettleIn(null)}>
           <Text style={s.kicker}>{t('settle').toUpperCase()}</Text>
@@ -1072,10 +1108,10 @@ function TripScreen({
         )}
         {tab === 'plan' && <PlanTab trip={trip} wx={wx} onOpen={onOpen} onJournal={setJournalDay} onAddPlan={onAddPlan} />}
         {tab === 'bookings' && (
-          <BookingsTab trip={trip} rate={rate} onOpen={onOpen} onInbox={onInbox} onDropInbox={(id) => onChange((tr) => ({ ...tr, inbox: (tr.inbox ?? []).filter((x) => x.id !== id) }))} />
+          <BookingsTab trip={trip} rate={rate} onOpen={onOpen} onChange={onChange} onInbox={onInbox} onDropInbox={(id) => onChange((tr) => ({ ...tr, inbox: (tr.inbox ?? []).filter((x) => x.id !== id) }))} />
         )}
         {tab === 'map' && <MapTab trip={trip} onOpen={onOpen} />}
-        {tab === 'money' && <MoneyTab trip={trip} rate={rate} onChange={onChange} />}
+        {tab === 'money' && <MoneyTab trip={trip} rate={rate} onChange={onChange} onShare={onShare} />}
         {tab === 'pack' && <PackTab trip={trip} onChange={onChange} />}
         <Pressable onPress={() => (sure ? onDelete() : setSure(true))} style={{ alignSelf: 'center', marginTop: 30 }}>
           <Text style={{ color: sure ? C.pink : C.sub, fontWeight: '700' }}>{sure ? t('deleteSure') : t('deleteTrip')}</Text>
@@ -1684,7 +1720,44 @@ function InboxBox({ items, onOpen, onDrop }: { items: InboxItem[]; onOpen: (it: 
   );
 }
 
-function BookingsTab({ trip, rate, onOpen, onInbox, onDropInbox }: { trip: Trip; rate: RateInfo; onOpen: (b: Booking) => void; onInbox: (it: InboxItem) => void; onDropInbox: (id: string) => void }) {
+function SelBar({ sel, setSel, all, onDelete }: { sel: string[] | null; setSel: (v: string[] | null) => void; all: string[]; onDelete: (ids: string[]) => void }) {
+  if (!sel)
+    return (
+      <View style={s.selBar}>
+        <Pressable hitSlop={8} onPress={() => setSel([])}>
+          <Text style={s.selLink}>☑︎ {t('selMode')}</Text>
+        </Pressable>
+      </View>
+    );
+  return (
+    <View style={s.selBar}>
+      <Pressable hitSlop={8} onPress={() => setSel(sel.length === all.length ? [] : all)}>
+        <Text style={s.selLink}>{t('selAll')}</Text>
+      </Pressable>
+      <Pressable hitSlop={8} onPress={() => setSel(null)}>
+        <Text style={s.selLink}>{t('selCancel')}</Text>
+      </Pressable>
+      <Pressable
+        disabled={!sel.length}
+        style={[s.smallBtn, { width: undefined, paddingHorizontal: 12, backgroundColor: C.pink }, !sel.length && { opacity: 0.35 }]}
+        onPress={() => {
+          onDelete(sel);
+          setSel(null);
+        }}
+      >
+        <Text style={[s.smallBtnText, { fontSize: 13 }]}>{t('delSelected', { n: sel.length })}</Text>
+      </Pressable>
+    </View>
+  );
+}
+const SelDot = ({ on }: { on: boolean }) => (
+  <View style={{ marginRight: 10 }}>
+    <Icon name={on ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={on ? C.pink : C.sub} />
+  </View>
+);
+
+function BookingsTab({ trip, rate, onOpen, onInbox, onDropInbox, onChange }: { trip: Trip; rate: RateInfo; onOpen: (b: Booking) => void; onInbox: (it: InboxItem) => void; onDropInbox: (id: string) => void; onChange: (fn: (t: Trip) => Trip) => void }) {
+  const [sel, setSel] = useState<string[] | null>(null);
   const inbox = <InboxBox items={trip.inbox ?? []} onOpen={onInbox} onDrop={onDropInbox} />;
   if (!trip.bookings.length)
     return (
@@ -1710,6 +1783,15 @@ function BookingsTab({ trip, rate, onOpen, onInbox, onDropInbox }: { trip: Trip;
         />
       )}
       <Suggest trip={trip} city={city} />
+      <SelBar
+        sel={sel}
+        setSel={setSel}
+        all={trip.bookings.map((b) => b.id)}
+        onDelete={(ids) => {
+          pushUndo(trip, t('undoDeleted', { n: ids.length }));
+          onChange((tr) => ({ ...tr, bookings: tr.bookings.filter((b) => !ids.includes(b.id)) }));
+        }}
+      />
       {TYPES.filter((ty) => trip.bookings.some((b) => b.type === ty.id)).map((ty) => (
         <View key={ty.id} style={{ marginBottom: 14 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 18, marginBottom: 8 }}>
@@ -1721,7 +1803,13 @@ function BookingsTab({ trip, rate, onOpen, onInbox, onDropInbox }: { trip: Trip;
               .filter((b) => b.type === ty.id)
               .sort((a, b) => (a.start + (a.startTime ?? '')).localeCompare(b.start + (b.startTime ?? '')))
               .map((b, i) => (
-                <Pressable key={b.id} onPress={() => onOpen(b)} style={[s.tlRow, i > 0 && s.tlLine]}>
+                <Pressable
+                  key={b.id}
+                  onPress={() => (sel ? setSel(sel.includes(b.id) ? sel.filter((x) => x !== b.id) : [...sel, b.id]) : onOpen(b))}
+                  onLongPress={() => !sel && setSel([b.id])}
+                  style={[s.tlRow, i > 0 && s.tlLine, { alignItems: 'center' }]}
+                >
+                  {!!sel && <SelDot on={sel.includes(b.id)} />}
                   <View style={{ flex: 1 }}>
                     <Text style={[s.tlTitle, b.cancelled && s.cancelled]} numberOfLines={2}>
                       {b.title || typeName(b.type)}
@@ -1750,7 +1838,7 @@ function BookingsTab({ trip, rate, onOpen, onInbox, onDropInbox }: { trip: Trip;
   );
 }
 
-function MoneyTab({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onChange: (fn: (t: Trip) => Trip) => void }) {
+function MoneyTab({ trip, rate, onChange, onShare }: { trip: Trip; rate: RateInfo; onChange: (fn: (t: Trip) => Trip) => void; onShare: () => void }) {
   const total = tripTotal(trip, rate);
   const [name, setName] = useState('');
   const [delM, setDelM] = useState<string | null>(null);
@@ -1851,6 +1939,18 @@ function MoneyTab({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onChan
             <Text style={s.smallBtnText}>＋</Text>
           </Pressable>
         </View>
+        <Pressable
+          style={[s.secondary, { marginTop: 12 }]}
+          onPress={() =>
+            trip.share
+              ? Share.share({ message: `${t('askPayMsg', { name: bracket(trip.name) })}\n${SERVER}/s/${trip.share.code}?c=${rate.base}` })
+              : onShare()
+          }
+        >
+          <Icon name="link-outline" size={17} />
+          <Text style={s.secondaryText}>{t('askPayLink')}</Text>
+        </Pressable>
+        <Text style={[s.hint, { fontSize: 11, marginTop: 4, lineHeight: 16 }]}>{trip.share ? t('askPayHint') : `${t('askPayHint')} ${t('askPayNeedShare')}`}</Text>
       </View>
 
       {trip.members.length > 1 && (
@@ -1998,6 +2098,7 @@ function ExpenseBox({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onCh
   const [photo, setPhoto] = useState<string | undefined>();
   const [ocrMsg, setOcrMsg] = useState('');
   const [reading, setReading] = useState(false);
+  const [sel, setSel] = useState<string[] | null>(null);
   const autoRate = cur !== rate.base ? toHome(1, cur, rate) : 1;
   const add = () => {
     const v = parseFloat(amt);
@@ -2099,8 +2200,23 @@ function ExpenseBox({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onCh
         <Text style={s.hint}>{t('noExp')}</Text>
       ) : (
         <>
+          <SelBar
+            sel={sel}
+            setSel={setSel}
+            all={list.slice(0, 30).map((e) => e.id)}
+            onDelete={(ids) => {
+              pushUndo(trip, t('undoDeleted', { n: ids.length }));
+              onChange((tr) => ({ ...tr, expenses: (tr.expenses ?? []).filter((x) => !ids.includes(x.id)) }));
+            }}
+          />
           {list.slice(0, 30).map((e) => (
-            <Pressable key={e.id} onLongPress={() => onChange((tr) => ({ ...tr, expenses: (tr.expenses ?? []).filter((x) => x.id !== e.id) }))} style={s.expRow}>
+            <Pressable
+              key={e.id}
+              onLongPress={() => !sel && setSel([e.id])}
+              onPress={() => sel && setSel(sel.includes(e.id) ? sel.filter((x) => x !== e.id) : [...sel, e.id])}
+              style={[s.expRow, { alignItems: 'center' }]}
+            >
+              {!!sel && <SelDot on={sel.includes(e.id)} />}
               <View style={s.expIcon}>
                 <Icon name={EXP_CATS.find((x) => x.id === e.cat)?.icon ?? 'ellipsis-horizontal'} size={15} />
               </View>
@@ -3644,6 +3760,11 @@ function makeStyles() {
   avatarText: { color: C.onInk, fontWeight: '900', fontSize: 12 },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 5 },
   check: { width: 24, height: 24, borderRadius: 7, borderWidth: 1.5, borderColor: C.sub, alignItems: 'center', justifyContent: 'center' },
+  undoBar: { position: 'absolute', left: 16, right: 16, zIndex: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, backgroundColor: C.ink, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 13, ...shadow, shadowOpacity: 0.25 },
+  undoText: { color: C.onInk, fontWeight: '700', flexShrink: 1 },
+  undoBtn: { color: '#FFC94D', fontWeight: '900' },
+  selBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 14, marginTop: 10 },
+  selLink: { color: C.sub, fontWeight: '800', fontSize: 13 },
   fab: { position: 'absolute', bottom: 34, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.ink, borderRadius: 30, paddingHorizontal: 24, paddingVertical: 16, ...shadow, shadowOpacity: 0.2 },
   fabText: { color: C.onInk, fontWeight: '800', fontSize: 15 },
   sheetWrap: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(21,23,28,0.35)' },
