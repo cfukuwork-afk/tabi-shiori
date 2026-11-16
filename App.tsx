@@ -212,10 +212,24 @@ const pickImage = async () => {
 };
 
 /* ---------- 元に戻す（まとめて追加・削除のあとに出す） ---------- */
-type UndoSnap = { tripId: string; label: string; prev: Pick<Trip, 'bookings' | 'expenses' | 'inbox'>; at: number };
+// その操作で変わった分だけを記録する（共有中に相手が足した分は消さない）
+type UndoOp = { key: 'bookings' | 'expenses' | 'inbox' | 'checklist'; remove?: string[]; put?: { id: string }[] };
+type UndoSnap = { tripId: string; label: string; ops: UndoOp[]; at: number };
 const undoBus: { push?: (u: Omit<UndoSnap, 'at'>) => void } = {};
-const snapOf = (tr: Trip): Pick<Trip, 'bookings' | 'expenses' | 'inbox'> => ({ bookings: tr.bookings, expenses: tr.expenses, inbox: tr.inbox });
-const pushUndo = (tr: Trip | undefined, label: string) => tr && undoBus.push?.({ tripId: tr.id, label, prev: snapOf(tr) });
+const pushUndo = (tripId: string | undefined, label: string, ops: UndoOp[]) => tripId && ops.length && undoBus.push?.({ tripId, label, ops });
+function applyUndo(tr: Trip, ops: UndoOp[]): Trip {
+  const out: any = { ...tr };
+  for (const op of ops) {
+    let arr: any[] = [...((tr as any)[op.key] ?? [])].filter((x) => !op.remove?.includes(x.id));
+    for (const it of op.put ?? []) {
+      const i = arr.findIndex((x) => x.id === it.id);
+      if (i >= 0) arr[i] = it;
+      else arr = op.key === 'expenses' || op.key === 'inbox' ? [it, ...arr] : [...arr, it];
+    }
+    out[op.key] = arr;
+  }
+  return out;
+}
 
 export default function App() {
   return (
@@ -540,7 +554,13 @@ function Main() {
           onClose={() => setAdding(null)}
           onSave={(b) => {
             const inboxId = adding.initial?.inboxId;
-            pushUndo(trips.find((x) => x.id === adding.tripId), t('undoSaved'));
+            const tr0 = trips.find((x) => x.id === adding.tripId);
+            const old = tr0?.bookings.find((x) => x.id === b.id);
+            const inboxItem = inboxId ? tr0?.inbox?.find((x) => x.id === inboxId) : undefined;
+            pushUndo(adding.tripId, old ? t('undoSaved') : t('undoAdded', { n: 1 }), [
+              old ? { key: 'bookings', put: [old] } : { key: 'bookings', remove: [b.id] },
+              ...(inboxItem ? [{ key: 'inbox' as const, put: [inboxItem] }] : []),
+            ]);
             updateTrip(adding.tripId, (tr) => ({
               ...tr,
               bookings: tr.bookings.some((x) => x.id === b.id) ? tr.bookings.map((x) => (x.id === b.id ? b : x)) : [...tr.bookings, b],
@@ -550,7 +570,9 @@ function Main() {
           }}
           onSaveMany={(list) => {
             // 2回押しても同じ予定が二重にならないように
-            pushUndo(trips.find((x) => x.id === adding.tripId), t('undoAdded', { n: list.length }));
+            const have = trips.find((x) => x.id === adding.tripId)?.bookings ?? [];
+            const fresh = list.filter((x) => !have.some((y) => y.id === x.id));
+            pushUndo(adding.tripId, t('undoAdded', { n: fresh.length }), [{ key: 'bookings', remove: fresh.map((x) => x.id) }]);
             updateTrip(adding.tripId, (tr) => ({ ...tr, bookings: [...tr.bookings, ...list.filter((x) => !tr.bookings.some((y) => y.id === x.id))] }));
             setAdding(null);
           }}
@@ -575,11 +597,16 @@ function Main() {
             setAdding({ tripId: detailTrip.id, edit: detailBooking });
           }}
           onDelete={() => {
-            pushUndo(detailTrip, t('undoDeleted', { n: 1 }));
+            pushUndo(detailTrip.id, t('undoDeleted', { n: 1 }), [{ key: 'bookings', put: [detailBooking] }]);
             updateTrip(detailTrip.id, (tr) => ({ ...tr, bookings: tr.bookings.filter((x) => x.id !== detailBooking.id) }));
             setDetail(null);
           }}
-          onUpdate={(nb) => updateTrip(detailTrip.id, (tr) => ({ ...tr, bookings: tr.bookings.map((x) => (x.id === nb.id ? nb : x)) }))}
+          onUpdate={(nb) => {
+            // 写真・ファイルを長押しで消したときは元に戻せるように
+            if ((nb.photos?.length ?? 0) < (detailBooking.photos?.length ?? 0) || (nb.files?.length ?? 0) < (detailBooking.files?.length ?? 0))
+              pushUndo(detailTrip.id, t('undoDeleted', { n: 1 }), [{ key: 'bookings', put: [detailBooking] }]);
+            updateTrip(detailTrip.id, (tr) => ({ ...tr, bookings: tr.bookings.map((x) => (x.id === nb.id ? nb : x)) }));
+          }}
         />
       )}
 
@@ -591,7 +618,7 @@ function Main() {
             onPress={() => {
               const u = undo;
               setUndo(null);
-              updateTrip(u.tripId, (tr) => ({ ...tr, ...u.prev }));
+              updateTrip(u.tripId, (tr) => applyUndo(tr, u.ops));
             }}
           >
             <Text style={s.undoBtn}>{t('undoBtn')}</Text>
@@ -1108,7 +1135,11 @@ function TripScreen({
         )}
         {tab === 'plan' && <PlanTab trip={trip} wx={wx} onOpen={onOpen} onJournal={setJournalDay} onAddPlan={onAddPlan} onChange={onChange} />}
         {tab === 'bookings' && (
-          <BookingsTab trip={trip} rate={rate} onOpen={onOpen} onChange={onChange} onInbox={onInbox} onDropInbox={(id) => onChange((tr) => ({ ...tr, inbox: (tr.inbox ?? []).filter((x) => x.id !== id) }))} />
+          <BookingsTab trip={trip} rate={rate} onOpen={onOpen} onChange={onChange} onInbox={onInbox} onDropInbox={(id) => {
+            const it = trip.inbox?.find((x) => x.id === id);
+            if (it) pushUndo(trip.id, t('undoDeleted', { n: 1 }), [{ key: 'inbox', put: [it] }]);
+            onChange((tr) => ({ ...tr, inbox: (tr.inbox ?? []).filter((x) => x.id !== id) }));
+          }} />
         )}
         {tab === 'map' && <MapTab trip={trip} onOpen={onOpen} />}
         {tab === 'money' && <MoneyTab trip={trip} rate={rate} onChange={onChange} onShare={onShare} />}
@@ -1609,7 +1640,7 @@ function PlanTab({ trip, wx, onOpen, onJournal, onAddPlan, onChange }: { trip: T
             setSel={setSel}
             all={trip.bookings.map((b) => b.id)}
             onDelete={(ids) => {
-              pushUndo(trip, t('undoDeleted', { n: ids.length }));
+              pushUndo(trip.id, t('undoDeleted', { n: ids.length }), [{ key: 'bookings', put: trip.bookings.filter((b) => ids.includes(b.id)) }]);
               onChange((tr) => ({ ...tr, bookings: tr.bookings.filter((b) => !ids.includes(b.id)) }));
             }}
           />
@@ -1807,7 +1838,7 @@ function BookingsTab({ trip, rate, onOpen, onInbox, onDropInbox, onChange }: { t
         setSel={setSel}
         all={trip.bookings.map((b) => b.id)}
         onDelete={(ids) => {
-          pushUndo(trip, t('undoDeleted', { n: ids.length }));
+          pushUndo(trip.id, t('undoDeleted', { n: ids.length }), [{ key: 'bookings', put: trip.bookings.filter((b) => ids.includes(b.id)) }]);
           onChange((tr) => ({ ...tr, bookings: tr.bookings.filter((b) => !ids.includes(b.id)) }));
         }}
       />
@@ -2224,7 +2255,7 @@ function ExpenseBox({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onCh
             setSel={setSel}
             all={list.slice(0, 30).map((e) => e.id)}
             onDelete={(ids) => {
-              pushUndo(trip, t('undoDeleted', { n: ids.length }));
+              pushUndo(trip.id, t('undoDeleted', { n: ids.length }), [{ key: 'expenses', put: (trip.expenses ?? []).filter((x) => ids.includes(x.id)) }]);
               onChange((tr) => ({ ...tr, expenses: (tr.expenses ?? []).filter((x) => !ids.includes(x.id)) }));
             }}
           />
@@ -2311,7 +2342,10 @@ function PackTab({ trip, onChange }: { trip: Trip; onChange: (fn: (t: Trip) => T
       key={c.id}
       style={[s.tlRow, i > 0 && s.tlLine]}
       onPress={() => onChange((tr) => ({ ...tr, checklist: tr.checklist.map((x) => (x.id === c.id ? { ...x, done: !x.done } : x)) }))}
-      onLongPress={() => onChange((tr) => ({ ...tr, checklist: tr.checklist.filter((x) => x.id !== c.id) }))}
+      onLongPress={() => {
+        pushUndo(trip.id, t('undoDeleted', { n: 1 }), [{ key: 'checklist', put: [c] }]);
+        onChange((tr) => ({ ...tr, checklist: tr.checklist.filter((x) => x.id !== c.id) }));
+      }}
     >
       <View style={[s.check, c.done && { backgroundColor: C.ink, borderColor: C.ink }]}>{c.done && <Icon name="checkmark" size={15} color={C.onInk} />}</View>
       <Text style={[s.tlTitle, { flex: 1 }, c.done && { color: C.sub, textDecorationLine: 'line-through' }]}>{c.text}</Text>
@@ -2366,7 +2400,7 @@ function PackTab({ trip, onChange }: { trip: Trip; onChange: (fn: (t: Trip) => T
       <Text style={s.hint}>
         {mode === 'gift' ? t('giftHint') : t('packHint')} {dot()} {done}/{list.length}
       </Text>
-      {groups.map((g) => (
+      {groups.filter((g) => g.items.length > 0).map((g) => (
         <View key={g.who || '-'} style={[s.card, { marginTop: 8 }]}>
           {mode === 'gift' && !!g.who && <Text style={[s.kicker, { marginBottom: 4 }]}>{t('giftFor', { who: g.who })}</Text>}
           {g.items.map(row)}
