@@ -48,7 +48,10 @@ export const shadow = {
 
 export const cleanNum = (t: string, decimals: number) => {
   // ヨーロッパの端末はキーボードの小数点が「,」になる。全角数字も半角に
-  let v = t.replace(/[０-９．，]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0)).replace(/,/g, '.');
+  let v = t.replace(/[０-９．，]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0)).trim();
+  // 「1,000」「12,345.50」のような桁区切りのカンマは消す（貼り付けたときなど）。それ以外のカンマは小数点
+  if (/^\d{1,3}(,\d{3})+(\.\d*)?$/.test(v)) v = v.replace(/,/g, '');
+  else v = v.replace(/,/g, '.');
   v = v.replace(decimals > 0 ? /[^0-9.]/g : /[^0-9]/g, '');
   const i = v.indexOf('.');
   // 整数部分は12けたまで（それより大きいと 1e+20 のような表示になる）

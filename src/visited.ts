@@ -31,21 +31,34 @@ const CITIES: [string, string, string, ...string[]][] = [
   ['EG', 'カイロ', 'Cairo'], ['MA', 'マラケシュ', 'Marrakech', 'Marrakesh'],
 ];
 type Hit = { cc: string; ja: string; en: string };
-const NAMES: { re: RegExp; hit: Hit }[] = CITIES.flatMap(([cc, ja, en, ...more]) =>
+const NAMES: { re: RegExp; hit: Hit; short: boolean }[] = CITIES.flatMap(([cc, ja, en, ...more]) =>
   [ja, en, ...more].map((n) => ({
-    re: /^[\x00-\x7f]+$/.test(n) || /[À-ÿ]/.test(n) ? new RegExp(`(^|[^A-Za-zÀ-ÿ])${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^A-Za-zÀ-ÿ])`, 'i') : new RegExp(n),
+    re: /^[\x00-\x7f]+$/.test(n) || /[À-ÿ]/.test(n) ? new RegExp(`(^|[^A-Za-zÀ-ÿ])${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^A-Za-zÀ-ÿ])`, 'g') : new RegExp(n, 'g'),
     hit: { cc, ja, en },
+    short: /^[\x00-\x7fÀ-ÿ]+$/.test(n) && n.length <= 4, // Nice・Bath・York など、ふつうの英単語と紛れやすい名前
   })),
-).sort((a, b) => b.re.source.length - a.re.source.length);
+);
 
 const UK_POST = /([A-Za-z][A-Za-z .'-]*?)\s+[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/;
 const JP_ADDR = /(東京都|北海道|京都府|大阪府|.{2,3}県)\s*([^\d\s]+?[市区町村郡])/;
 
 /** 1つの文字列から国と街 */
-export function placeIn(text?: string): { cc?: string; city?: Hit } {
+export function placeIn(text?: string, strict = false): { cc?: string; city?: Hit } {
   if (!text) return {};
   const t = text.trim();
-  for (const n of NAMES) if (n.re.test(t)) return { cc: n.hit.cc, city: n.hit };
+  // 住所は最後に街の名前が来るので、いちばん後ろで見つかった街を使う（「Washington St, London」は London）
+  let best: { at: number; len: number; hit: Hit } | undefined;
+  for (const n of NAMES) {
+    if (strict && n.short) continue;
+    n.re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = n.re.exec(t))) {
+      const at = m.index + m[0].length;
+      if (!best || at > best.at || (at === best.at && m[0].length > best.len)) best = { at, len: m[0].length, hit: n.hit };
+      if (m[0].length === 0) n.re.lastIndex++;
+    }
+  }
+  if (best) return { cc: best.hit.cc, city: best.hit };
   const jp = t.match(JP_ADDR);
   if (jp) {
     const pref = jp[1];
@@ -55,6 +68,8 @@ export function placeIn(text?: string): { cc?: string; city?: Hit } {
   const uk = t.match(UK_POST);
   if (uk) {
     const name = uk[1].split(',').pop()!.trim();
+    const known = CITIES.find((c) => c[0] === 'GB' && c[2].toLowerCase() === name.toLowerCase());
+    if (known) return { cc: 'GB', city: { cc: 'GB', ja: known[1], en: known[2] } };
     return name && !/\d/.test(name) ? { cc: 'GB', city: { cc: 'GB', ja: name, en: name } } : { cc: 'GB' };
   }
   return {};
@@ -82,12 +97,12 @@ export function tripPlaces(trip: Trip): { countries: Set<string>; cities: Map<st
         if (z && TZ_CC[z]) countries.add(TZ_CC[z]);
         return;
       }
-      add(placeIn(b.to) ?? {});
+      add(placeIn(b.to));
       return;
     }
     const p = placeIn(b.from);
     if (p.cc || p.city) add(p);
-    else if (b.type !== 'car') add(placeIn(b.title));
+    else if (b.type !== 'car') add(placeIn(b.title, true));
     if (b.tz && TZ_CC[b.tz]) countries.add(TZ_CC[b.tz]);
   });
   return { countries, cities };

@@ -215,9 +215,14 @@ const pickImage = async () => {
   return !r.canceled && r.assets?.[0] ? keepImage(r.assets[0].uri) : null;
 };
 
+// クリップボードは許可されないことがある（ブラウザなど）：読めなければ空として扱う
+const readClipboard = () => Clipboard.getStringAsync().catch(() => '');
+// 共有シートは端末やブラウザによって使えないことがある：失敗しても画面を止めない
+const shareSafe = (c: Parameters<typeof Share.share>[0]) => Share.share(c).catch(() => undefined);
+
 /* ---------- 元に戻す（まとめて追加・削除のあとに出す） ---------- */
 // その操作で変わった分だけを記録する（共有中に相手が足した分は消さない）
-type UndoOp = { key: 'bookings' | 'expenses' | 'inbox' | 'checklist'; remove?: string[]; put?: { id: string }[] };
+type UndoOp = { key: 'bookings' | 'expenses' | 'inbox' | 'checklist' | 'members'; remove?: string[]; put?: { id: string }[] };
 type UndoSnap = { tripId: string; label: string; ops: UndoOp[]; at: number };
 const undoBus: { push?: (u: Omit<UndoSnap, 'at'>) => void } = {};
 const pushUndo = (tripId: string | undefined, label: string, ops: UndoOp[]) => tripId && ops.length && undoBus.push?.({ tripId, label, ops });
@@ -797,7 +802,8 @@ function YearSummary({ trips }: { trips: Trip[]; rate: RateInfo }) {
   const nights = mine.reduce((a, tr) => {
     const h = tr.bookings.filter((b) => b.type === 'hotel' && !b.cancelled && isDate(b.end)).reduce((x, b) => x + Math.max(0, daysBetween(b.start, b.end!)), 0);
     const { start, end } = tripRange(tr);
-    return a + (h || (start && end ? Math.max(0, daysBetween(start, end)) : 0));
+    const d = isDate(start) && isDate(end) ? daysBetween(start!, end!) : 0;
+    return a + (h || Math.max(0, isFinite(d) ? d : 0));
   }, 0);
   const countries = new Set<string>();
   const cities = new Map<string, { ja: string; en: string }>();
@@ -837,7 +843,7 @@ function YearSummary({ trips }: { trips: Trip[]; rate: RateInfo }) {
           </Text>
         )}
         <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12 }}>
-          <Pressable onPress={() => Share.share({ message: msg })} style={s.yearShare}>
+          <Pressable onPress={() => shareSafe({ message: msg })} style={s.yearShare}>
             <Icon name="share-outline" size={16} color="#15171C" />
             <Text style={[s.chipText, { color: '#15171C' }]}>{t('share')}</Text>
           </Pressable>
@@ -1318,7 +1324,7 @@ function ShareSheet({ trip, onClose, onShared, onStop }: { trip: Trip; onClose: 
             {trip.share?.syncedAt ? `${t('synced')} ${new Date(trip.share.syncedAt).toLocaleTimeString().slice(0, 5)}` : ''}
             {trip.share?.dirty ? `  ${dot()}  ${t('pending')}` : ''}
           </Text>
-          <Pressable style={[s.primary, { alignSelf: 'stretch' }]} onPress={() => Share.share({ message: invite })}>
+          <Pressable style={[s.primary, { alignSelf: 'stretch' }]} onPress={() => shareSafe({ message: invite })}>
             <Text style={s.primaryText}>{t('sendCode')}</Text>
           </Pressable>
           <Pressable onPress={() => (sure ? (onStop(), onClose()) : setSure(true))} style={{ marginTop: 14 }}>
@@ -1342,7 +1348,7 @@ function ShareSheet({ trip, onClose, onShared, onStop }: { trip: Trip; onClose: 
         {pdfBusy ? <ActivityIndicator color={C.ink} /> : <Icon name="print-outline" size={17} />}
         <Text style={s.secondaryText}>{t('sendPdf')}</Text>
       </Pressable>
-      <Pressable style={[s.secondary]} onPress={() => Share.share({ message: itineraryText(trip) })}>
+      <Pressable style={[s.secondary]} onPress={() => shareSafe({ message: itineraryText(trip) })}>
         <Icon name="document-text-outline" size={17} />
         <Text style={s.secondaryText}>{t('sendItinerary')}</Text>
       </Pressable>
@@ -1593,7 +1599,7 @@ function WishSheet({
           <Pressable
             style={s.smallBtn}
             onPress={async () => {
-              const txt = await Clipboard.getStringAsync();
+              const txt = await readClipboard();
               const u = firstUrl(txt);
               if (u) {
                 setW((x) => ({ ...x, url: u }));
@@ -1810,7 +1816,9 @@ function InboxBox({ items, onOpen, onDrop }: { items: InboxItem[]; onOpen: (it: 
   );
 }
 
-function SelBar({ sel, setSel, all, onDelete }: { sel: string[] | null; setSel: (v: string[] | null) => void; all: string[]; onDelete: (ids: string[]) => void }) {
+function SelBar({ sel: raw, setSel, all, onDelete }: { sel: string[] | null; setSel: (v: string[] | null) => void; all: string[]; onDelete: (ids: string[]) => void }) {
+  // 共有中に相手が消した項目は、選んだ数から外す
+  const sel = raw ? raw.filter((id) => all.includes(id)) : null;
   if (!sel)
     return (
       <View style={s.selBar}>
@@ -2005,6 +2013,12 @@ function MoneyTab({ trip, rate, onChange, onShare }: { trip: Trip; rate: RateInf
                   paidBy: x.paidBy === m.id ? to : x.paidBy,
                   splitWith: x.splitWith?.includes(m.id) ? x.splitWith.filter((i) => i !== m.id) : x.splitWith,
                 });
+                const touched = (x: { paidBy?: string; splitWith?: string[] }) => x.paidBy === m.id || !!x.splitWith?.includes(m.id);
+                pushUndo(trip.id, t('undoDeleted', { n: 1 }), [
+                  { key: 'members', put: [m] },
+                  { key: 'bookings', put: trip.bookings.filter(touched) },
+                  { key: 'expenses', put: (trip.expenses ?? []).filter(touched) },
+                ]);
                 onChange((tr) => ({ ...tr, members: tr.members.filter((x) => x.id !== m.id), bookings: tr.bookings.map(fix), expenses: tr.expenses?.map(fix) }));
               }}
               style={[s.chip, delM === m.id && { backgroundColor: C.pinkSoft, borderColor: C.pink }]}
@@ -2033,7 +2047,7 @@ function MoneyTab({ trip, rate, onChange, onShare }: { trip: Trip; rate: RateInf
           style={[s.secondary, { marginTop: 12 }]}
           onPress={() =>
             trip.share
-              ? Share.share({ message: `${t('askPayMsg', { name: bracket(trip.name) })}\n${SERVER}/s/${trip.share.code}?c=${rate.base}` })
+              ? shareSafe({ message: `${t('askPayMsg', { name: bracket(trip.name) })}\n${SERVER}/s/${trip.share.code}?c=${rate.base}` })
               : onShare()
           }
         >
@@ -2067,7 +2081,7 @@ function MoneyTab({ trip, rate, onChange, onShare }: { trip: Trip; rate: RateInf
                     const data = { n: trip.name, c: rate.base, p: st.pay.map((p) => ({ f: nameOf(p.from), t: nameOf(p.to), a: Math.round(p.amount) })) };
                     const link = trip.share ? `${SERVER}/s/${trip.share.code}?c=${rate.base}` : `tripfold://settle?d=${encodeURIComponent(JSON.stringify(data))}`;
                     const lines = st.pay.map((p) => `${dot()} ${nameOf(p.from)} → ${nameOf(p.to)}  ${fmtMoney(Math.round(p.amount), rate.base)}`);
-                    Share.share({ message: `${bracket(trip.name)} ${t('settle')}\n${lines.join('\n')}\n\n${t('openInApp')}\n${link}` });
+                    shareSafe({ message: `${bracket(trip.name)} ${t('settle')}\n${lines.join('\n')}\n\n${t('openInApp')}\n${link}` });
                   }}
                 >
                   <Icon name="paper-plane-outline" size={17} />
@@ -2192,9 +2206,12 @@ function ExpenseBox({ trip, rate, onChange }: { trip: Trip; rate: RateInfo; onCh
   const autoRate = cur !== rate.base ? toHome(1, cur, rate) : 1;
   const add = () => {
     const v = parseFloat(amt);
-    if (!v) return;
+    // 0やマイナス、打ち間違いのような大きすぎる金額（10億以上）は入れない
+    if (!v || !(v > 0) || v >= 1e9) return;
     const r = parseFloat(rateTxt);
-    const e: Expense = { id: uid(), title: title.trim() || catName(cat), cat, amount: v, currency: cur, date: todayStr(), paidBy: payer, rate: r > 0 && cur !== rate.base ? r : undefined, photo };
+    // 手で直したレートが自動のレートから桁違い（50倍以上ずれる）なら、打ち間違いとして使わない
+    const okRate = r > 0 && cur !== rate.base && (!(autoRate > 0) || (r / autoRate < 50 && autoRate / r < 50));
+    const e: Expense = { id: uid(), title: title.trim() || catName(cat), cat, amount: v, currency: cur, date: todayStr(), paidBy: payer, rate: okRate ? r : undefined, photo };
     onChange((tr) => ({ ...tr, expenses: [e, ...(tr.expenses ?? [])] }));
     setTitle('');
     setAmt('');
@@ -2924,7 +2941,7 @@ function AddBookingSheet({
             <Pressable
               style={[s.secondary, { flex: 1 }]}
               onPress={async () => {
-                const c = await Clipboard.getStringAsync();
+                const c = await readClipboard();
                 if (c) setText(c);
               }}
             >
@@ -2943,7 +2960,7 @@ function AddBookingSheet({
           <Text style={[s.hint, { marginBottom: 8, lineHeight: 18 }]}>{t('aiHint')}</Text>
           <TextInput style={[s.input, { height: 180, textAlignVertical: 'top' }]} multiline value={text} onChangeText={(v) => (setText(v), setDrafts(null))} placeholder={t('aiPh')} placeholderTextColor={C.sub} />
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-            <Pressable style={[s.secondary, { flex: 1 }]} onPress={async () => { const c = await Clipboard.getStringAsync(); if (c) (setText(c), setDrafts(null)); }}>
+            <Pressable style={[s.secondary, { flex: 1 }]} onPress={async () => { const c = await readClipboard(); if (c) (setText(c), setDrafts(null)); }}>
               <Icon name="clipboard-outline" size={17} />
               <Text style={s.secondaryText}>{t('paste')}</Text>
             </Pressable>
@@ -3355,7 +3372,7 @@ function BookingDetail({
           <Pressable
             style={s.codeBig}
             onPress={async () => {
-              await Clipboard.setStringAsync(b.code!);
+              await Clipboard.setStringAsync(b.code!).catch(() => undefined);
               setCopied(true);
               setTimeout(() => setCopied(false), 1500);
             }}
