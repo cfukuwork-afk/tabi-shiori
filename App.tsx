@@ -1106,7 +1106,7 @@ function TripScreen({
             onToPlan={(w) => onAddPlan(tripDays(trip)[0] ?? todayStr(), { planTitle: w.title, planMemo: [w.url, w.memo].filter(Boolean).join('\n') || undefined })}
           />
         )}
-        {tab === 'plan' && <PlanTab trip={trip} wx={wx} onOpen={onOpen} onJournal={setJournalDay} onAddPlan={onAddPlan} />}
+        {tab === 'plan' && <PlanTab trip={trip} wx={wx} onOpen={onOpen} onJournal={setJournalDay} onAddPlan={onAddPlan} onChange={onChange} />}
         {tab === 'bookings' && (
           <BookingsTab trip={trip} rate={rate} onOpen={onOpen} onChange={onChange} onInbox={onInbox} onDropInbox={(id) => onChange((tr) => ({ ...tr, inbox: (tr.inbox ?? []).filter((x) => x.id !== id) }))} />
         )}
@@ -1586,7 +1586,8 @@ function WishSheet({
   );
 }
 
-function PlanTab({ trip, wx, onOpen, onJournal, onAddPlan }: { trip: Trip; wx?: TripWx | null; onOpen: (b: Booking) => void; onJournal?: (d: string) => void; onAddPlan?: (d: string) => void }) {
+function PlanTab({ trip, wx, onOpen, onJournal, onAddPlan, onChange }: { trip: Trip; wx?: TripWx | null; onOpen: (b: Booking) => void; onJournal?: (d: string) => void; onAddPlan?: (d: string) => void; onChange?: (fn: (t: Trip) => Trip) => void }) {
+  const [sel, setSel] = useState<string[] | null>(null);
   const tl = timeline(trip);
   const today = todayStr();
   const days = tripDays(trip).map((date) => ({ date, items: tl.find((d) => d.date === date)?.items ?? [] }));
@@ -1598,8 +1599,22 @@ function PlanTab({ trip, wx, onOpen, onJournal, onAddPlan }: { trip: Trip; wx?: 
         <Text style={[s.hint, { textAlign: 'center', marginTop: 10, lineHeight: 19 }]}>{t('noBookings')}</Text>
       </View>
     );
+  const toggle = (id: string) => sel && setSel(sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id]);
   return (
     <>
+      {!!onChange && trip.bookings.length > 0 && (
+        <View style={{ marginBottom: 8 }}>
+          <SelBar
+            sel={sel}
+            setSel={setSel}
+            all={trip.bookings.map((b) => b.id)}
+            onDelete={(ids) => {
+              pushUndo(trip, t('undoDeleted', { n: ids.length }));
+              onChange((tr) => ({ ...tr, bookings: tr.bookings.filter((b) => !ids.includes(b.id)) }));
+            }}
+          />
+        </View>
+      )}
       {days.map(({ date, items }) => (
         <View key={date} style={{ marginBottom: 22 }}>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10, marginBottom: 10 }}>
@@ -1630,8 +1645,12 @@ function PlanTab({ trip, wx, onOpen, onJournal, onAddPlan }: { trip: Trip; wx?: 
                   <View style={[s.tlDotSmall, { borderColor: ty.color }]} />
                   {!last && <View style={s.tlRail} />}
                 </View>
-                <Pressable onPress={() => onOpen(b)} style={({ pressed }) => [s.tlCard, pressed && { opacity: 0.85 }]}>
-                  <TypeBadge type={b.type} size={34} />
+                <Pressable
+                  onPress={() => (sel ? toggle(b.id) : onOpen(b))}
+                  onLongPress={() => onChange && !sel && setSel([b.id])}
+                  style={({ pressed }) => [s.tlCard, pressed && { opacity: 0.85 }, !!sel?.includes(b.id) && { borderColor: C.pink, borderWidth: 1.5 }]}
+                >
+                  {sel ? <SelDot on={sel.includes(b.id)} /> : <TypeBadge type={b.type} size={34} />}
                   <View style={{ flex: 1 }}>
                     <Text style={[s.tlTitle, b.cancelled && s.cancelled]} numberOfLines={2}>
                       {b.title || typeName(b.type)}
