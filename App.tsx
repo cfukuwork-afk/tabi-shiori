@@ -6,7 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useShareIntent } from 'expo-share-intent';
 import { requireOptionalNativeModule } from 'expo-modules-core';
 import {
@@ -3344,8 +3344,32 @@ function BookingDetail({
   const [sure, setSure] = useState(false);
   const [zoom, setZoom] = useState<string | null>(null);
   const nights = b.type === 'hotel' && isDate(b.end) ? daysBetween(b.start, b.end!) : 0;
+  // タップでコピー（ホテル名・住所・日時など）
+  const [toast, setToast] = useState('');
+  const toastTm = useRef<any>(null);
+  const copyTxt = async (txt: string) => {
+    if (!txt) return;
+    await Clipboard.setStringAsync(txt).catch(() => undefined);
+    setToast(t('copiedX', { x: txt.length > 28 ? txt.slice(0, 28) + '…' : txt }));
+    clearTimeout(toastTm.current);
+    toastTm.current = setTimeout(() => setToast(''), 1600);
+  };
+  const allText = () => {
+    const L: string[] = [b.title || typeName(b.type)];
+    const lab = (x: string) => x.replace(/（.*）| \(.*\)/, '');
+    L.push(`${b.type === 'hotel' ? t('checkin') : b.type === 'car' ? t('pickup') : t('startDate')}: ${prettyDate(b.start)} ${b.startTime ?? ''}`.trim());
+    if (isDate(b.end)) L.push(`${b.type === 'hotel' ? t('checkout') : b.type === 'car' ? t('dropoff') : t('endDate')}: ${prettyDate(b.end!)} ${b.endTime ?? ''}`.trim());
+    if (b.from) L.push(`${lab(placeLabels(b.type)[0])}: ${b.from}`);
+    if (b.to) L.push(`${lab(placeLabels(b.type)[1] ?? t('to'))}: ${b.to}`);
+    if (b.code) L.push(`${t('code')}: ${b.code}`);
+    if (b.seat) L.push(`${t('seat')}: ${b.seat}`);
+    if (b.price) L.push(`${t('price')}: ${fmtMoney(b.price, b.currency || rate.base)}`);
+    if (b.memo) L.push(b.memo);
+    return L.join('\n');
+  };
   return (
     <Sheet visible onClose={onClose} tall>
+      <CopyCtx.Provider value={copyTxt}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 30 }}>
         <View style={s.detailHead}>
           <TypeBadge type={b.type} size={48} />
@@ -3353,7 +3377,13 @@ function BookingDetail({
             <Text style={[s.kicker, { color: ty.color }]}>
               {typeName(b.type).toUpperCase()} · {trip.name}
             </Text>
-            <Text style={s.detailTitle}>{b.title || typeName(b.type)}</Text>
+            <Pressable onPress={() => copyTxt(b.title || typeName(b.type))} onLongPress={() => copyTxt(b.title || typeName(b.type))}>
+              <Text style={s.detailTitle}>
+                {b.title || typeName(b.type)}
+                {'  '}
+                <Icon name="copy-outline" size={16} color={C.sub} />
+              </Text>
+            </Pressable>
           </View>
         </View>
         <Text style={s.sec}>{t('ticketsSec').toUpperCase()}</Text>
@@ -3463,7 +3493,12 @@ function BookingDetail({
           {!!b.memo && <Info k={t('memo')} v={b.memo} />}
         </View>
         {(b.type === 'plan' || (b.type === 'ticket' && !b.code)) && !!b.title && <FindRow title={t('findTickets')} links={activityLinks(b.title, tripCity(trip.bookings))} />}
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
+        <Text style={[s.hint, { fontSize: 11, marginTop: 8 }]}>{t('tapToCopy')}</Text>
+        <Pressable style={[s.secondary, { marginTop: 12 }]} onPress={() => copyTxt(allText())}>
+          <Icon name="copy-outline" size={17} />
+          <Text style={s.secondaryText}>{t('copyAll')}</Text>
+        </Pressable>
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
           <Pressable style={[s.secondary, { flex: 1 }]} onPress={onEdit}>
             <Icon name="create-outline" size={17} />
             <Text style={s.secondaryText}>{t('edit')}</Text>
@@ -3474,6 +3509,15 @@ function BookingDetail({
           </Pressable>
         </View>
       </ScrollView>
+      </CopyCtx.Provider>
+      {!!toast && (
+        <View pointerEvents="none" style={{ position: 'absolute', left: 20, right: 20, bottom: 40, alignItems: 'center' }}>
+          <View style={{ backgroundColor: C.ink, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Icon name="checkmark" size={15} color={C.bg} />
+            <Text style={{ color: C.bg, fontWeight: '700', fontSize: 13 }} numberOfLines={1}>{toast}</Text>
+          </View>
+        </View>
+      )}
       <Modal visible={!!zoom} transparent onRequestClose={() => setZoom(null)}>
         <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', justifyContent: 'center' }} onPress={() => setZoom(null)}>
           {zoom && <Image source={imgSrc(zoom)} style={{ width: '100%', height: '85%' }} resizeMode="contain" />}
@@ -3584,19 +3628,30 @@ function HowTo({ fromQ, toQ, label }: { fromQ: string; toQ: string; label: strin
     </Pressable>
   );
 }
-const Info = ({ k, v, q }: { k: string; v: string; q?: string }) => (
+/** 詳細画面の中では、値をタップするとコピーできる */
+const CopyCtx = createContext<((txt: string) => void) | null>(null);
+const Info = ({ k, v, q }: { k: string; v: string; q?: string }) => {
+  const copy = useContext(CopyCtx);
+  return (
   <View style={[s.infoRow, { alignItems: 'center' }]}>
     <Text style={s.infoK}>{k}</Text>
-    <Text style={s.infoV} selectable>
-      {v}
-    </Text>
+    {copy ? (
+      <Pressable style={{ flex: 1 }} onPress={() => copy(v.trim())} onLongPress={() => copy(v.trim())}>
+        <Text style={s.infoV}>{v}</Text>
+      </Pressable>
+    ) : (
+      <Text style={s.infoV} selectable>
+        {v}
+      </Text>
+    )}
     {!!q && (
       <Pressable onPress={() => openMap(q)} hitSlop={8} style={s.mapBtn}>
         <Icon name="navigate" size={14} color={C.onInk} />
       </Pressable>
     )}
   </View>
-);
+  );
+};
 
 /* ---------------- 設定・ようこそ ---------------- */
 function SettingsSheet({
