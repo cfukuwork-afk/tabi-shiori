@@ -362,6 +362,8 @@ function Main() {
   const tripsRef = useRef(trips);
   tripsRef.current = trips;
   const syncing = useRef(false);
+  // 共有の状態：最後にサーバーと話せた時刻と、つながらないときの理由（画面に出す）
+  const [syncStat, setSyncStat] = useState<Record<string, { ok: number; err?: string }>>({});
   const syncAll = async () => {
     if (syncing.current) return;
     syncing.current = true;
@@ -371,7 +373,11 @@ function Main() {
         try {
           const r = await syncTrip(tr);
           if (r) applyRemote(tr.id, r.trip, r.rev, seq);
-        } catch {}
+          setSyncStat((p) => ({ ...p, [tr.id]: { ok: Date.now() } }));
+        } catch (e: any) {
+          const err = e?.status === 404 ? 'syncErrGone' : e?.status ? 'syncErrServer' : e?.message === 'bad trip' ? 'syncErrData' : 'syncErrNet';
+          setSyncStat((p) => ({ ...p, [tr.id]: { ok: p[tr.id]?.ok ?? 0, err } }));
+        }
       }
     } finally {
       syncing.current = false;
@@ -519,6 +525,8 @@ function Main() {
       {sharing && trips.some((x) => x.id === sharing) && (
         <ShareSheet
           trip={trips.find((x) => x.id === sharing)!}
+          stat={syncStat[sharing]}
+          onSyncNow={syncAll}
           onClose={() => setSharing(null)}
           onShared={(tr) => setTrips((prev) => { const next = prev.map((x) => (x.id === tr.id ? tr : x)); saveTrips(next); return next; })}
           onStop={() => {
@@ -1276,7 +1284,9 @@ function JournalSheet({
 }
 
 /* ---------------- 共有（一緒に編集） ---------------- */
-function ShareSheet({ trip, onClose, onShared, onStop }: { trip: Trip; onClose: () => void; onShared: (t: Trip) => void; onStop: () => void }) {
+function ShareSheet({ trip, stat, onSyncNow, onClose, onShared, onStop }: { trip: Trip; stat?: { ok: number; err?: string }; onSyncNow: () => Promise<void>; onClose: () => void; onShared: (t: Trip) => void; onStop: () => void }) {
+  const [syncBusy, setSyncBusy] = useState(false);
+  const hhmm = (ms: number) => new Date(ms).toLocaleTimeString().slice(0, 5);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [sure, setSure] = useState(false);
@@ -1321,9 +1331,22 @@ function ShareSheet({ trip, onClose, onShared, onStop }: { trip: Trip; onClose: 
             {prettyCode(code)}
           </Text>
           <Text style={[s.hint, { fontSize: 11, marginTop: 4 }]}>
-            {trip.share?.syncedAt ? `${t('synced')} ${new Date(trip.share.syncedAt).toLocaleTimeString().slice(0, 5)}` : ''}
+            {stat?.ok ? t('checkedAt', { t: hhmm(stat.ok) }) : trip.share?.syncedAt ? `${t('synced')} ${hhmm(trip.share.syncedAt)}` : ''}
             {trip.share?.dirty ? `  ${dot()}  ${t('pending')}` : ''}
           </Text>
+          {!!stat?.err && <Text style={[s.hint, { fontSize: 12, marginTop: 6, color: C.pink, textAlign: 'center' }]}>{t(stat.err as any)}</Text>}
+          <Pressable
+            disabled={syncBusy}
+            onPress={async () => {
+              setSyncBusy(true);
+              await onSyncNow().catch(() => {});
+              setSyncBusy(false);
+            }}
+            style={{ marginTop: 8, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 6 }}
+          >
+            {syncBusy ? <ActivityIndicator size="small" color={C.sub} /> : <Icon name="refresh" size={14} color={C.sub} />}
+            <Text style={[s.hint, { fontSize: 12 }]}>{t('syncNow')}</Text>
+          </Pressable>
           <Pressable style={[s.primary, { alignSelf: 'stretch' }]} onPress={() => shareSafe({ message: invite })}>
             <Text style={s.primaryText}>{t('sendCode')}</Text>
           </Pressable>
