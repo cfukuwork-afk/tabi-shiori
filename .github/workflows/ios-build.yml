@@ -1,0 +1,56 @@
+# iOSアプリをGitHubのMacでビルドして、App Store Connectへ送る（Expoの無料ビルド枠を使わない）
+# 実行方法：GitHubの「Actions」→「iOS build」→「Run workflow」
+name: iOS build
+
+on:
+  workflow_dispatch:
+    inputs:
+      submit:
+        description: 'ビルド後にApp Store Connectへ送る'
+        type: boolean
+        default: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EAS_BUILD_NO_EXPO_GO_WARNING: 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Check EXPO_TOKEN
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::EXPO_TOKEN が登録されていません（Settings → Secrets and variables → Actions）"
+            exit 1
+          fi
+
+      - name: Install packages
+        run: npm ci || npm install
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Show Xcode
+        run: xcodebuild -version
+
+      - name: Build (on this Mac)
+        run: eas build -p ios --profile production --local --non-interactive --output "$RUNNER_TEMP/app.ipa"
+
+      - name: Keep the .ipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: ${{ runner.temp }}/app.ipa
+          retention-days: 7
+
+      - name: Send to App Store Connect
+        if: ${{ inputs.submit }}
+        run: eas submit -p ios --profile production --path "$RUNNER_TEMP/app.ipa" --non-interactive
