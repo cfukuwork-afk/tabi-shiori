@@ -17,6 +17,9 @@ jobs:
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       EAS_BUILD_NO_EXPO_GO_WARNING: 'true'
+      # macOSの /var は /private/var への近道（シンボリックリンク）で、ウィジェットのバンドルが
+      # 2つの書き方の食い違いで失敗する。近道を含まない場所でビルドする
+      EAS_LOCAL_BUILD_WORKINGDIR: /Users/runner/eas-build
     steps:
       - uses: actions/checkout@v4
 
