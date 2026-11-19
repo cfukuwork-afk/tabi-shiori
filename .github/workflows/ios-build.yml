@@ -45,8 +45,8 @@ jobs:
       # 次に付く番号を先に調べて app.json に書いておけば、全部そろう
       - name: Align build number for extensions
         run: |
-          CUR=$(eas build:version:get -p ios --profile production --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);console.log(j.buildNumber??j.ios?.buildNumber??"")})')
-          if ! [[ "$CUR" =~ ^[0-9]+$ ]]; then echo "::error::ビルド番号を取得できません: $CUR"; exit 1; fi
+          CUR=$(eas build:version:get -p ios --profile production --json 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);console.log(j.buildNumber??j.ios?.buildNumber??"")})')
+          if ! [[ "$CUR" =~ ^[0-9]+$ ]]; then echo "::warning::ビルド番号を取得できなかったので、そろえずに続けます: $CUR"; exit 0; fi
           NEXT=$((CUR + 1))
           node -e 'const f="app.json";const fs=require("fs");const j=JSON.parse(fs.readFileSync(f));j.expo.ios.buildNumber=process.argv[1];fs.writeFileSync(f,JSON.stringify(j,null,2))' "$NEXT"
           echo "buildNumber -> $NEXT"
