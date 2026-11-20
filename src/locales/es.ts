@@ -62,4 +62,5 @@ export default {
   copiedX: "Copiado: {x}", copyAll: "Copiar todos los datos", tapToCopy: "Toca un nombre, dirección u hora para copiarlo",
   diffTitle: "Qué cambió ({n})", diffKeep: "Dejar como estaba", diffNone: "(nada)",
   keepBoth: "No sobrescribir: conservar ambas", keptBoth: "La reserva anterior se mantiene; esta se añadirá como nueva",
+  dupKept: "Ya hay una reserva con este código. Se conservan ambas; las diferencias se resaltan", dupDiff: "{n} copias · difiere en: {k}", dupSame: "{n} copias (idénticas)", dupHere: "Esta reserva aparece {n} veces (todas se conservan)", dupNoDiff: "Igual que la otra copia", dupOther: "la otra:",
 } as Record<string, string>;

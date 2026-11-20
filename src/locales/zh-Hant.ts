@@ -62,4 +62,5 @@ export default {
   copiedX: "已複製：{x}", copyAll: "複製全部資訊", tapToCopy: "點按名稱、地址、時間即可複製",
   diffTitle: "與之前不同的地方（{n}處）", diffKeep: "保持原樣", diffNone: "（無）",
   keepBoth: "不覆蓋，兩筆都保留", keptBoth: "之前的預訂保持不變，這筆將作為新預訂加入",
+  dupKept: "已有相同預訂號的預訂。兩筆都保留，不同之處用顏色標出", dupDiff: "重複{n}筆·不同：{k}", dupSame: "重複{n}筆（內容相同）", dupHere: "此預訂有{n}筆（都已保留）", dupNoDiff: "與另一筆內容相同", dupOther: "另一筆：",
 } as Record<string, string>;

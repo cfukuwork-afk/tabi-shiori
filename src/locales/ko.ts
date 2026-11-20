@@ -62,4 +62,5 @@ export default {
   copiedX: "복사했어요: {x}", copyAll: "정보 한꺼번에 복사", tapToCopy: "이름·주소·일시를 탭하면 복사돼요",
   diffTitle: "이전과 달라진 부분({n}건)", diffKeep: "이전대로 두기", diffNone: "(없음)",
   keepBoth: "덮어쓰지 않고 둘 다 남기기", keptBoth: "이전 예약은 그대로 두고, 이것은 새 예약으로 추가합니다",
+  dupKept: "같은 예약 번호의 예약이 이미 있어요. 둘 다 남기고, 다른 부분은 색으로 표시해요", dupDiff: "중복 {n}건 · 차이: {k}", dupSame: "중복 {n}건(내용 같음)", dupHere: "같은 예약이 {n}건 있어요(모두 남겨 둠)", dupNoDiff: "다른 1건과 내용이 같아요", dupOther: "다른 1건:",
 } as Record<string, string>;

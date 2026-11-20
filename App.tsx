@@ -125,6 +125,35 @@ function keepImage(uri: string) {
 
 const SHARE_NATIVE = !!requireOptionalNativeModule('ExpoShareIntentModule');
 /** 予約の種類ごとの「場所」欄の名前。2つ目が null なら到着地の欄は出さない */
+/** 同じ予約が2件以上あるか（同期や取り込みで重なったもの）。消さずに色で知らせる */
+const bkCode = (c?: string) => (c ?? '').replace(/[\s-]/g, '').toUpperCase();
+const DUP_KEYS: (keyof Booking)[] = ['title', 'start', 'startTime', 'end', 'endTime', 'from', 'to', 'seat', 'price', 'currency'];
+const dupKey = (b: Booking) =>
+  b.cancelled ? '' : bkCode(b.code).length >= 5 ? `${b.type}|c|${bkCode(b.code)}|${bkCode(b.title)}` : b.title && isDate(b.start) ? `${b.type}|t|${bkCode(b.title)}|${b.start}` : '';
+function findDups(trip: Trip): Map<string, Booking[]> {
+  const g = new Map<string, Booking[]>();
+  for (const b of trip.bookings) {
+    const k = dupKey(b);
+    if (k) g.set(k, [...(g.get(k) ?? []), b]);
+  }
+  const out = new Map<string, Booking[]>();
+  for (const list of g.values()) if (list.length > 1) for (const b of list) out.set(b.id, list.filter((x) => x.id !== b.id));
+  return out;
+}
+const diffKeys = (a: Booking, b: Booking) =>
+  DUP_KEYS.filter((k) => String((a as any)[k] ?? '').trim() !== String((b as any)[k] ?? '').trim());
+const dupLabel = (k: keyof Booking, ty: BookingType) =>
+  (({ title: t('title'), start: t('startDate'), startTime: t('time'), end: t('endDate'), endTime: t('endTime'), from: placeLabels(ty)[0], to: placeLabels(ty)[1] ?? t('to'), seat: t('seat'), price: t('price'), currency: t('price') }) as Record<string, string>)[k as string] ?? String(k);
+/** 一覧に出す「重複」の印（違うところの名前つき） */
+function DupTag({ b, twins }: { b: Booking; twins?: Booking[] }) {
+  if (!twins?.length) return null;
+  const ks = [...new Set(twins.flatMap((x) => diffKeys(b, x)))];
+  return (
+    <Text style={[s.tlEdge, { color: C.pink }]}>
+      {ks.length ? t('dupDiff', { n: twins.length + 1, k: ks.map((k) => dupLabel(k, b.type)).join('・') }) : t('dupSame', { n: twins.length + 1 })}
+    </Text>
+  );
+}
 const placeLabels = (ty: BookingType): [string, string | null] =>
   ty === 'flight' ? [t('fromAirport'), t('toAirport')]
   : ty === 'train' || ty === 'bus' ? [t('fromStation'), t('toStation')]
@@ -1101,6 +1130,7 @@ function TripScreen({
   onAdd: () => void;
   onOpen: (b: Booking) => void;
 }) {
+  const selOn = !!useSelFloat();
   const [tab, setTab] = useState<Tab>('plan');
   const scrollRef = useRef<any>(null);
   const [editing, setEditing] = useState(false);
@@ -1202,7 +1232,8 @@ function TripScreen({
           <Text style={{ color: sure ? C.pink : C.sub, fontWeight: '700' }}>{sure ? t('deleteSure') : t('deleteTrip')}</Text>
         </Pressable>
       </ScrollView>
-      {(tab === 'plan' || tab === 'bookings') && (
+      <FloatingSelBar />
+      {(tab === 'plan' || tab === 'bookings') && !selOn && (
         <Pressable style={({ pressed }) => [s.fab, pressed && { transform: [{ scale: 0.97 }] }]} onPress={onAdd}>
           <Icon name="add" size={20} color={C.onInk} />
           <Text style={s.fabText}>{t('addBooking')}</Text>
@@ -1688,6 +1719,7 @@ function WishSheet({
 
 function PlanTab({ trip, wx, onOpen, onJournal, onAddPlan, onChange }: { trip: Trip; wx?: TripWx | null; onOpen: (b: Booking) => void; onJournal?: (d: string) => void; onAddPlan?: (d: string) => void; onChange?: (fn: (t: Trip) => Trip) => void }) {
   const [sel, setSel] = useState<string[] | null>(null);
+  const dups = useMemo(() => findDups(trip), [trip.bookings]);
   const tl = timeline(trip);
   const today = todayStr();
   const days = tripDays(trip).map((date) => ({ date, items: tl.find((d) => d.date === date)?.items ?? [] }));
@@ -1756,6 +1788,7 @@ function PlanTab({ trip, wx, onOpen, onJournal, onAddPlan, onChange }: { trip: T
                       {b.title || typeName(b.type)}
                     </Text>
                     {!!b.cancelled && <Text style={[s.tlEdge, { color: C.pink }]}>{t('cancelled')}</Text>}
+                    <DupTag b={b} twins={dups.get(b.id)} />
                     {!!edge && <Text style={[s.tlEdge, { color: ty.color }]}>{edge}</Text>}
                     {(b.from || b.to) && it.edge !== 'end' ? (
                       <Text style={s.hint} numberOfLines={2}>
@@ -1839,34 +1872,76 @@ function InboxBox({ items, onOpen, onDrop }: { items: InboxItem[]; onOpen: (it: 
   );
 }
 
+/** 選んで消すときの操作バー。選んでいる間は画面の下に浮かせて、スクロールしてもついてくる */
+type SelFloat = { n: number; total: number; toggleAll: () => void; cancel: () => void; del: () => void } | null;
+let selFloat: SelFloat = null;
+const selSubs = new Set<() => void>();
+const setSelFloat = (v: SelFloat) => {
+  selFloat = v;
+  selSubs.forEach((f) => f());
+};
+function useSelFloat() {
+  const [, force] = useState(0);
+  useEffect(() => {
+    const cb = () => force((x) => x + 1);
+    selSubs.add(cb);
+    return () => {
+      selSubs.delete(cb);
+    };
+  }, []);
+  return selFloat;
+}
 function SelBar({ sel: raw, setSel, all, onDelete }: { sel: string[] | null; setSel: (v: string[] | null) => void; all: string[]; onDelete: (ids: string[]) => void }) {
   // 共有中に相手が消した項目は、選んだ数から外す
   const sel = raw ? raw.filter((id) => all.includes(id)) : null;
-  if (!sel)
-    return (
-      <View style={s.selBar}>
-        <Pressable hitSlop={8} onPress={() => setSel([])}>
-          <Text style={s.selLink}>☑︎ {t('selMode')}</Text>
-        </Pressable>
-      </View>
-    );
+  const ref = useRef({ sel, all, setSel, onDelete });
+  ref.current = { sel, all, setSel, onDelete };
+  useEffect(() => {
+    if (!sel) {
+      setSelFloat(null);
+      return;
+    }
+    setSelFloat({
+      n: sel.length,
+      total: all.length,
+      toggleAll: () => ref.current.setSel(ref.current.sel && ref.current.sel.length === ref.current.all.length ? [] : ref.current.all),
+      cancel: () => ref.current.setSel(null),
+      del: () => {
+        const c = ref.current;
+        if (!c.sel?.length) return;
+        c.onDelete(c.sel);
+        c.setSel(null);
+      },
+    });
+  }, [sel?.join(','), all.join(',')]);
+  useEffect(() => () => setSelFloat(null), []);
+  if (sel) return <View style={{ height: 4 }} />;
   return (
     <View style={s.selBar}>
-      <Pressable hitSlop={8} onPress={() => setSel(sel.length === all.length ? [] : all)}>
+      <Pressable hitSlop={8} onPress={() => setSel([])}>
+        <Text style={s.selLink}>☑︎ {t('selMode')}</Text>
+      </Pressable>
+    </View>
+  );
+}
+/** 画面の下に浮かぶ「全部選ぶ・やめる・選んだものを削除」 */
+function FloatingSelBar() {
+  const f = useSelFloat();
+  if (!f) return null;
+  return (
+    <View style={[s.selFloat]}>
+      <Pressable hitSlop={8} onPress={f.toggleAll}>
         <Text style={s.selLink}>{t('selAll')}</Text>
       </Pressable>
-      <Pressable hitSlop={8} onPress={() => setSel(null)}>
+      <Pressable hitSlop={8} onPress={f.cancel}>
         <Text style={s.selLink}>{t('selCancel')}</Text>
       </Pressable>
       <Pressable
-        disabled={!sel.length}
-        style={[s.smallBtn, { width: undefined, paddingHorizontal: 12, backgroundColor: C.pink }, !sel.length && { opacity: 0.35 }]}
-        onPress={() => {
-          onDelete(sel);
-          setSel(null);
-        }}
+        disabled={!f.n}
+        style={[s.smallBtn, { width: undefined, paddingHorizontal: 14, backgroundColor: C.pink }, !f.n && { opacity: 0.35 }]}
+        onPress={f.del}
       >
-        <Text style={[s.smallBtnText, { fontSize: 13 }]}>{t('delSelected', { n: sel.length })}</Text>
+        <Text style={[s.smallBtnText, { fontSize: 13 }]}>{t('delSelected', { n: f.n })}</Text>
       </Pressable>
     </View>
   );
@@ -1878,6 +1953,7 @@ const SelDot = ({ on }: { on: boolean }) => (
 );
 
 function BookingsTab({ trip, rate, onOpen, onInbox, onDropInbox, onChange }: { trip: Trip; rate: RateInfo; onOpen: (b: Booking) => void; onInbox: (it: InboxItem) => void; onDropInbox: (id: string) => void; onChange: (fn: (t: Trip) => Trip) => void }) {
+  const dups = useMemo(() => findDups(trip), [trip.bookings]);
   const [sel, setSel] = useState<string[] | null>(null);
   const inbox = <InboxBox items={trip.inbox ?? []} onOpen={onInbox} onDrop={onDropInbox} />;
   if (!trip.bookings.length)
@@ -1936,6 +2012,7 @@ function BookingsTab({ trip, rate, onOpen, onInbox, onDropInbox, onChange }: { t
                       {b.title || typeName(b.type)}
                     </Text>
                     {!!b.cancelled && <Text style={[s.tlEdge, { color: C.pink }]}>{t('cancelled')}</Text>}
+                    <DupTag b={b} twins={dups.get(b.id)} />
                     <Text style={s.hint}>
                       {isDate(b.start) ? prettyDate(b.start) : ''} {b.startTime ?? ''}
                       {isDate(b.end) && b.end !== b.start ? `${range()}${prettyDate(b.end!)}` : ''}
@@ -2876,8 +2953,14 @@ function AddBookingSheet({
               .filter((k) => (p as any)[k] != null && String((p as any)[k]).trim() !== '' && String((p as any)[k]) !== String((hit as any)[k] ?? ''))
               .map((k) => ({ k, old: (hit as any)[k], now: (p as any)[k] })),
       );
-      setB({ ...hit, ...keep, currency: (keep as any).currency ?? hit.currency, photos: photo ? [...(hit.photos ?? []), photo] : hit.photos, files: addFile(hit.files), memo: p.memo && hit.memo && !hit.memo.includes(p.memo) ? `${hit.memo}\n${p.memo}` : p.memo ?? hit.memo });
-      setNote(p.cancelled ? t('readCancel') : t('readUpdate'));
+      if (p.cancelled) {
+        setB({ ...hit, ...keep, photos: photo ? [...(hit.photos ?? []), photo] : hit.photos, files: addFile(hit.files) });
+        setNote(t('readCancel'));
+      } else {
+        // 前の予約は消さず・上書きせず、新しい予約として残す（違うところは色で見せる）
+        setB((x) => ({ ...x, ...p, type: hit.type, cancelled: undefined, currency: p.currency ?? hit.currency ?? x.currency, photos: photo ? [...(x.photos ?? []), photo] : x.photos, files: addFile(x.files) }));
+        setNote(t('dupKept'));
+      }
       setMode('form');
       return;
     }
@@ -3076,29 +3159,11 @@ function AddBookingSheet({
                         <Text style={{ color: C.pink, fontWeight: '700' }}>{show(d.now)}</Text>
                       </Text>
                     </View>
-                    <Pressable
-                      hitSlop={8}
-                      onPress={() => {
-                        set({ [d.k]: d.old } as any);
-                        setDiff((x) => x.filter((y) => y.k !== d.k));
-                      }}
-                    >
-                      <Text style={[s.noteText, { textDecorationLine: 'underline', fontSize: 12 }]}>{t('diffKeep')}</Text>
-                    </Pressable>
+
                   </View>
                 );
               })}
-              <Pressable
-                onPress={() => {
-                  // 前の予約には触らず、新しい予約として追加する（両方残る）
-                  setB((x) => ({ ...x, id: uid(), createdAt: Date.now() }));
-                  setDiff([]);
-                  setNote(t('keptBoth'));
-                }}
-                style={{ marginTop: 8, alignSelf: 'flex-start', borderWidth: 1, borderColor: C.pink, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 }}
-              >
-                <Text style={[s.noteText, { color: C.pink, fontWeight: '700' }]}>{t('keepBoth')}</Text>
-              </Pressable>
+
             </View>
           )}
           {!!b.cancelled && (
@@ -3437,6 +3502,34 @@ function BookingDetail({
             </Pressable>
           </View>
         </View>
+        {(() => {
+          const twins = findDups(trip).get(b.id);
+          if (!twins?.length) return null;
+          return (
+            <View style={[s.note, { backgroundColor: C.pinkSoft, marginTop: 12 }]}>
+              <Text style={[s.noteText, { color: C.pink, fontWeight: '700' }]}>{t('dupHere', { n: twins.length + 1 })}</Text>
+              {twins.map((o) => {
+                const ks = diffKeys(b, o);
+                return (
+                  <View key={o.id} style={{ marginTop: 6 }}>
+                    {ks.length === 0 ? (
+                      <Text style={[s.noteText, { color: C.pink }]}>{t('dupNoDiff')}</Text>
+                    ) : (
+                      ks.map((k) => (
+                        <Text key={String(k)} style={[s.noteText, { color: C.ink }]}>
+                          <Text style={{ opacity: 0.6 }}>{dupLabel(k, b.type)}：</Text>
+                          <Text style={{ color: C.pink, fontWeight: '700' }}>{String((b as any)[k] ?? t('diffNone'))}</Text>
+                          <Text style={{ opacity: 0.6 }}>{'  /  '}{t('dupOther')} </Text>
+                          <Text style={{ fontWeight: '700' }}>{String((o as any)[k] ?? t('diffNone'))}</Text>
+                        </Text>
+                      ))
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          );
+        })()}
         <Text style={s.sec}>{t('ticketsSec').toUpperCase()}</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ flexGrow: 0, marginBottom: 14 }}>
           {(b.photos ?? []).map((p, i) => (
@@ -4004,6 +4097,7 @@ function makeStyles() {
   undoBtn: { color: '#FFC94D', fontWeight: '900' },
   selBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 14, marginTop: 10 },
   selLink: { color: C.sub, fontWeight: '800', fontSize: 13 },
+  selFloat: { position: 'absolute', bottom: 34, left: 16, right: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, backgroundColor: C.card, borderRadius: 18, paddingHorizontal: 18, paddingVertical: 12, borderWidth: 1, borderColor: C.line, ...shadow, shadowOpacity: 0.18 },
   fab: { position: 'absolute', bottom: 34, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.ink, borderRadius: 30, paddingHorizontal: 24, paddingVertical: 16, ...shadow, shadowOpacity: 0.2 },
   fabText: { color: C.onInk, fontWeight: '800', fontSize: 15 },
   sheetWrap: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(21,23,28,0.35)' },

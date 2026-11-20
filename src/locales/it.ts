@@ -62,4 +62,5 @@ export default {
   copiedX: "Copiato: {x}", copyAll: "Copia tutti i dettagli", tapToCopy: "Tocca un nome, indirizzo o orario per copiarlo",
   diffTitle: "Cosa è cambiato ({n})", diffKeep: "Mantieni il vecchio", diffNone: "(nessuno)",
   keepBoth: "Non sovrascrivere: tienile entrambe", keptBoth: "La prenotazione precedente resta; questa sarà aggiunta come nuova",
+  dupKept: "Esiste già una prenotazione con questo codice. Vengono tenute entrambe; le differenze sono evidenziate", dupDiff: "{n} copie · differenze: {k}", dupSame: "{n} copie (identiche)", dupHere: "Questa prenotazione compare {n} volte (tutte conservate)", dupNoDiff: "Uguale all'altra copia", dupOther: "l'altra:",
 } as Record<string, string>;

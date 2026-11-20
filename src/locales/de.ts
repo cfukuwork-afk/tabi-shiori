@@ -62,4 +62,5 @@ export default {
   copiedX: "Kopiert: {x}", copyAll: "Alle Angaben kopieren", tapToCopy: "Name, Adresse oder Zeit antippen zum Kopieren",
   diffTitle: "Was sich geändert hat ({n})", diffKeep: "Alt behalten", diffNone: "(keine)",
   keepBoth: "Nicht überschreiben – beide behalten", keptBoth: "Die frühere Buchung bleibt; diese wird als neue hinzugefügt",
+  dupKept: "Es gibt schon eine Buchung mit diesem Code. Beide bleiben erhalten; Unterschiede sind markiert", dupDiff: "{n} Kopien · Unterschied: {k}", dupSame: "{n} Kopien (gleich)", dupHere: "Diese Buchung gibt es {n}-mal (alle behalten)", dupNoDiff: "Gleich wie die andere Kopie", dupOther: "andere:",
 } as Record<string, string>;
