@@ -2836,6 +2836,8 @@ function AddBookingSheet({
   const [mode, setMode] = useState<'choose' | 'text' | 'form' | 'ai'>(edit || initial?.planDate ? 'form' : 'choose');
   const [text, setText] = useState('');
   const [note, setNote] = useState('');
+  // 同じ予約番号の予約を上書きするとき、前と変わったところ（色付きで見せて、1つずつ戻せる）
+  const [diff, setDiff] = useState<{ k: keyof Booking; old: any; now: any }[]>([]);
   const [busy, setBusy] = useState(false);
   const [b, setB] = useState<Booking>(
     edit ??
@@ -2866,6 +2868,14 @@ function AddBookingSheet({
       (same.length === 1 && (!p.title || !same[0].title) ? same[0] : undefined);
     if (hit) {
       const keep = p.cancelled ? { cancelled: true } : { ...p, type: hit.type, cancelled: undefined };
+      const keys: (keyof Booking)[] = ['title', 'start', 'startTime', 'end', 'endTime', 'from', 'to', 'seat', 'price', 'currency'];
+      setDiff(
+        p.cancelled
+          ? []
+          : keys
+              .filter((k) => (p as any)[k] != null && String((p as any)[k]).trim() !== '' && String((p as any)[k]) !== String((hit as any)[k] ?? ''))
+              .map((k) => ({ k, old: (hit as any)[k], now: (p as any)[k] })),
+      );
       setB({ ...hit, ...keep, currency: (keep as any).currency ?? hit.currency, photos: photo ? [...(hit.photos ?? []), photo] : hit.photos, files: addFile(hit.files), memo: p.memo && hit.memo && !hit.memo.includes(p.memo) ? `${hit.memo}\n${p.memo}` : p.memo ?? hit.memo });
       setNote(p.cancelled ? t('readCancel') : t('readUpdate'));
       setMode('form');
@@ -3048,6 +3058,36 @@ function AddBookingSheet({
                   <Text style={[s.noteText, { textDecorationLine: 'underline' }]}>{initial?.inboxId ? t('keepInInbox') : t('later')}</Text>
                 </Pressable>
               )}
+            </View>
+          )}
+          {diff.length > 0 && (
+            <View style={[s.note, { backgroundColor: C.pinkSoft }]}>
+              <Text style={[s.noteText, { color: C.pink, fontWeight: '700', marginBottom: 6 }]}>{t('diffTitle', { n: diff.length })}</Text>
+              {diff.map((d) => {
+                const lab: Record<string, string> = { title: t('title'), start: t('startDate'), startTime: t('time'), end: t('endDate'), endTime: t('endTime'), from: placeLabels(b.type)[0], to: placeLabels(b.type)[1] ?? t('to'), seat: t('seat'), price: t('price'), currency: t('price') };
+                const show = (v: any) => (v == null || v === '' ? t('diffNone') : String(v));
+                return (
+                  <View key={String(d.k)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[s.noteText, { fontSize: 11, opacity: 0.7 }]}>{lab[d.k as string] ?? String(d.k)}</Text>
+                      <Text style={s.noteText}>
+                        <Text style={{ textDecorationLine: 'line-through', opacity: 0.55 }}>{show(d.old)}</Text>
+                        {'  →  '}
+                        <Text style={{ color: C.pink, fontWeight: '700' }}>{show(d.now)}</Text>
+                      </Text>
+                    </View>
+                    <Pressable
+                      hitSlop={8}
+                      onPress={() => {
+                        set({ [d.k]: d.old } as any);
+                        setDiff((x) => x.filter((y) => y.k !== d.k));
+                      }}
+                    >
+                      <Text style={[s.noteText, { textDecorationLine: 'underline', fontSize: 12 }]}>{t('diffKeep')}</Text>
+                    </Pressable>
+                  </View>
+                );
+              })}
             </View>
           )}
           {!!b.cancelled && (

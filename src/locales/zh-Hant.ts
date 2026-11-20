@@ -60,4 +60,5 @@ export default {
   undoAdded: "已新增 {n} 項", undoDeleted: "已刪除 {n} 項", undoSaved: "已儲存", undoBtn: "復原", selMode: "選擇", selCancel: "完成", selAll: "全選", delSelected: "刪除所選 {n} 項", delSure: "刪除 {n} 項？", delYes: "刪除", cancel2: "取消", askPayLink: "傳送連結，讓大家不用 App 填寫代墊", askPayHint: "開啟連結的人可以自己填寫代墊的費用，會自動同步到這個旅行。", askPayNeedShare: "請先開啟旅行分享（輸入名字後「產生分享碼」）", askPayMsg: "{name} 的分帳，請在這裡填寫你代墊的費用（不需要 App）", expLongHint: "長按可選擇並刪除",
   checkedAt: "已檢查 {t}", syncNow: "立即同步", syncErrNet: "未同步：沒有網路連線", syncErrGone: "未同步：伺服器上找不到此共享碼的旅行", syncErrServer: "未同步：伺服器發生問題，請稍後再試", syncErrData: "未同步：無法讀取收到的資料",
   copiedX: "已複製：{x}", copyAll: "複製全部資訊", tapToCopy: "點按名稱、地址、時間即可複製",
+  diffTitle: "與之前不同的地方（{n}處）", diffKeep: "保持原樣", diffNone: "（無）",
 } as Record<string, string>;

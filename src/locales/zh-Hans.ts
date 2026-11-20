@@ -60,4 +60,5 @@ export default {
   undoAdded: "已添加 {n} 项", undoDeleted: "已删除 {n} 项", undoSaved: "已保存", undoBtn: "撤销", selMode: "选择", selCancel: "完成", selAll: "全选", delSelected: "删除所选 {n} 项", delSure: "删除 {n} 项？", delYes: "删除", cancel2: "取消", askPayLink: "发送链接，让大家免应用填写垫付", askPayHint: "打开链接的人可以自己填写垫付的费用，会自动同步到这个旅行。", askPayNeedShare: "请先开启旅行分享（输入名字后「生成分享码」）", askPayMsg: "{name} 的分账，请在这里填写你垫付的费用（无需应用）", expLongHint: "长按可选择并删除",
   checkedAt: "已检查 {t}", syncNow: "立即同步", syncErrNet: "未同步：没有网络连接", syncErrGone: "未同步：服务器上找不到此共享码的旅行", syncErrServer: "未同步：服务器出现问题，请稍后再试", syncErrData: "未同步：无法读取收到的数据",
   copiedX: "已复制：{x}", copyAll: "复制全部信息", tapToCopy: "点按名称、地址、时间即可复制",
+  diffTitle: "与之前不同的地方（{n}处）", diffKeep: "保持原样", diffNone: "（无）",
 } as Record<string, string>;
