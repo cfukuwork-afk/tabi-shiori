@@ -1,0 +1,57 @@
+# アプリの中身（画面や文字）の修正を、ビルドや審査なしでストア版に届ける（EAS Update / OTA）
+# main に上がるたびに自動で動く。ネイティブの部品（package.json の依存）が変わったときは
+# ストア版で動かない恐れがあるので届けずに止める（そのときは iOS build で新しいビルドを出す）
+name: OTA update
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'App.tsx'
+      - 'src/**'
+      - 'assets/**'
+      - 'locales/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ota-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Same native parts as the store build?
+        id: guard
+        run: |
+          NOW=$(node -e 'const p=require("./package.json");console.log(require("crypto").createHash("sha1").update(JSON.stringify({...p.dependencies})).digest("hex"))')
+          BASE=$(cat .github/native-baseline)
+          if [ "$NOW" != "$BASE" ]; then
+            echo "::warning::部品（package.json）がストア版と違うので、OTAでは届けません。iOS build で新しいビルドを出してください"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.guard.outputs.ok == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        if: steps.guard.outputs.ok == 'true'
+        run: (npm ci || npm install) && npm install -g eas-cli
+
+      - name: Type check
+        if: steps.guard.outputs.ok == 'true'
+        run: npx tsc --noEmit
+
+      - name: Publish update
+        if: steps.guard.outputs.ok == 'true'
+        run: eas update --channel production --platform ios --message "$(git log -1 --pretty=%s | cut -c1-200)" --non-interactive

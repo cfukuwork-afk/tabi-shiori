@@ -61,4 +61,5 @@ export default {
   checkedAt: "Controllato {t}", syncNow: "Sincronizza ora", syncErrNet: "Non sincronizzato: nessuna connessione a internet", syncErrGone: "Non sincronizzato: il viaggio di questo codice non è più sul server", syncErrServer: "Non sincronizzato: problema del server. Riprova più tardi", syncErrData: "Non sincronizzato: impossibile leggere i dati ricevuti",
   copiedX: "Copiato: {x}", copyAll: "Copia tutti i dettagli", tapToCopy: "Tocca un nome, indirizzo o orario per copiarlo",
   diffTitle: "Cosa è cambiato ({n})", diffKeep: "Mantieni il vecchio", diffNone: "(nessuno)",
+  keepBoth: "Non sovrascrivere: tienile entrambe", keptBoth: "La prenotazione precedente resta; questa sarà aggiunta come nuova",
 } as Record<string, string>;

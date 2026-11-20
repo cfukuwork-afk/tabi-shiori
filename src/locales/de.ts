@@ -61,4 +61,5 @@ export default {
   checkedAt: "Geprüft {t}", syncNow: "Jetzt synchronisieren", syncErrNet: "Nicht synchron: keine Internetverbindung", syncErrGone: "Nicht synchron: Die Reise zu diesem Code ist nicht mehr auf dem Server", syncErrServer: "Nicht synchron: Serverproblem. Bitte später erneut versuchen", syncErrData: "Nicht synchron: Empfangene Daten konnten nicht gelesen werden",
   copiedX: "Kopiert: {x}", copyAll: "Alle Angaben kopieren", tapToCopy: "Name, Adresse oder Zeit antippen zum Kopieren",
   diffTitle: "Was sich geändert hat ({n})", diffKeep: "Alt behalten", diffNone: "(keine)",
+  keepBoth: "Nicht überschreiben – beide behalten", keptBoth: "Die frühere Buchung bleibt; diese wird als neue hinzugefügt",
 } as Record<string, string>;

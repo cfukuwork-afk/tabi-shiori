@@ -61,4 +61,5 @@ export default {
   checkedAt: "已检查 {t}", syncNow: "立即同步", syncErrNet: "未同步：没有网络连接", syncErrGone: "未同步：服务器上找不到此共享码的旅行", syncErrServer: "未同步：服务器出现问题，请稍后再试", syncErrData: "未同步：无法读取收到的数据",
   copiedX: "已复制：{x}", copyAll: "复制全部信息", tapToCopy: "点按名称、地址、时间即可复制",
   diffTitle: "与之前不同的地方（{n}处）", diffKeep: "保持原样", diffNone: "（无）",
+  keepBoth: "不覆盖，两条都保留", keptBoth: "之前的预订保持不变，这条将作为新预订添加",
 } as Record<string, string>;

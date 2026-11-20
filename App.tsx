@@ -3088,6 +3088,17 @@ function AddBookingSheet({
                   </View>
                 );
               })}
+              <Pressable
+                onPress={() => {
+                  // 前の予約には触らず、新しい予約として追加する（両方残る）
+                  setB((x) => ({ ...x, id: uid(), createdAt: Date.now() }));
+                  setDiff([]);
+                  setNote(t('keptBoth'));
+                }}
+                style={{ marginTop: 8, alignSelf: 'flex-start', borderWidth: 1, borderColor: C.pink, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 }}
+              >
+                <Text style={[s.noteText, { color: C.pink, fontWeight: '700' }]}>{t('keepBoth')}</Text>
+              </Pressable>
             </View>
           )}
           {!!b.cancelled && (

@@ -61,4 +61,5 @@ export default {
   checkedAt: "Comprobado {t}", syncNow: "Sincronizar ahora", syncErrNet: "Sin sincronizar: no hay conexión a internet", syncErrGone: "Sin sincronizar: el viaje de este código ya no está en el servidor", syncErrServer: "Sin sincronizar: problema del servidor. Inténtalo más tarde", syncErrData: "Sin sincronizar: no se pudieron leer los datos recibidos",
   copiedX: "Copiado: {x}", copyAll: "Copiar todos los datos", tapToCopy: "Toca un nombre, dirección u hora para copiarlo",
   diffTitle: "Qué cambió ({n})", diffKeep: "Dejar como estaba", diffNone: "(nada)",
+  keepBoth: "No sobrescribir: conservar ambas", keptBoth: "La reserva anterior se mantiene; esta se añadirá como nueva",
 } as Record<string, string>;

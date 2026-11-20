@@ -61,4 +61,5 @@ export default {
   checkedAt: "확인 {t}", syncNow: "지금 동기화", syncErrNet: "동기화 안 됨: 인터넷에 연결되어 있지 않아요", syncErrGone: "동기화 안 됨: 이 공유 코드의 여행이 서버에 없어요", syncErrServer: "동기화 안 됨: 서버 문제예요. 잠시 후 다시 시도해 주세요", syncErrData: "동기화 안 됨: 받은 데이터를 읽을 수 없어요",
   copiedX: "복사했어요: {x}", copyAll: "정보 한꺼번에 복사", tapToCopy: "이름·주소·일시를 탭하면 복사돼요",
   diffTitle: "이전과 달라진 부분({n}건)", diffKeep: "이전대로 두기", diffNone: "(없음)",
+  keepBoth: "덮어쓰지 않고 둘 다 남기기", keptBoth: "이전 예약은 그대로 두고, 이것은 새 예약으로 추가합니다",
 } as Record<string, string>;
