@@ -1,6 +1,6 @@
 // 旅行の地図：予約と予定をピンで並べ、日ごとの移動を線でつなぐ
 import { useEffect, useMemo, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Booking, Trip, timeline, typeOf } from './data';
 import { C } from './theme';
@@ -237,6 +237,7 @@ export default function MapTab({ trip, onOpen }: { trip: Trip; onOpen: (b: Booki
         <NativeMap points={points} lines={lines} badges={badges} />
         {busy && (
           <View style={st.busy}>
+            <ActivityIndicator size="small" color={C.onInk} />
             <Text style={st.busyText}>{t('mapLoading')}</Text>
           </View>
         )}
@@ -322,7 +323,7 @@ function makeSt() {
   chipOn: { backgroundColor: C.ink, borderColor: C.ink },
   chipText: { fontWeight: '800', color: C.ink, fontSize: 13 },
   mapBox: { height: 360, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: C.line, backgroundColor: C.chip },
-  busy: { position: 'absolute', top: 10, alignSelf: 'center', backgroundColor: 'rgba(21,23,28,0.85)', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6 },
+  busy: { position: 'absolute', top: 10, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.ink, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8 },
   busyText: { color: C.onInk, fontSize: 12, fontWeight: '700' },
   routeBtn: { flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: C.ink, borderRadius: 16, paddingVertical: 14, marginTop: 12 },
   routeText: { color: C.onInk, fontWeight: '800', fontSize: 15 },

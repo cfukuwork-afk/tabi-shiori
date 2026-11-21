@@ -105,6 +105,7 @@ import { myTz } from './src/airports';
 import { isPdf, isPkpass, keepFile, readPkpass, TicketFile } from './src/pkpass';
 import { pickAnyFile } from './src/files';
 import * as Sharing from 'expo-sharing';
+import { ShareCardPanel } from './src/ShareCard';
 import { activityLinks, airhelpLink, carLinks, esimLinks, flightLinks, hotelLinks, inspireLinks, luggageLinks, transferLinks, FindLink } from './src/affiliate';
 import { syncTripActivity, updateNextWidget, widgetsAvailable } from './src/liveWidgets';
 
@@ -555,6 +556,7 @@ function Main() {
         <ShareSheet
           trip={trips.find((x) => x.id === sharing)!}
           stat={syncStat[sharing]}
+          rate={rate}
           onSyncNow={syncAll}
           onClose={() => setSharing(null)}
           onShared={(tr) => setTrips((prev) => { const next = prev.map((x) => (x.id === tr.id ? tr : x)); saveTrips(next); return next; })}
@@ -835,12 +837,12 @@ function YearSummary({ trips }: { trips: Trip[]; rate: RateInfo }) {
   const y = todayStr().slice(0, 4);
   const mine = trips.filter((tr) => (tripRange(tr).start ?? '').startsWith(y));
   if (!mine.length) return null;
-  // 泊数：ホテルの泊数。ホテルがない旅は日数-1
+  // 泊数：旅の日数-1。ホテルの入力が一部だけでも（連泊を1件で入れていない等）少なく数えないよう、多いほうを使う
   const nights = mine.reduce((a, tr) => {
     const h = tr.bookings.filter((b) => b.type === 'hotel' && !b.cancelled && isDate(b.end)).reduce((x, b) => x + Math.max(0, daysBetween(b.start, b.end!)), 0);
     const { start, end } = tripRange(tr);
     const d = isDate(start) && isDate(end) ? daysBetween(start!, end!) : 0;
-    return a + (h || Math.max(0, isFinite(d) ? d : 0));
+    return a + Math.max(h, Math.max(0, isFinite(d) ? d : 0));
   }, 0);
   const countries = new Set<string>();
   const cities = new Map<string, { ja: string; en: string }>();
@@ -1315,12 +1317,19 @@ function JournalSheet({
 }
 
 /* ---------------- 共有（一緒に編集） ---------------- */
-function ShareSheet({ trip, stat, onSyncNow, onClose, onShared, onStop }: { trip: Trip; stat?: { ok: number; err?: string }; onSyncNow: () => Promise<void>; onClose: () => void; onShared: (t: Trip) => void; onStop: () => void }) {
+function ShareSheet({ trip, stat, rate, onSyncNow, onClose, onShared, onStop }: { trip: Trip; stat?: { ok: number; err?: string }; rate: RateInfo; onSyncNow: () => Promise<void>; onClose: () => void; onShared: (t: Trip) => void; onStop: () => void }) {
   const [syncBusy, setSyncBusy] = useState(false);
   const hhmm = (ms: number) => new Date(ms).toLocaleTimeString().slice(0, 5);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [sure, setSure] = useState(false);
+  const [card, setCard] = useState(false);
+  const [cover, setCover] = useState<string | null>(null);
+  useEffect(() => {
+    // カードに入れる表紙写真（なければ思い出の最初の1枚）
+    const u = trip.cover ?? memoryPhotos(trip)[0];
+    if (card && u) toDataUri(u).then(setCover).catch(() => setCover(null));
+  }, [card, trip.cover]);
   const code = trip.share?.code;
   const meId = trip.myId ?? trip.members.find((m) => m.id === 'me')?.id ?? trip.members[0]?.id;
   const meName = trip.members.find((m) => m.id === meId)?.name ?? '';
@@ -1387,6 +1396,12 @@ function ShareSheet({ trip, stat, onSyncNow, onClose, onShared, onStop }: { trip
         </View>
       )}
       {!!err && <Text style={[s.hint, { color: C.pink, marginTop: 8 }]}>{err}</Text>}
+      <Text style={[s.kicker, { marginTop: 22, marginBottom: 8 }]}>{t('cardKicker').toUpperCase()}</Text>
+      <Pressable style={[s.secondary, { marginBottom: 8, borderColor: C.pink }]} onPress={() => setCard((v) => !v)}>
+        <Icon name="sparkles-outline" size={17} color={C.pink} />
+        <Text style={[s.secondaryText, { color: C.pink }]}>{t('cardOpen')}</Text>
+      </Pressable>
+      {card && <ShareCardPanel trip={trip} rate={rate} cover={cover} onText={(message) => shareSafe({ message })} />}
       <Text style={[s.kicker, { marginTop: 22, marginBottom: 8 }]}>{t('shareText').toUpperCase()}</Text>
       <Pressable
         style={[s.secondary, { marginBottom: 8 }, pdfBusy && { opacity: 0.5 }]}
@@ -1761,6 +1776,18 @@ function PlanTab({ trip, wx, onOpen, onJournal, onAddPlan, onChange }: { trip: T
               </View>
             )}
           </View>
+          {(() => {
+            // その日の夜に泊まる宿（連泊の2泊目以降も、毎日わかるように出す）
+            const stays = trip.bookings.filter((h) => h.type === 'hotel' && !h.cancelled && isDate(h.start) && isDate(h.end) && h.start <= date && date < h.end! && h.start !== date);
+            return stays.map((h) => (
+              <Pressable key={'stay' + h.id} onPress={() => onOpen(h)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 52, marginBottom: 8 }}>
+                <Icon name="bed-outline" size={14} color={C.sub} />
+                <Text style={[s.hint, { flex: 1 }]} numberOfLines={1}>
+                  {t('stayNight', { name: h.title || typeName('hotel'), n: daysBetween(h.start, date) + 1, m: daysBetween(h.start, h.end!) })}
+                </Text>
+              </Pressable>
+            ));
+          })()}
           {items.length === 0 && !onAddPlan && <Text style={[s.hint, { marginLeft: 52, marginBottom: 8 }]}>{t('freeDay')}</Text>}
           {items.map((it, i) => {
             const b = it.booking;
