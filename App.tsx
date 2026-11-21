@@ -47,6 +47,7 @@ import {
   monogram,
   isPast,
   memoryPhotos,
+  hotelNights,
   tripDays,
   DEFAULT_SETTINGS,
   RateInfo,
@@ -839,7 +840,7 @@ function YearSummary({ trips }: { trips: Trip[]; rate: RateInfo }) {
   if (!mine.length) return null;
   // 泊数：旅の日数-1。ホテルの入力が一部だけでも（連泊を1件で入れていない等）少なく数えないよう、多いほうを使う
   const nights = mine.reduce((a, tr) => {
-    const h = tr.bookings.filter((b) => b.type === 'hotel' && !b.cancelled && isDate(b.end)).reduce((x, b) => x + Math.max(0, daysBetween(b.start, b.end!)), 0);
+    const h = hotelNights(tr);
     const { start, end } = tripRange(tr);
     const d = isDate(start) && isDate(end) ? daysBetween(start!, end!) : 0;
     return a + Math.max(h, Math.max(0, isFinite(d) ? d : 0));

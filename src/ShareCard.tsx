@@ -6,7 +6,7 @@ import Svg, { Circle, G, Image as SvgImage, Path, Rect, Text as SvgText, ClipPat
 import { File as FSFile, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import type { RateInfo, Trip } from './data';
-import { daysBetween, fmtMoney, isDate, tripDays, tripRange, tripTotal } from './data';
+import { daysBetween, fmtMoney, hotelNights, isDate, tripDays, tripRange, tripTotal } from './data';
 import { getLang, prettyDate, range, t } from './i18n';
 import { C } from './theme';
 import { WORLD } from './worldPaths';
@@ -61,7 +61,7 @@ function useCardData(trip: Trip, rate: RateInfo) {
     const cities = [...pl.cities.values()].map((c) => (ja ? c.ja : c.en));
     const { start, end } = tripRange(trip);
     const days = tripDays(trip).length;
-    const hotelN = trip.bookings.filter((b) => b.type === 'hotel' && !b.cancelled && isDate(b.end)).reduce((a, b) => a + Math.max(0, daysBetween(b.start, b.end!)), 0);
+    const hotelN = hotelNights(trip);
     const nights = Math.max(hotelN, isDate(start) && isDate(end) ? Math.max(0, daysBetween(start!, end!)) : 0);
     const spots = [...new Set(trip.bookings.filter((b) => SPOT_TYPES.includes(b.type) && !b.cancelled && b.title).map((b) => b.title.replace(/[（(].*[）)]/, '').trim()))].filter(Boolean);
     const total = tripTotal(trip, rate);

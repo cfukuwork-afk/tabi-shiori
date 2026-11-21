@@ -280,6 +280,16 @@ export function timeline(t: Trip): { date: string; items: TimelineItem[] }[] {
     .map(([date, items]) => ({ date, items: items.sort((x, y) => sortTime(x).localeCompare(sortTime(y))) }));
 }
 
+/** ホテルに泊まる夜の数（同じ夜に重なる予約・重複は1泊として数える） */
+export function hotelNights(t: Trip): number {
+  const nights = new Set<string>();
+  t.bookings.forEach((b) => {
+    if (b.type !== 'hotel' || b.cancelled || !isDate(b.start) || !isDate(b.end)) return;
+    for (let d = b.start; d < b.end! && nights.size < 400; d = shiftDate(d, 1)) nights.add(d);
+  });
+  return nights.size;
+}
+
 /** 次の予定（今日以降でいちばん近いもの） */
 export function nextUp(trips: Trip[], now = todayStr()): { trip: Trip; item: TimelineItem; date: string } | null {
   let best: { trip: Trip; item: TimelineItem; date: string } | null = null;
