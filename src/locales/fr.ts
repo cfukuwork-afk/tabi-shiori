@@ -77,4 +77,7 @@ export default {
   cardMaking: "Création de l’image…",
   cardErr: "Impossible de créer l’image. Réessayez.",
   cardHint: "Les hôtels, codes de réservation et compagnons n’apparaissent jamais sur la carte.",
+  cardPost: "Post (4:5)",
+  cardStory: "Story (9:16)",
+  cardMapHint: "Ouvrez l’onglet Carte une fois pour ajouter vos lieux et l’itinéraire.",
 } as Record<string, string>;

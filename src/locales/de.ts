@@ -77,4 +77,7 @@ export default {
   cardMaking: "Bild wird erstellt…",
   cardErr: "Bild konnte nicht erstellt werden. Bitte erneut versuchen.",
   cardHint: "Hotelnamen, Buchungscodes und Mitreisende erscheinen nie auf der Karte.",
+  cardPost: "Beitrag (4:5)",
+  cardStory: "Story (9:16)",
+  cardMapHint: "Öffne einmal den Karten-Tab, um Orte und Route hinzuzufügen.",
 } as Record<string, string>;

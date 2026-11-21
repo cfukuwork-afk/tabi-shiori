@@ -77,4 +77,7 @@ export default {
   cardMaking: "正在生成图片…",
   cardErr: "无法生成图片，请重试。",
   cardHint: "酒店名、预订号和同行人姓名不会出现在卡片上。",
+  cardPost: "帖子（4:5）",
+  cardStory: "快拍（9:16）",
+  cardMapHint: "打开一次地图页，卡片上就会显示去过的地点和路线。",
 } as Record<string, string>;

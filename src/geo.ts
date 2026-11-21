@@ -20,6 +20,17 @@ async function loadCache() {
   }
   return cache!;
 }
+/** 地図で一度調べた場所だけを返す（ネットには行かない） */
+export async function cachedGeos(qs: string[]): Promise<Record<string, Geo>> {
+  const c = await loadCache();
+  const out: Record<string, Geo> = {};
+  const keys = Object.keys(c);
+  qs.forEach((q) => {
+    const k = [q, `n4:${q}`].find((x) => c[x]) ?? keys.find((x) => x.startsWith(`n4:${q}@`) && c[x]);
+    if (k && c[k]) out[q] = c[k]!;
+  });
+  return out;
+}
 const saveCache = () => AsyncStorage.setItem(KEY, JSON.stringify(cache ?? {})).catch(() => {});
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

@@ -77,4 +77,7 @@ export default {
   cardMaking: "이미지를 만드는 중…",
   cardErr: "이미지를 만들 수 없었어요. 다시 시도해 주세요.",
   cardHint: "호텔 이름·예약 번호·동행자 이름은 카드에 나오지 않아요.",
+  cardPost: "게시물 (4:5)",
+  cardStory: "스토리 (9:16)",
+  cardMapHint: "지도 탭을 한 번 열면 간 곳과 경로가 카드에 들어가요.",
 } as Record<string, string>;
