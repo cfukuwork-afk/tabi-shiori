@@ -80,4 +80,5 @@ export default {
   cardPost: "Post (4:5)",
   cardStory: "Story (9:16)",
   cardMapHint: "Abra a aba Mapa uma vez para adicionar os lugares e o trajeto.",
+  todayShort: "Hoje",
 } as Record<string, string>;

@@ -1320,7 +1320,16 @@ function JournalSheet({
 /* ---------------- 共有（一緒に編集） ---------------- */
 function ShareSheet({ trip, stat, rate, onSyncNow, onClose, onShared, onStop }: { trip: Trip; stat?: { ok: number; err?: string }; rate: RateInfo; onSyncNow: () => Promise<void>; onClose: () => void; onShared: (t: Trip) => void; onStop: () => void }) {
   const [syncBusy, setSyncBusy] = useState(false);
-  const hhmm = (ms: number) => new Date(ms).toLocaleTimeString().slice(0, 5);
+  // 「今日 14:05」「11/21(土) 9:30」のように日付も出す
+  const hhmm = (ms: number) => {
+    const d = new Date(ms);
+    const p2 = (n: number) => String(n).padStart(2, '0');
+    const day = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+    const time = `${d.getHours()}:${p2(d.getMinutes())}`;
+    const n = new Date();
+    const today = `${n.getFullYear()}-${p2(n.getMonth() + 1)}-${p2(n.getDate())}`;
+    return `${day === today ? t('todayShort') : prettyDate(day)} ${time}`;
+  };
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [sure, setSure] = useState(false);

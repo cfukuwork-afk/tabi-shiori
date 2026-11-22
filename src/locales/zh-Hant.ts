@@ -80,4 +80,5 @@ export default {
   cardPost: "貼文（4:5）",
   cardStory: "限動（9:16）",
   cardMapHint: "打開一次地圖頁，卡片上就會顯示去過的地點和路線。",
+  todayShort: "今天",
 } as Record<string, string>;

@@ -80,4 +80,5 @@ export default {
   cardPost: "게시물 (4:5)",
   cardStory: "스토리 (9:16)",
   cardMapHint: "지도 탭을 한 번 열면 간 곳과 경로가 카드에 들어가요.",
+  todayShort: "오늘",
 } as Record<string, string>;

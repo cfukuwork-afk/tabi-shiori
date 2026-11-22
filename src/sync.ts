@@ -113,7 +113,15 @@ const strip = (t: Trip) => {
   return rest;
 };
 async function call(path: string, init?: RequestInit) {
-  const r = await fetch(`${SERVER}${path}`, { ...init, headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) } });
+  // 電波が弱い・Wi-Fiからモバイル回線に切り替わった直後などで返事が来ないまま止まらないよう、15秒で打ち切る
+  const ctl = new AbortController();
+  const tm = setTimeout(() => ctl.abort(), 15000);
+  let r: Response;
+  try {
+    r = await fetch(`${SERVER}${path}`, { ...init, signal: ctl.signal, headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) } });
+  } finally {
+    clearTimeout(tm);
+  }
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw Object.assign(new Error(j.error || `HTTP ${r.status}`), { status: r.status });
   return j;
