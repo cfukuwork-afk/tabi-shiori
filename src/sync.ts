@@ -109,7 +109,7 @@ async function downloadPhotos(trip: Trip) {
 
 /* ---------- サーバーとのやりとり ---------- */
 const strip = (t: Trip) => {
-  const { share: _s, myId: _m, ...rest } = t;
+  const { share: _s, myId: _m, pub: _p, ...rest } = t;
   return rest;
 };
 async function call(path: string, init?: RequestInit) {
@@ -166,3 +166,29 @@ export async function syncTrip(trip: Trip): Promise<{ trip: Trip; rev: number; p
   await downloadPhotos(res.trip);
   return { trip: res.trip, rev: res.rev, pushed: false };
 }
+
+/* ---------- みんなのしおり ---------- */
+export type PubTrip = { id: string; author?: string; trip: { name: string; emoji?: string; days: number; cities: string[]; countries: string[]; note?: string; items: { type: string; title: string; day: number; time?: string; endDay?: number; endTime?: string; from?: string; to?: string }[] } };
+const pubBody = (trip: Trip, author: string, note: string, cities: string[], countries: string[], lang: string) =>
+  JSON.stringify({
+    author,
+    note,
+    cities,
+    countries,
+    lang,
+    // 公開するのは種類・名前・日付・時刻・乗り物の出発地と到着地だけ（予約番号・金額・メモ・住所・写真・メンバーは送らない）
+    trip: { name: trip.name, emoji: trip.emoji, bookings: trip.bookings.filter((b) => !b.cancelled).map((b) => ({ type: b.type, title: b.title, start: b.start, startTime: b.startTime, end: b.end, endTime: b.endTime, from: b.from, to: b.to })) },
+  });
+export async function publishTrip(trip: Trip, author: string, note: string, cities: string[], countries: string[], lang: string): Promise<{ id: string; key: string; url: string }> {
+  return call('/v1/pub', { method: 'POST', body: pubBody(trip, author, note, cities, countries, lang) });
+}
+export async function updatePub(trip: Trip, author: string, note: string, cities: string[], countries: string[], lang: string) {
+  return call(`/v1/pub/${trip.pub!.id}`, { method: 'PUT', headers: { 'x-pub-key': trip.pub!.key }, body: pubBody(trip, author, note, cities, countries, lang) });
+}
+export async function unpublishTrip(trip: Trip) {
+  return call(`/v1/pub/${trip.pub!.id}`, { method: 'DELETE', headers: { 'x-pub-key': trip.pub!.key } });
+}
+export async function fetchPub(id: string): Promise<PubTrip> {
+  return call(`/v1/pub/${encodeURIComponent(id)}`);
+}
+export const pubUrl = (id: string) => `${SERVER}/t/${id}`;

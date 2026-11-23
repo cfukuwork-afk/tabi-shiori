@@ -21,6 +21,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  Alert,
   View,
   useWindowDimensions,
   useColorScheme,
@@ -35,7 +36,7 @@ import { estimate, fmtKm } from './src/eta';
 import MapTab, { tripStops } from './src/MapTab';
 import { fetchMeta, firstUrl, platformOf } from './src/wish';
 import { stamp, mergeTrip } from './src/merge';
-import { fetchShared, loadPhotoMap, localPhoto, normCode, prettyCode, startShare, syncTrip } from './src/sync';
+import { fetchPub, fetchShared, loadPhotoMap, localPhoto, normCode, prettyCode, publishTrip, pubUrl, startShare, syncTrip, unpublishTrip, updatePub, type PubTrip } from './src/sync';
 import {
   Booking,
   BookingType,
@@ -301,11 +302,18 @@ function Main() {
     const rest = (x!.text ?? '').replace(u, '').trim();
     return rest.length < 120 && !/(予約|booking|confirmation|reservation|check-?in|搭乗|便)/i.test(rest) ? u : undefined;
   };
+  const [pubIn, setPubIn] = useState<PubTrip | null>(null);
   const [settleIn, setSettleIn] = useState<{ n: string; c: string; p: { f: string; t: string; a: number }[] } | null>(null);
   const url = ExpoLinking.useURL();
   useEffect(() => {
     if (url && url.includes('join?c=')) {
       setJoining(normCode(url.split('join?c=')[1] ?? ''));
+      return;
+    }
+    // みんなのしおりのページの「Tripfold にコピーする」
+    const pm = url?.match(/pub\?id=([a-z0-9]{10})/);
+    if (pm) {
+      fetchPub(pm[1]).then(setPubIn).catch(() => Alert.alert(t('pubNotFound')));
       return;
     }
     if (!url || !url.includes('settle?d=')) return;
@@ -549,6 +557,39 @@ function Main() {
               else setAdding({ tripId: tr.id, initial: incoming });
             }
             setIncoming(null);
+          }}
+        />
+      )}
+
+      {!!pubIn && (
+        <ImportPubSheet
+          pub={pubIn}
+          onClose={() => setPubIn(null)}
+          onCopy={(start) => {
+            const p = pubIn.trip;
+            const tr: Trip = {
+              id: uid(),
+              name: p.name,
+              emoji: p.emoji && COVERS.includes(p.emoji) ? p.emoji : COVERS[Math.floor(Math.random() * COVERS.length)],
+              members: [{ id: 'me', name: settings.myName || t('me') }],
+              bookings: p.items.map((it, i) => ({
+                id: uid(),
+                type: (TYPES.some((x) => x.id === it.type) ? it.type : 'plan') as BookingType,
+                title: it.title,
+                start: shiftDate(start, it.day - 1),
+                startTime: it.time,
+                end: it.endDay ? shiftDate(start, it.endDay - 1) : undefined,
+                endTime: it.endTime,
+                from: it.from,
+                to: it.to,
+                createdAt: Date.now() + i,
+              })),
+              checklist: t('defaultPack').split(',').map((x) => ({ id: uid(), text: x, done: false })),
+              createdAt: Date.now(),
+            };
+            updateTrips((all) => [tr, ...all]);
+            setPubIn(null);
+            setOpenId(tr.id);
           }}
         />
       )}
@@ -1318,6 +1359,123 @@ function JournalSheet({
 }
 
 /* ---------------- 共有（一緒に編集） ---------------- */
+/** みんなのしおりに公開する（共有画面の中） */
+function PublishBlock({ trip, defaultName, onChange }: { trip: Trip; defaultName: string; onChange: (t: Trip) => void }) {
+  const [open, setOpen] = useState(false);
+  const [author, setAuthor] = useState(defaultName);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const places = () => {
+    const ja = getLang() === 'ja';
+    const pl = tripPlaces(trip);
+    return { cities: [...pl.cities.values()].map((c) => (ja ? c.ja : c.en)), countries: [...new Set([...pl.countries, ...tripCountries(trip)])] };
+  };
+  const dated = trip.bookings.filter((b) => !b.cancelled && isDate(b.start)).length;
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    setMsg('');
+    try {
+      await fn();
+    } catch {
+      setMsg(t('syncErrNet'));
+    }
+    setBusy(false);
+  };
+  const url = trip.pub ? pubUrl(trip.pub.id) : '';
+  return (
+    <>
+      <Text style={[s.kicker, { marginTop: 22, marginBottom: 8 }]}>{t('pubKicker').toUpperCase()}</Text>
+      {trip.pub ? (
+        <View style={s.card}>
+          <Text style={[s.hint, { lineHeight: 20 }]}>{t('pubLive')}</Text>
+          <Pressable onPress={() => Linking.openURL(url)}>
+            <Text style={[s.hint, { color: C.ink, textDecorationLine: 'underline', marginTop: 6 }]} numberOfLines={1}>{url}</Text>
+          </Pressable>
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+            <Pressable style={[s.secondary, { flex: 1 }]} onPress={() => shareSafe({ message: `${trip.name}\n${url}` })}>
+              <Icon name="share-outline" size={16} />
+              <Text style={s.secondaryText}>{t('pubShare')}</Text>
+            </Pressable>
+            <Pressable
+              style={[s.secondary, { flex: 1 }, busy && { opacity: 0.5 }]}
+              disabled={busy}
+              onPress={() => run(async () => {
+                const p = places();
+                await updatePub(trip, author.trim(), note.trim(), p.cities, p.countries, getLang());
+                setMsg(t('pubUpdated'));
+              })}
+            >
+              <Icon name="refresh-outline" size={16} />
+              <Text style={s.secondaryText}>{t('pubUpdate')}</Text>
+            </Pressable>
+          </View>
+          <Pressable
+            disabled={busy}
+            onPress={() =>
+              Alert.alert(t('pubStopQ'), '', [
+                { text: t('cancel'), style: 'cancel' },
+                { text: t('pubStop'), style: 'destructive', onPress: () => run(async () => {
+                  await unpublishTrip(trip).catch((e) => { if (e?.status !== 404) throw e; });
+                  onChange({ ...trip, pub: undefined });
+                }) },
+              ])
+            }
+          >
+            <Text style={[s.hint, { color: C.pink, textAlign: 'center', marginTop: 12 }]}>{t('pubStop')}</Text>
+          </Pressable>
+        </View>
+      ) : !open ? (
+        <Pressable style={s.secondary} onPress={() => setOpen(true)} disabled={dated < 2}>
+          <Icon name="globe-outline" size={17} />
+          <Text style={s.secondaryText}>{dated < 2 ? t('pubNeedMore') : t('pubOpen')}</Text>
+        </Pressable>
+      ) : (
+        <View style={s.card}>
+          <Text style={[s.hint, { lineHeight: 20 }]}>{t('pubHint')}</Text>
+          <Text style={s.label}>{t('pubAuthor')}</Text>
+          <TextInput style={s.input} value={author} onChangeText={setAuthor} placeholder={t('pubAuthorPh')} placeholderTextColor={C.sub} maxLength={30} />
+          <Text style={s.label}>{t('pubNote')}</Text>
+          <TextInput style={[s.input, { minHeight: 70, textAlignVertical: 'top' }]} value={note} onChangeText={setNote} placeholder={t('pubNotePh')} placeholderTextColor={C.sub} multiline maxLength={600} />
+          <Pressable
+            style={[s.primary, { marginTop: 12 }, busy && { opacity: 0.5 }]}
+            disabled={busy}
+            onPress={() => run(async () => {
+              const p = places();
+              const r = await publishTrip(trip, author.trim(), note.trim(), p.cities, p.countries, getLang());
+              onChange({ ...trip, pub: { id: r.id, key: r.key } });
+              setOpen(false);
+            })}
+          >
+            {busy ? <ActivityIndicator color={C.onInk} /> : <Text style={s.primaryText}>{t('pubGo')}</Text>}
+          </Pressable>
+        </View>
+      )}
+      {!!msg && <Text style={[s.hint, { marginTop: 6 }]}>{msg}</Text>}
+    </>
+  );
+}
+
+/** みんなのしおりを自分の旅にコピーする */
+function ImportPubSheet({ pub, onClose, onCopy }: { pub: PubTrip; onClose: () => void; onCopy: (start: string) => void }) {
+  const [start, setStart] = useState(shiftDate(todayStr(), 14));
+  const p = pub.trip;
+  return (
+    <Sheet visible onClose={onClose}>
+      <Text style={s.kicker}>{t('pubKicker').toUpperCase()}</Text>
+      <Text style={s.sheetTitle}>{(p.emoji ? p.emoji + ' ' : '') + p.name}</Text>
+      <Text style={[s.hint, { marginBottom: 12 }]}>
+        {[p.countries.map(flag).join(''), p.cities.join(' · '), t('pubDays', { n: p.days }), pub.author ? `by ${pub.author}` : ''].filter(Boolean).join('  ')}
+      </Text>
+      <Text style={[s.hint, { lineHeight: 20 }]}>{t('pubCopyHint', { n: p.items.length })}</Text>
+      <DateField label={t('pubStart')} value={start} onChange={setStart} />
+      <Pressable style={[s.primary, { marginTop: 14 }]} disabled={!isDate(start)} onPress={() => onCopy(start)}>
+        <Text style={s.primaryText}>{t('pubCopy')}</Text>
+      </Pressable>
+    </Sheet>
+  );
+}
+
 function ShareSheet({ trip, stat, rate, onSyncNow, onClose, onShared, onStop }: { trip: Trip; stat?: { ok: number; err?: string }; rate: RateInfo; onSyncNow: () => Promise<void>; onClose: () => void; onShared: (t: Trip) => void; onStop: () => void }) {
   const [syncBusy, setSyncBusy] = useState(false);
   // 「今日 14:05」「11/21(土) 9:30」のように日付も出す
@@ -1399,6 +1557,7 @@ function ShareSheet({ trip, stat, rate, onSyncNow, onClose, onShared, onStop }: 
         </View>
       )}
       {!!err && <Text style={[s.hint, { color: C.pink, marginTop: 8 }]}>{err}</Text>}
+      <PublishBlock trip={trip} defaultName={myName} onChange={onShared} />
       <Text style={[s.kicker, { marginTop: 22, marginBottom: 8 }]}>{t('shareText').toUpperCase()}</Text>
       <Pressable
         style={[s.secondary, { marginBottom: 8 }, pdfBusy && { opacity: 0.5 }]}
