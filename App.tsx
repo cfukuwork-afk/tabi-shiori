@@ -106,7 +106,6 @@ import { myTz } from './src/airports';
 import { isPdf, isPkpass, keepFile, readPkpass, TicketFile } from './src/pkpass';
 import { pickAnyFile } from './src/files';
 import * as Sharing from 'expo-sharing';
-import { ShareCardPanel } from './src/ShareCard';
 import { activityLinks, airhelpLink, carLinks, esimLinks, flightLinks, hotelLinks, inspireLinks, luggageLinks, transferLinks, FindLink } from './src/affiliate';
 import { syncTripActivity, updateNextWidget, widgetsAvailable } from './src/liveWidgets';
 
@@ -1333,13 +1332,6 @@ function ShareSheet({ trip, stat, rate, onSyncNow, onClose, onShared, onStop }: 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [sure, setSure] = useState(false);
-  const [card, setCard] = useState(false);
-  const [cover, setCover] = useState<string | null>(null);
-  useEffect(() => {
-    // カードに入れる表紙写真（なければ思い出の最初の1枚）
-    const u = trip.cover ?? memoryPhotos(trip)[0];
-    if (card && u) toDataUri(u).then(setCover).catch(() => setCover(null));
-  }, [card, trip.cover]);
   const code = trip.share?.code;
   const meId = trip.myId ?? trip.members.find((m) => m.id === 'me')?.id ?? trip.members[0]?.id;
   const meName = trip.members.find((m) => m.id === meId)?.name ?? '';
@@ -1406,12 +1398,6 @@ function ShareSheet({ trip, stat, rate, onSyncNow, onClose, onShared, onStop }: 
         </View>
       )}
       {!!err && <Text style={[s.hint, { color: C.pink, marginTop: 8 }]}>{err}</Text>}
-      <Text style={[s.kicker, { marginTop: 22, marginBottom: 8 }]}>{t('cardKicker').toUpperCase()}</Text>
-      <Pressable style={[s.secondary, { marginBottom: 8, borderColor: C.pink }]} onPress={() => setCard((v) => !v)}>
-        <Icon name="sparkles-outline" size={17} color={C.pink} />
-        <Text style={[s.secondaryText, { color: C.pink }]}>{t('cardOpen')}</Text>
-      </Pressable>
-      {card && <ShareCardPanel trip={trip} rate={rate} cover={cover} onText={(message) => shareSafe({ message })} />}
       <Text style={[s.kicker, { marginTop: 22, marginBottom: 8 }]}>{t('shareText').toUpperCase()}</Text>
       <Pressable
         style={[s.secondary, { marginBottom: 8 }, pdfBusy && { opacity: 0.5 }]}
