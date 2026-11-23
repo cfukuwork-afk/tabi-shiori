@@ -1538,17 +1538,17 @@ function PaywallSheet({ tripId, trips, api, onClose }: { tripId?: string; trips:
         <>
           {!!trip && !hasPass && (
             <Pressable style={[s.primary, { marginTop: 12 }, api.busy && { opacity: 0.5 }]} disabled={api.busy || !api.storeAvailable} onPress={() => api.buyPass(trip.id)}>
-              <Text style={s.primaryText}>{t('plusPassBtn', { p: api.prices.pass ?? '¥480' })}</Text>
+              <Text style={s.primaryText}>{t('plusPassBtn', { p: api.prices.pass ?? '¥500' })}</Text>
               <Text style={[s.primaryText, { fontSize: 12, fontWeight: '600', opacity: 0.8 }]}>{t('plusPassSub', { name: trip.name })}</Text>
             </Pressable>
           )}
           <Pressable style={[trip && !hasPass ? s.secondary : s.primary, { marginTop: 10, flexDirection: 'column' }, api.busy && { opacity: 0.5 }]} disabled={api.busy || !api.storeAvailable} onPress={api.buyPlus}>
-            <Text style={trip && !hasPass ? s.secondaryText : s.primaryText}>{t('plusYearBtn', { p: api.prices.plus ?? '¥2,400' })}</Text>
+            <Text style={trip && !hasPass ? s.secondaryText : s.primaryText}>{t('plusYearBtn', { p: api.prices.plus ?? '¥2,500' })}</Text>
             <Text style={[trip && !hasPass ? s.hint : s.primaryText, { fontSize: 12, fontWeight: '600', opacity: 0.8 }]}>{t('plusYearSub')}</Text>
           </Pressable>
           {api.busy && <ActivityIndicator style={{ marginTop: 10 }} color={C.ink} />}
           {!!api.error && <Text style={[s.hint, { color: C.pink, marginTop: 8 }]}>{t('plusBuyErr')}</Text>}
-          {!api.storeAvailable && <Text style={[s.hint, { marginTop: 8 }]}>{t('plusNoStore')}</Text>}
+          {!api.storeAvailable && process.env.EXPO_PUBLIC_PAYWALL_DEMO !== '1' && <Text style={[s.hint, { marginTop: 8 }]}>{t('plusNoStore')}</Text>}
           <Pressable onPress={api.restore} disabled={api.busy}>
             <Text style={[s.hint, { textAlign: 'center', textDecorationLine: 'underline', marginTop: 14 }]}>{t('plusRestore')}</Text>
           </Pressable>
