@@ -65,4 +65,6 @@ export default {
   dupKept: "Já existe uma reserva com este código. As duas são mantidas; as diferenças ficam destacadas", dupDiff: "{n} cópias · difere em: {k}", dupSame: "{n} cópias (iguais)", dupHere: "Esta reserva aparece {n} vezes (todas mantidas)", dupNoDiff: "Igual à outra cópia", dupOther: "a outra:",
   stayNight: "Esta noite: {name} (noite {n} de {m})",
   todayShort: "Hoje",
+  privacyPolicy: "Política de privacidade",
+  legalNotice: "Aviso legal",
 } as Record<string, string>;

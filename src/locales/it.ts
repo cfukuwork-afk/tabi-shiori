@@ -65,4 +65,6 @@ export default {
   dupKept: "Esiste già una prenotazione con questo codice. Vengono tenute entrambe; le differenze sono evidenziate", dupDiff: "{n} copie · differenze: {k}", dupSame: "{n} copie (identiche)", dupHere: "Questa prenotazione compare {n} volte (tutte conservate)", dupNoDiff: "Uguale all'altra copia", dupOther: "l'altra:",
   stayNight: "Stanotte: {name} (notte {n} di {m})",
   todayShort: "Oggi",
+  privacyPolicy: "Privacy",
+  legalNotice: "Note legali",
 } as Record<string, string>;

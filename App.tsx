@@ -106,6 +106,7 @@ import { myTz } from './src/airports';
 import { isPdf, isPkpass, keepFile, readPkpass, TicketFile } from './src/pkpass';
 import { pickAnyFile } from './src/files';
 import * as Sharing from 'expo-sharing';
+import Constants from 'expo-constants';
 import { activityLinks, airhelpLink, carLinks, esimLinks, flightLinks, hotelLinks, inspireLinks, luggageLinks, transferLinks, FindLink } from './src/affiliate';
 import { syncTripActivity, updateNextWidget, widgetsAvailable } from './src/liveWidgets';
 
@@ -3877,7 +3878,15 @@ function SettingsSheet({
         <Text style={s.secondaryText}>{t('vaultOpen')}</Text>
       </Pressable>
       {vault && <VaultSheet onClose={() => setVault(false)} />}
-      <Text style={[s.hint, { textAlign: 'center', marginTop: 16 }]}>v0.1</Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 18, marginTop: 20 }}>
+        <Pressable hitSlop={8} onPress={() => Linking.openURL(`${SERVER}/privacy`)}>
+          <Text style={[s.hint, { textDecorationLine: 'underline' }]}>{t('privacyPolicy')}</Text>
+        </Pressable>
+        <Pressable hitSlop={8} onPress={() => Linking.openURL(`${SERVER}/legal`)}>
+          <Text style={[s.hint, { textDecorationLine: 'underline' }]}>{t('legalNotice')}</Text>
+        </Pressable>
+      </View>
+      <Text style={[s.hint, { textAlign: 'center', marginTop: 10 }]}>v{Constants.expoConfig?.version ?? '1.0'}</Text>
     </Sheet>
   );
 }
