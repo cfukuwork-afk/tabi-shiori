@@ -49,6 +49,7 @@ export function stamp(prev: Trip | undefined, next: Trip, at = Date.now()): Trip
     out.metaU = at;
     changed = true;
   }
+  if ((next as any).pass && !(prev as any).pass) changed = true; // トリップパスを買ったら共有メンバーにも送る
   if (!changed) return next;
   out.tomb = tomb;
   if (out.share) out.share = { ...out.share, dirty: true };

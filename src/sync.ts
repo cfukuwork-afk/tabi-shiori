@@ -75,9 +75,20 @@ async function uploadOne(code: string, uri: string): Promise<string | null> {
 }
 
 /** 端末にしかない写真をサーバーへ送り、URLに置き換えた旅行を返す（送れなかった写真はそのまま） */
+// 無料で共有できる写真の枚数。超えた分は端末の中だけに残す（トリップパス・Plus で全部共有）
+let plusOn = false;
+export const setSyncPlus = (on: boolean) => (plusOn = on);
+export const photoLimited: Record<string, boolean> = {};
 async function uploadPhotos(trip: Trip, code: string): Promise<Trip> {
-  const local = [...new Set(allPhotos(trip).filter(isLocalUri))];
+  let local = [...new Set(allPhotos(trip).filter(isLocalUri))];
   if (!local.length) return trip;
+  const { FREE_SHARED_PHOTOS, unlocked } = require('./plus') as typeof import('./plus');
+  if (!unlocked(trip, plusOn)) {
+    const onServer = new Set(allPhotos(trip).filter(isServerUri)).size;
+    const room = Math.max(0, FREE_SHARED_PHOTOS - onServer);
+    photoLimited[trip.id] = local.length > room;
+    local = local.slice(0, room);
+  } else photoLimited[trip.id] = false;
   const done: Record<string, string> = {};
   for (const u of local) {
     const url = await uploadOne(code, u);

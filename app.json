@@ -2,7 +2,7 @@
   "expo": {
     "name": "Tripfold",
     "slug": "tabi-shiori",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -33,7 +33,7 @@
     },
     "backgroundColor": "#F4F3EF",
     "runtimeVersion": {
-      "policy": "sdkVersion"
+      "policy": "appVersion"
     },
     "plugins": [
       [
@@ -93,7 +93,8 @@
         {
           "faceIDPermission": "Tripfold uses Face ID to open your important documents (such as passport copies)."
         }
-      ]
+      ],
+      "expo-iap"
     ],
     "owner": "chihayax",
     "extra": {

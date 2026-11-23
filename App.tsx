@@ -7,6 +7,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { IAP_AVAILABLE, TERMS_URL, unlocked, usePlus, type PlusApi } from './src/plus';
 import { useShareIntent } from 'expo-share-intent';
 import { requireOptionalNativeModule } from 'expo-modules-core';
 import {
@@ -36,6 +37,7 @@ import { estimate, fmtKm } from './src/eta';
 import MapTab, { tripStops } from './src/MapTab';
 import { fetchMeta, firstUrl, platformOf } from './src/wish';
 import { stamp, mergeTrip } from './src/merge';
+import { photoLimited, setSyncPlus } from './src/sync';
 import { fetchPub, fetchShared, loadPhotoMap, localPhoto, normCode, prettyCode, publishTrip, pubUrl, startShare, syncTrip, unpublishTrip, updatePub, type PubTrip } from './src/sync';
 import {
   Booking,
@@ -285,6 +287,9 @@ function Main() {
   const [ready, setReady] = useState(false);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [paywall, setPaywall] = useState<{ tripId?: string } | null>(null);
+  const plusApi = usePlus((tripId) => updateTripsRef.current((all) => all.map((x) => (x.id === tripId ? { ...x, pass: Date.now() } : x))));
+  const updateTripsRef = useRef<(fn: (all: Trip[]) => Trip[]) => void>(() => {});
   const [rate, setRate] = useState<RateInfo>(fallbackRates('JPY'));
   const [openId, setOpenId] = useState<string | null>(null);
   const [newTrip, setNewTrip] = useState(false);
@@ -468,11 +473,20 @@ function Main() {
   const detailTrip = detail ? trips.find((x) => x.id === detail.tripId) : null;
   const detailBooking = detailTrip?.bookings.find((b) => b.id === detail?.id) ?? null;
 
+  updateTripsRef.current = updateTrips;
+  useEffect(() => { setSyncPlus(plusApi.plus); }, [plusApi.plus]);
+  // Plus の人が共有している旅は、一緒に編集しているメンバーも有料機能を使えるようにする
+  useEffect(() => {
+    if (plusApi.plus && trips.some((x) => x.share && !x.pass)) updateTrips((all) => all.map((x) => (x.share && !x.pass ? { ...x, pass: Date.now() } : x)));
+  }, [plusApi.plus, trips]);
+  const plusCtx = useMemo(() => ({ api: plusApi, open: (tripId?: string) => setPaywall({ tripId }) }), [plusApi]);
   if (!ready) return <View style={{ flex: 1, backgroundColor: C.bg }} />;
 
   return (
+    <PlusCtx.Provider value={plusCtx}>
     <View key={(dark ? 'dark' : 'light') + settings.lang} style={{ flex: 1, backgroundColor: C.bg, paddingTop: insets.top }}>
       <StatusBar style={dark ? 'light' : 'dark'} />
+      {!!paywall && <PaywallSheet tripId={paywall.tripId} trips={trips} api={plusApi} onClose={() => setPaywall(null)} />}
       {trip ? (
         <TripScreen
           trip={trip}
@@ -759,6 +773,7 @@ function Main() {
         }}
       />
     </View>
+    </PlusCtx.Provider>
   );
 }
 
@@ -1476,6 +1491,79 @@ function ImportPubSheet({ pub, onClose, onCopy }: { pub: PubTrip; onClose: () =>
   );
 }
 
+function PlusBadge() {
+  return (
+    <View style={{ backgroundColor: C.pink, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 1, marginLeft: 4 }}>
+      <Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>PLUS</Text>
+    </View>
+  );
+}
+
+/** 購入画面：トリップパス（この旅だけ）と Tripfold Plus（年額） */
+function PaywallSheet({ tripId, trips, api, onClose }: { tripId?: string; trips: Trip[]; api: PlusApi; onClose: () => void }) {
+  const trip = trips.find((x) => x.id === tripId);
+  const hasPass = !!trip?.pass;
+  // 買えたら閉じる
+  const was = useRef({ plus: api.plus, pass: hasPass });
+  useEffect(() => {
+    if ((!was.current.plus && api.plus) || (!was.current.pass && hasPass)) onClose();
+  }, [api.plus, hasPass]);
+  const benefits: [string, string][] = [
+    ['images-outline', t('plusB1')],
+    ['book-outline', t('plusB2')],
+    ['people-outline', t('plusB3')],
+    ['heart-outline', t('plusB4')],
+  ];
+  return (
+    <Sheet visible onClose={onClose}>
+      <Text style={s.kicker}>TRIPFOLD PLUS</Text>
+      <Text style={s.sheetTitle}>{t('plusTitle')}</Text>
+      {api.plus ? (
+        <View style={s.card}>
+          <Text style={[s.hint, { color: C.ink, fontWeight: '700' }]}>{t('plusActive')}</Text>
+          <Pressable onPress={api.manage}>
+            <Text style={[s.hint, { textDecorationLine: 'underline', marginTop: 6 }]}>{t('plusManage')}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+      <View style={[s.card, { gap: 10 }]}>
+        {benefits.map(([ic, txt]) => (
+          <View key={txt} style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
+            <Icon name={ic as any} size={18} color={C.pink} />
+            <Text style={[s.hint, { color: C.ink, flex: 1, lineHeight: 20 }]}>{txt}</Text>
+          </View>
+        ))}
+      </View>
+      {!api.plus && (
+        <>
+          {!!trip && !hasPass && (
+            <Pressable style={[s.primary, { marginTop: 12 }, api.busy && { opacity: 0.5 }]} disabled={api.busy || !api.storeAvailable} onPress={() => api.buyPass(trip.id)}>
+              <Text style={s.primaryText}>{t('plusPassBtn', { p: api.prices.pass ?? '¥480' })}</Text>
+              <Text style={[s.primaryText, { fontSize: 12, fontWeight: '600', opacity: 0.8 }]}>{t('plusPassSub', { name: trip.name })}</Text>
+            </Pressable>
+          )}
+          <Pressable style={[trip && !hasPass ? s.secondary : s.primary, { marginTop: 10, flexDirection: 'column' }, api.busy && { opacity: 0.5 }]} disabled={api.busy || !api.storeAvailable} onPress={api.buyPlus}>
+            <Text style={trip && !hasPass ? s.secondaryText : s.primaryText}>{t('plusYearBtn', { p: api.prices.plus ?? '¥2,400' })}</Text>
+            <Text style={[trip && !hasPass ? s.hint : s.primaryText, { fontSize: 12, fontWeight: '600', opacity: 0.8 }]}>{t('plusYearSub')}</Text>
+          </Pressable>
+          {api.busy && <ActivityIndicator style={{ marginTop: 10 }} color={C.ink} />}
+          {!!api.error && <Text style={[s.hint, { color: C.pink, marginTop: 8 }]}>{t('plusBuyErr')}</Text>}
+          {!api.storeAvailable && <Text style={[s.hint, { marginTop: 8 }]}>{t('plusNoStore')}</Text>}
+          <Pressable onPress={api.restore} disabled={api.busy}>
+            <Text style={[s.hint, { textAlign: 'center', textDecorationLine: 'underline', marginTop: 14 }]}>{t('plusRestore')}</Text>
+          </Pressable>
+        </>
+      )}
+      <Text style={[s.hint, { fontSize: 11, lineHeight: 16, marginTop: 14 }]}>{t('plusLegal')}</Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: 8 }}>
+        <Pressable onPress={() => Linking.openURL(TERMS_URL)}><Text style={[s.hint, { fontSize: 11, textDecorationLine: 'underline' }]}>{t('plusTerms')}</Text></Pressable>
+        <Pressable onPress={() => Linking.openURL(`${SERVER}/privacy`)}><Text style={[s.hint, { fontSize: 11, textDecorationLine: 'underline' }]}>{t('privacyPolicy')}</Text></Pressable>
+        <Pressable onPress={() => Linking.openURL(`${SERVER}/legal`)}><Text style={[s.hint, { fontSize: 11, textDecorationLine: 'underline' }]}>{t('legalNotice')}</Text></Pressable>
+      </View>
+    </Sheet>
+  );
+}
+
 function ShareSheet({ trip, stat, rate, onSyncNow, onClose, onShared, onStop }: { trip: Trip; stat?: { ok: number; err?: string }; rate: RateInfo; onSyncNow: () => Promise<void>; onClose: () => void; onShared: (t: Trip) => void; onStop: () => void }) {
   const [syncBusy, setSyncBusy] = useState(false);
   // 「今日 14:05」「11/21(土) 9:30」のように日付も出す
@@ -1498,9 +1586,16 @@ function ShareSheet({ trip, stat, rate, onSyncNow, onClose, onShared, onStop }: 
   const [myName, setMyName] = useState(generic(meName) ? '' : meName);
   const invite = code ? t('inviteText', { name: trip.name, code: prettyCode(code), link: `${SERVER}/j/${code}` }) : '';
   const [pdfBusy, setPdfBusy] = useState(false);
+  const plusCtx = useContext(PlusCtx);
   return (
     <Sheet visible onClose={onClose}>
       <Text style={s.sheetTitle}>{t('shareTitle')}</Text>
+      {!!code && photoLimited[trip.id] && !unlocked(trip, !!plusCtx.api?.plus) && (
+        <Pressable style={[s.card, { borderWidth: 1, borderColor: C.pink, marginBottom: 12 }]} onPress={() => plusCtx.open(trip.id)}>
+          <Text style={[s.hint, { color: C.ink, lineHeight: 20 }]}>{t('plusPhotoLimit')}</Text>
+          <Text style={[s.hint, { color: C.pink, fontWeight: '700', marginTop: 4 }]}>{t('plusSee')}</Text>
+        </Pressable>
+      )}
       <Text style={[s.kicker, { marginBottom: 8 }]}>{t('coEdit').toUpperCase()}</Text>
       {!code ? (
         <>
@@ -1582,6 +1677,7 @@ function ShareSheet({ trip, stat, rate, onSyncNow, onClose, onShared, onStop }: 
           style={[s.secondary, { marginTop: 8 }, pdfBusy && { opacity: 0.5 }]}
           disabled={pdfBusy}
           onPress={async () => {
+            if (!unlocked(trip, !!plusCtx.api?.plus)) return plusCtx.open(trip.id);
             setPdfBusy(true);
             try {
               await exportMemoryBook(trip, toDataUri);
@@ -1591,6 +1687,7 @@ function ShareSheet({ trip, stat, rate, onSyncNow, onClose, onShared, onStop }: 
         >
           <Icon name="book-outline" size={17} />
           <Text style={s.secondaryText}>{t('memoryBookMake')}</Text>
+          {!unlocked(trip, !!plusCtx.api?.plus) && <PlusBadge />}
         </Pressable>
       )}
     </Sheet>
@@ -3956,6 +4053,8 @@ function HowTo({ fromQ, toQ, label }: { fromQ: string; toQ: string; label: strin
   );
 }
 /** 詳細画面の中では、値をタップするとコピーできる */
+// 有料機能（トリップパス・Plus）の状態と、購入画面を開く関数
+const PlusCtx = createContext<{ api: PlusApi | null; open: (tripId?: string) => void }>({ api: null, open: () => {} });
 const CopyCtx = createContext<((txt: string) => void) | null>(null);
 const Info = ({ k, v, q }: { k: string; v: string; q?: string }) => {
   const copy = useContext(CopyCtx);
@@ -3981,6 +4080,26 @@ const Info = ({ k, v, q }: { k: string; v: string; q?: string }) => {
 };
 
 /* ---------------- 設定・ようこそ ---------------- */
+function PlusRow({ onOpen }: { onOpen: () => void }) {
+  const { api, open } = useContext(PlusCtx);
+  return (
+    <Pressable
+      style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 }]}
+      onPress={() => {
+        onOpen();
+        setTimeout(() => open(), 350);
+      }}
+    >
+      <Icon name="sparkles" size={20} color={C.pink} />
+      <View style={{ flex: 1 }}>
+        <Text style={[s.hint, { color: C.ink, fontWeight: '800', fontSize: 15 }]}>Tripfold Plus</Text>
+        <Text style={s.hint}>{api?.plus ? t('plusActive') : t('plusRowSub')}</Text>
+      </View>
+      <Icon name="chevron-forward" size={18} color={C.sub} />
+    </Pressable>
+  );
+}
+
 function SettingsSheet({
   visible,
   settings,
@@ -4012,6 +4131,7 @@ function SettingsSheet({
   return (
     <Sheet visible={visible} onClose={onClose}>
       <Text style={s.sheetTitle}>{t('settings')}</Text>
+      {IAP_AVAILABLE && <PlusRow onOpen={onClose} />}
       <SettingsBody settings={settings} onChange={onChange} />
       <Text style={s.label}>{t('backup')}</Text>
       <Text style={[s.hint, { marginBottom: 8, lineHeight: 18 }]}>{t('backupHint')}</Text>
