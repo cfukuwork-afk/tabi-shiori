@@ -849,6 +849,15 @@ function Home({
           <TripCard key={tr.id} trip={tr} rate={rate} onPress={() => onOpen(tr.id)} />
         ))}
       <Inspire trips={trips} />
+      {/* みんなのしおり（Web）の紹介。購入の案内ではなく、公開されている旅程を見る入口 */}
+      <Pressable style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14 }]} onPress={() => Linking.openURL(`${SERVER}/t`)}>
+        <Icon name="globe-outline" size={22} color={C.pink} />
+        <View style={{ flex: 1 }}>
+          <Text style={[s.hint, { color: C.ink, fontWeight: '800', fontSize: 15 }]}>{t('pubHomeTitle')}</Text>
+          <Text style={s.hint}>{t('pubHomeSub')}</Text>
+        </View>
+        <Icon name="open-outline" size={18} color={C.sub} />
+      </Pressable>
       <Memories trips={sorted.filter((tr) => isPast(tr))} onOpen={onOpen} />
       <YearSummary trips={trips} rate={rate} />
       {Platform.OS === 'web' && onDemo && (
@@ -1543,7 +1552,7 @@ function PaywallSheet({ tripId, trips, api, onClose }: { tripId?: string; trips:
             </Pressable>
           )}
           <Pressable style={[trip && !hasPass ? s.secondary : s.primary, { marginTop: 10, flexDirection: 'column' }, api.busy && { opacity: 0.5 }]} disabled={api.busy || !api.storeAvailable} onPress={api.buyPlus}>
-            <Text style={trip && !hasPass ? s.secondaryText : s.primaryText}>{t('plusYearBtn', { p: api.prices.plus ?? '¥2,500' })}</Text>
+            <Text style={trip && !hasPass ? s.secondaryText : s.primaryText}>{t('plusYearBtn', { p: api.prices.plus ?? '¥3,000' })}</Text>
             <Text style={[trip && !hasPass ? s.hint : s.primaryText, { fontSize: 12, fontWeight: '600', opacity: 0.8 }]}>{t('plusYearSub')}</Text>
           </Pressable>
           {api.busy && <ActivityIndicator style={{ marginTop: 10 }} color={C.ink} />}
