@@ -93,6 +93,7 @@ export type Trip = {
   // 共有（共同編集）用。share と myId はこの端末だけのもの
   share?: { code: string; rev: number; dirty?: boolean; syncedAt?: number };
   myId?: string; // 共有した旅行で「自分」はどのメンバーか
+  pass?: number; // トリップパス（この旅で有料機能が使える。買った時刻。共有メンバー全員に効く）
   pub?: { id: string; key: string }; // みんなのしおりに公開したとき（この端末だけ。消す・直すための鍵）
   tomb?: Record<string, number>; // 消した項目（id → 消した時刻）
   metaU?: number; // 名前・表紙・予算を変えた時刻

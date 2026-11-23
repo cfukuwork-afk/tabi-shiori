@@ -90,5 +90,8 @@ export function mergeTrip(a: Trip, b: Trip): Trip {
   out.id = b.id;
   out.share = b.share;
   out.myId = b.myId;
+  out.pub = b.pub; // みんなのしおりの鍵はこの端末だけのもの
+  // トリップパスは一度買ったら消えない
+  if ((a as any).pass || (b as any).pass) (out as any).pass = (a as any).pass || (b as any).pass;
   return out as Trip;
 }
