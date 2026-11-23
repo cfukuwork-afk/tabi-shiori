@@ -64,6 +64,8 @@ export default {
   keepBoth: "不覆盖，两条都保留", keptBoth: "之前的预订保持不变，这条将作为新预订添加",
   dupKept: "已有相同预订号的预订。两条都保留，不同之处用颜色标出", dupDiff: "重复{n}条·不同：{k}", dupSame: "重复{n}条（内容相同）", dupHere: "此预订有{n}条（都已保留）", dupNoDiff: "与另一条内容相同", dupOther: "另一条：",
   stayNight: "今晚住：{name}（第{n}晚／共{m}晚）",
+  noStayNight: "今晚住宿未定 · {city}",
+  noStayFind: "在{city}找今晚的住宿",
   todayShort: "今天",
   privacyPolicy: "隐私政策",
   legalNotice: "特定商业交易法标示",

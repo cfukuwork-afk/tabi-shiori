@@ -1996,11 +1996,13 @@ function WishSheet({
 
 function PlanTab({ trip, wx, onOpen, onJournal, onAddPlan, onChange }: { trip: Trip; wx?: TripWx | null; onOpen: (b: Booking) => void; onJournal?: (d: string) => void; onAddPlan?: (d: string) => void; onChange?: (fn: (t: Trip) => Trip) => void }) {
   const [sel, setSel] = useState<string[] | null>(null);
+  const [stayOpen, setStayOpen] = useState<string | null>(null);
   const dups = useMemo(() => findDups(trip), [trip.bookings]);
   const tl = timeline(trip);
   const today = todayStr();
   const days = tripDays(trip).map((date) => ({ date, items: tl.find((d) => d.date === date)?.items ?? [] }));
   const { start } = tripRange(trip);
+  const lastDay = days.length ? days[days.length - 1].date : '';
   if (!days.length)
     return (
       <View style={[s.card, { alignItems: 'center', paddingVertical: 30 }]}>
@@ -2041,6 +2043,24 @@ function PlanTab({ trip, wx, onOpen, onJournal, onAddPlan, onChange }: { trip: T
           {(() => {
             // その日の夜に泊まる宿（連泊の2泊目以降も、毎日わかるように出す）
             const stays = trip.bookings.filter((h) => h.type === 'hotel' && !h.cancelled && isDate(h.start) && isDate(h.end) && h.start <= date && date < h.end! && h.start !== date);
+            if (!stays.length && noStay(trip, date, lastDay, today)) {
+              const city = nightCity(trip, date);
+              if (!city) return null;
+              const next = new Date(date + 'T00:00:00Z'); next.setUTCDate(next.getUTCDate() + 1);
+              const out = next.toISOString().slice(0, 10);
+              return (
+                <View key={'nostay' + date} style={{ marginLeft: 52, marginBottom: 10 }}>
+                  <Pressable onPress={() => setStayOpen(stayOpen === date ? null : date)} hitSlop={6} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Icon name="bed-outline" size={14} color={C.pink} />
+                    <Text style={[s.hint, { flex: 1, color: C.pink, fontWeight: '700' }]} numberOfLines={1}>
+                      {t('noStayNight', { city })}
+                    </Text>
+                    <Icon name={stayOpen === date ? 'chevron-up' : 'chevron-down'} size={14} color={C.pink} />
+                  </Pressable>
+                  {stayOpen === date && <FindRow title={t('noStayFind', { city })} links={hotelLinks(city, date, out, /[぀-ヿ一-鿿]/.test(city), arrivalCC(trip))} />}
+                </View>
+              );
+            }
             return stays.map((h) => (
               <Pressable key={'stay' + h.id} onPress={() => onOpen(h)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 52, marginBottom: 8 }}>
                 <Icon name="bed-outline" size={14} color={C.sub} />
@@ -2964,6 +2984,43 @@ function arrivalCC(trip: Trip): string | undefined {
   const fl = trip.bookings.filter((b) => b.type === 'flight' && !b.cancelled && b.to).sort((a, b) => (a.start + (a.startTime ?? '')).localeCompare(b.start + (b.startTime ?? '')));
   const code = fl[0]?.to?.trim().toUpperCase() ?? '';
   return /^[A-Z]{3}$/.test(code) ? TZ_CC[AIRPORT_TZ[code] ?? ''] : undefined;
+}
+/** その夜の宿が入っていないか（最終日・過ぎた日・夜行の便や列車に乗っている夜は除く） */
+function noStay(trip: Trip, date: string, lastDay: string, today: string): boolean {
+  if (!lastDay || date >= lastDay || date < today) return false;
+  const live = trip.bookings.filter((b) => !b.cancelled);
+  if (live.some((h) => h.type === 'hotel' && isDate(h.start) && h.start <= date && (isDate(h.end) ? date < h.end! : h.start === date))) return false;
+  if (live.some((b) => ['flight', 'train', 'bus'].includes(b.type) && b.start <= date && isDate(b.end) && b.end! > date)) return false;
+  return true;
+}
+/** その夜にいる都市：その日までに乗った最後の便の到着地、または都市名がわかる列車・バスの到着地（地下鉄の駅などは飛ばす）。なければ宿の住所や最初の到着地 */
+const CITY_NAMES: string[] = PLACES.flatMap(([, , cs]) => cs.flatMap(([en, ja]) => [en, ja])).sort((a, b) => b.length - a.length);
+const cityIn = (text: string): string | undefined => {
+  const low = text.toLowerCase();
+  return CITY_NAMES.find((c) => (/^[\x00-\x7f]+$/.test(c) ? new RegExp(`\\b${c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text) : low.includes(c)));
+};
+function nightCity(trip: Trip, date: string): string | undefined {
+  const moves = trip.bookings
+    .filter((b) => ['flight', 'train', 'bus'].includes(b.type) && !b.cancelled && b.to && b.start <= date)
+    .sort((a, b) => (a.start + (a.startTime ?? '')).localeCompare(b.start + (b.startTime ?? '')));
+  for (let i = moves.length - 1; i >= 0; i--) {
+    const to = moves[i].to!.trim();
+    const code = to.toUpperCase();
+    if (moves[i].type === 'flight' && /^[A-Z]{3}$/.test(code) && AIRPORT_CITY[code]) return AIRPORT_CITY[code];
+    const hit = cityIn(to);
+    if (hit) return hit;
+  }
+  // 住所に一番よく出てくる都市名（前日までの宿や予定を優先）
+  const count = new Map<string, number>();
+  for (const b of trip.bookings) {
+    if (b.cancelled) continue;
+    for (const a of [b.from, b.to]) {
+      const c = a && cityIn(a);
+      if (c) count.set(c, (count.get(c) ?? 0) + (b.start <= date ? 3 : 1));
+    }
+  }
+  const best = [...count].sort((a, b) => b[1] - a[1])[0]?.[0];
+  return best ?? arrivalCity(trip) ?? tripCity(trip.bookings);
 }
 /** 宿がないとき、どの都市で探すか：最初の便の到着空港の都市（帰りの便の到着地＝自宅側は使わない） */
 function arrivalCity(trip: Trip): string | undefined {

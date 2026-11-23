@@ -64,6 +64,8 @@ export default {
   keepBoth: "不覆蓋，兩筆都保留", keptBoth: "之前的預訂保持不變，這筆將作為新預訂加入",
   dupKept: "已有相同預訂號的預訂。兩筆都保留，不同之處用顏色標出", dupDiff: "重複{n}筆·不同：{k}", dupSame: "重複{n}筆（內容相同）", dupHere: "此預訂有{n}筆（都已保留）", dupNoDiff: "與另一筆內容相同", dupOther: "另一筆：",
   stayNight: "今晚住：{name}（第{n}晚／共{m}晚）",
+  noStayNight: "今晚住宿未定 · {city}",
+  noStayFind: "在{city}找今晚的住宿",
   todayShort: "今天",
   privacyPolicy: "隱私權政策",
   legalNotice: "特定商業交易法標示",

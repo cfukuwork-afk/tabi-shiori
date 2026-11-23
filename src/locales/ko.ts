@@ -64,6 +64,8 @@ export default {
   keepBoth: "덮어쓰지 않고 둘 다 남기기", keptBoth: "이전 예약은 그대로 두고, 이것은 새 예약으로 추가합니다",
   dupKept: "같은 예약 번호의 예약이 이미 있어요. 둘 다 남기고, 다른 부분은 색으로 표시해요", dupDiff: "중복 {n}건 · 차이: {k}", dupSame: "중복 {n}건(내용 같음)", dupHere: "같은 예약이 {n}건 있어요(모두 남겨 둠)", dupNoDiff: "다른 1건과 내용이 같아요", dupOther: "다른 1건:",
   stayNight: "오늘 밤 숙소: {name} ({m}박 중 {n}박째)",
+  noStayNight: "오늘 밤 숙소 미정 · {city}",
+  noStayFind: "{city}에서 오늘 밤 숙소 찾기",
   todayShort: "오늘",
   privacyPolicy: "개인정보 처리방침",
   legalNotice: "특정상거래법 표기",

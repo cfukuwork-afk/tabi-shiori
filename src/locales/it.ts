@@ -64,6 +64,8 @@ export default {
   keepBoth: "Non sovrascrivere: tienile entrambe", keptBoth: "La prenotazione precedente resta; questa sarà aggiunta come nuova",
   dupKept: "Esiste già una prenotazione con questo codice. Vengono tenute entrambe; le differenze sono evidenziate", dupDiff: "{n} copie · differenze: {k}", dupSame: "{n} copie (identiche)", dupHere: "Questa prenotazione compare {n} volte (tutte conservate)", dupNoDiff: "Uguale all'altra copia", dupOther: "l'altra:",
   stayNight: "Stanotte: {name} (notte {n} di {m})",
+  noStayNight: "Nessun alloggio stanotte · {city}",
+  noStayFind: "Trova un alloggio a {city} per stanotte",
   todayShort: "Oggi",
   privacyPolicy: "Privacy",
   legalNotice: "Note legali",
