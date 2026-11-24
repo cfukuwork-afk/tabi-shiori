@@ -1708,6 +1708,23 @@ function ShareSheet({ trip, stat, rate, onSyncNow, onClose, onShared, onStop }: 
         <Icon name="document-text-outline" size={17} />
         <Text style={s.secondaryText}>{t('sendItinerary')}</Text>
       </Pressable>
+      {/* 家計簿アプリ World Budget Book に旅費を送る（入っていなければ App Store を開く） */}
+      {(trip.bookings.some((b) => b.price && b.currency && !b.cancelled) || (trip.expenses ?? []).length > 0) && (
+        <Pressable
+          style={[s.secondary, { marginTop: 8 }]}
+          onPress={() => {
+            const items = [
+              ...trip.bookings.filter((b) => !b.cancelled && b.price && b.currency && isDate(b.start)).map((b) => ({ id: b.id, date: b.start, amount: Number(b.price), cur: b.currency, kind: b.type, title: b.title || typeName(b.type) })),
+              ...(trip.expenses ?? []).map((e) => ({ id: e.id, date: e.date, amount: e.amount, cur: e.currency, kind: e.cat, title: e.title })),
+            ].slice(0, 300);
+            const url = `worldbudgetbook://import?d=${encodeURIComponent(JSON.stringify({ v: 1, trip: { id: trip.id, name: trip.name }, items }))}`;
+            Linking.openURL(url).catch(() => Linking.openURL('https://apps.apple.com/app/id6832550941'));
+          }}
+        >
+          <Icon name="wallet-outline" size={17} />
+          <Text style={s.secondaryText}>{t('toWbb')}</Text>
+        </Pressable>
+      )}
       <Pressable style={[s.secondary, { marginTop: 8 }]} onPress={() => setCardOpen(true)}>
         <Icon name="images-outline" size={17} />
         <Text style={s.secondaryText}>{t('memoryCard')}</Text>
