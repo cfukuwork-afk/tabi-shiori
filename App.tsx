@@ -2,6 +2,8 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import { WORLD, WORLD_H, WORLD_SPHERE, WORLD_W } from './src/worldPaths';
 import { projectNE, SMALL_CC, tripPlaces } from './src/visited';
 import { makeDemoTrips } from './src/demo';
+import { DnaView } from './src/DnaView';
+import { MemoryCard } from './src/MemoryCard';
 import { StatusBar } from 'expo-status-bar';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
@@ -308,11 +310,18 @@ function Main() {
     return rest.length < 120 && !/(予約|booking|confirmation|reservation|check-?in|搭乗|便)/i.test(rest) ? u : undefined;
   };
   const [pubIn, setPubIn] = useState<PubTrip | null>(null);
+  const [dnaIn, setDnaIn] = useState<string | null>(null);
   const [settleIn, setSettleIn] = useState<{ n: string; c: string; p: { f: string; t: string; a: number }[] } | null>(null);
   const url = ExpoLinking.useURL();
   useEffect(() => {
     if (url && url.includes('join?c=')) {
       setJoining(normCode(url.split('join?c=')[1] ?? ''));
+      return;
+    }
+    // 友達から届いた旅のDNA（tripfold://dna?c=… / tripfold.net/dna/…）→ 相性を見る
+    const dm = url?.match(/dna(?:\?c=|\/)([0-9a-z]{16})/i);
+    if (dm) {
+      setDnaIn(dm[1].toLowerCase());
       return;
     }
     // みんなのしおりのページの「Tripfold にコピーする」
@@ -512,6 +521,7 @@ function Main() {
           onNew={() => setNewTrip(true)}
           onSettings={() => setShowSettings(true)}
           onOpenBooking={(tripId, id) => setDetail({ tripId, id })}
+          onDna={() => setDnaIn('')}
           onDemo={() =>
             updateTrips((all) => (all.some((tr) => tr.id.startsWith('tpl_')) ? all.filter((tr) => !tr.id.startsWith('tpl_')) : [...makeDemoTrips(todayStr()), ...all]))
           }
@@ -575,6 +585,9 @@ function Main() {
         />
       )}
 
+      <Sheet visible={dnaIn !== null} onClose={() => setDnaIn(null)}>
+        <View style={{ paddingHorizontal: 4, paddingBottom: 8 }}>{dnaIn !== null && <DnaView trips={trips} rate={rate} friendCode={dnaIn || undefined} />}</View>
+      </Sheet>
       {!!pubIn && (
         <ImportPubSheet
           pub={pubIn}
@@ -788,11 +801,13 @@ function Home({
   onSettings,
   onOpenBooking,
   onDemo,
+  onDna,
 }: {
   trips: Trip[];
   rate: RateInfo;
   onOpen: (id: string) => void;
   onNew: () => void;
+  onDna: () => void;
   onSettings: () => void;
   onOpenBooking: (tripId: string, id: string) => void;
   onDemo?: () => void;
@@ -859,6 +874,15 @@ function Home({
           <Text style={s.hint}>{t('pubHomeSub')}</Text>
         </View>
         <Icon name="open-outline" size={18} color={C.sub} />
+      </Pressable>
+      {/* 旅のDNA（これまでの旅から旅のタイプを分析。友達と相性も見られる） */}
+      <Pressable style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14 }]} onPress={onDna}>
+        <Icon name="color-filter-outline" size={22} color={C.pink} />
+        <View style={{ flex: 1 }}>
+          <Text style={[s.hint, { color: C.ink, fontWeight: '800', fontSize: 15 }]}>{t('dnaTitle')}</Text>
+          <Text style={s.hint}>{t('dnaHomeSub')}</Text>
+        </View>
+        <Icon name="chevron-forward" size={18} color={C.sub} />
       </Pressable>
       <Memories trips={sorted.filter((tr) => isPast(tr))} onOpen={onOpen} />
       <YearSummary trips={trips} rate={rate} />
@@ -1597,6 +1621,7 @@ function ShareSheet({ trip, stat, rate, onSyncNow, onClose, onShared, onStop }: 
   const [myName, setMyName] = useState(generic(meName) ? '' : meName);
   const invite = code ? t('inviteText', { name: trip.name, code: prettyCode(code), link: `${SITE}/j/${code}` }) : '';
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [cardOpen, setCardOpen] = useState(false);
   const plusCtx = useContext(PlusCtx);
   return (
     <Sheet visible onClose={onClose}>
@@ -1683,6 +1708,17 @@ function ShareSheet({ trip, stat, rate, onSyncNow, onClose, onShared, onStop }: 
         <Icon name="document-text-outline" size={17} />
         <Text style={s.secondaryText}>{t('sendItinerary')}</Text>
       </Pressable>
+      <Pressable style={[s.secondary, { marginTop: 8 }]} onPress={() => setCardOpen(true)}>
+        <Icon name="images-outline" size={17} />
+        <Text style={s.secondaryText}>{t('memoryCard')}</Text>
+      </Pressable>
+      <Sheet visible={cardOpen} onClose={() => setCardOpen(false)}>
+        <View style={{ paddingHorizontal: 4, paddingBottom: 8 }}>
+          <Text style={{ color: C.ink, fontWeight: '900', fontSize: 20, marginBottom: 4 }}>{t('memoryCard')}</Text>
+          <Text style={[s.hint, { marginBottom: 12 }]}>{t('memoryCardSub')}</Text>
+          {cardOpen && <MemoryCard trip={trip} />}
+        </View>
+      </Sheet>
       {Object.values(trip.journal ?? {}).some((j) => j?.text || j?.photos?.length) && (
         <Pressable
           style={[s.secondary, { marginTop: 8 }, pdfBusy && { opacity: 0.5 }]}

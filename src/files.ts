@@ -73,3 +73,25 @@ export const csvCell = (x: unknown) => {
   if (typeof x !== 'number' && /^[=+\-@\t\r]/.test(s)) s = "'" + s;
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
+
+/** PNG（base64）を画像ファイルにして共有メニューを開く（思い出カード・旅のDNA） */
+export async function shareImage(name: string, base64: string) {
+  const file = safeName(name) + '.png';
+  if (Platform.OS === 'web') {
+    const a = document.createElement('a');
+    a.href = `data:image/png;base64,${base64}`;
+    a.download = file;
+    a.click();
+    return;
+  }
+  const dir = new Directory(Paths.cache, 'out');
+  if (!dir.exists) dir.create();
+  const f = new FSFile(dir, file);
+  if (f.exists) f.delete();
+  f.create();
+  const bin = globalThis.atob(base64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  f.write(bytes);
+  await Sharing.shareAsync(f.uri, { mimeType: 'image/png', UTI: 'public.png', dialogTitle: file });
+}
