@@ -98,7 +98,7 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { exportBackup, importBackup, mergeBackup } from './src/backup';
 import { findPrice } from './src/parse';
 import { parseItinerary, PlanDraft } from './src/itinerary';
-import { SERVER } from './src/sync';
+import { SITE } from './src/sync';
 import { InboxItem } from './src/data';
 import { TZ_CC, countriesOf, flag, tripCountries } from './src/countries';
 import { NEAR, PLACES } from './src/places';
@@ -852,7 +852,7 @@ function Home({
         ))}
       <Inspire trips={trips} />
       {/* みんなのしおり（Web）の紹介。購入の案内ではなく、公開されている旅程を見る入口 */}
-      <Pressable style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14 }]} onPress={() => Linking.openURL(`${SERVER}/t`)}>
+      <Pressable style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14 }]} onPress={() => Linking.openURL(`${SITE}/t`)}>
         <Icon name="globe-outline" size={22} color={C.pink} />
         <View style={{ flex: 1 }}>
           <Text style={[s.hint, { color: C.ink, fontWeight: '800', fontSize: 15 }]}>{t('pubHomeTitle')}</Text>
@@ -1568,8 +1568,8 @@ function PaywallSheet({ tripId, trips, api, onClose }: { tripId?: string; trips:
       <Text style={[s.hint, { fontSize: 11, lineHeight: 16, marginTop: 14 }]}>{t('plusLegal')}</Text>
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: 8 }}>
         <Pressable onPress={() => Linking.openURL(TERMS_URL)}><Text style={[s.hint, { fontSize: 11, textDecorationLine: 'underline' }]}>{t('plusTerms')}</Text></Pressable>
-        <Pressable onPress={() => Linking.openURL(`${SERVER}/privacy`)}><Text style={[s.hint, { fontSize: 11, textDecorationLine: 'underline' }]}>{t('privacyPolicy')}</Text></Pressable>
-        <Pressable onPress={() => Linking.openURL(`${SERVER}/legal`)}><Text style={[s.hint, { fontSize: 11, textDecorationLine: 'underline' }]}>{t('legalNotice')}</Text></Pressable>
+        <Pressable onPress={() => Linking.openURL(`${SITE}/privacy`)}><Text style={[s.hint, { fontSize: 11, textDecorationLine: 'underline' }]}>{t('privacyPolicy')}</Text></Pressable>
+        <Pressable onPress={() => Linking.openURL(`${SITE}/legal`)}><Text style={[s.hint, { fontSize: 11, textDecorationLine: 'underline' }]}>{t('legalNotice')}</Text></Pressable>
       </View>
     </Sheet>
   );
@@ -1595,7 +1595,7 @@ function ShareSheet({ trip, stat, rate, onSyncNow, onClose, onShared, onStop }: 
   const meName = trip.members.find((m) => m.id === meId)?.name ?? '';
   const generic = (n: string) => !n.trim() || n === '自分' || n.toLowerCase() === 'me';
   const [myName, setMyName] = useState(generic(meName) ? '' : meName);
-  const invite = code ? t('inviteText', { name: trip.name, code: prettyCode(code), link: `${SERVER}/j/${code}` }) : '';
+  const invite = code ? t('inviteText', { name: trip.name, code: prettyCode(code), link: `${SITE}/j/${code}` }) : '';
   const [pdfBusy, setPdfBusy] = useState(false);
   const plusCtx = useContext(PlusCtx);
   return (
@@ -2458,7 +2458,7 @@ function MoneyTab({ trip, rate, onChange, onShare }: { trip: Trip; rate: RateInf
           style={[s.secondary, { marginTop: 12 }]}
           onPress={() =>
             trip.share
-              ? shareSafe({ message: `${t('askPayMsg', { name: bracket(trip.name) })}\n${SERVER}/s/${trip.share.code}?c=${rate.base}` })
+              ? shareSafe({ message: `${t('askPayMsg', { name: bracket(trip.name) })}\n${SITE}/s/${trip.share.code}?c=${rate.base}` })
               : onShare()
           }
         >
@@ -2490,7 +2490,7 @@ function MoneyTab({ trip, rate, onChange, onShare }: { trip: Trip; rate: RateInf
                   style={[s.secondary, { marginBottom: 8 }]}
                   onPress={() => {
                     const data = { n: trip.name, c: rate.base, p: st.pay.map((p) => ({ f: nameOf(p.from), t: nameOf(p.to), a: Math.round(p.amount) })) };
-                    const link = trip.share ? `${SERVER}/s/${trip.share.code}?c=${rate.base}` : `tripfold://settle?d=${encodeURIComponent(JSON.stringify(data))}`;
+                    const link = trip.share ? `${SITE}/s/${trip.share.code}?c=${rate.base}` : `tripfold://settle?d=${encodeURIComponent(JSON.stringify(data))}`;
                     const lines = st.pay.map((p) => `${dot()} ${nameOf(p.from)} → ${nameOf(p.to)}  ${fmtMoney(Math.round(p.amount), rate.base)}`);
                     shareSafe({ message: `${bracket(trip.name)} ${t('settle')}\n${lines.join('\n')}\n\n${t('openInApp')}\n${link}` });
                   }}
@@ -4226,10 +4226,10 @@ function SettingsSheet({
       </Pressable>
       {vault && <VaultSheet onClose={() => setVault(false)} />}
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 18, marginTop: 20 }}>
-        <Pressable hitSlop={8} onPress={() => Linking.openURL(`${SERVER}/privacy`)}>
+        <Pressable hitSlop={8} onPress={() => Linking.openURL(`${SITE}/privacy`)}>
           <Text style={[s.hint, { textDecorationLine: 'underline' }]}>{t('privacyPolicy')}</Text>
         </Pressable>
-        <Pressable hitSlop={8} onPress={() => Linking.openURL(`${SERVER}/legal`)}>
+        <Pressable hitSlop={8} onPress={() => Linking.openURL(`${SITE}/legal`)}>
           <Text style={[s.hint, { textDecorationLine: 'underline' }]}>{t('legalNotice')}</Text>
         </Pressable>
       </View>

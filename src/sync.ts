@@ -11,6 +11,8 @@ const safe = (x: any): Trip => {
 };
 
 export const SERVER = process.env.EXPO_PUBLIC_TF_SERVER || 'https://tripfold.160-251-171-249.sslip.io';
+// 公式サイト（Webページへのリンクはこちら。APIは古いアプリのため SERVER のまま）
+export const SITE = 'https://tripfold.net';
 const K_PHOTOS = 'ts.photomap.v1';
 
 /** 共有コードの表示（XXXX-XXXX） */
@@ -202,4 +204,4 @@ export async function unpublishTrip(trip: Trip) {
 export async function fetchPub(id: string): Promise<PubTrip> {
   return call(`/v1/pub/${encodeURIComponent(id)}`);
 }
-export const pubUrl = (id: string) => `${SERVER}/t/${id}`;
+export const pubUrl = (id: string) => `${SITE}/t/${id}`;
