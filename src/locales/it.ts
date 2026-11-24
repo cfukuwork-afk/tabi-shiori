@@ -1,6 +1,7 @@
 // Italiano
 export default {
   date: 'Data', nTomorrow: 'Domani', share: 'Condividi', shareHead: 'Programma di viaggio', openMap: 'Apri in Mappe', budget: 'Budget', budgetSet: 'Imposta un budget', left: 'rimasti', over: 'in più',
+  nLeaveAirport: "È ora di andare in aeroporto", nLeaveStation: "È ora di andare in stazione", nLeaveBody: "Circa {min} min fino a {place}{guess}. Parti ora per arrivare in tempo per le {time}.", nGuess: " (stima)",
   spending: 'Spese del viaggio', addExpense: 'Aggiungi spesa', expTitle: 'Per cosa? (es. pranzo)', catMeal: 'Cibo', catMove: 'Trasporti', catShop: 'Shopping', catSight: 'Visite', catEtc: 'Altro',
   bookingsTotal: 'Prenotazioni', expensesTotal: 'Spese', convert: 'Conversione rapida', notify: 'Promemoria (la sera prima e prima della partenza)', pickTrip: 'Per quale viaggio?', shared: 'Lettura di ciò che hai condiviso',
   noExp: 'Ancora nessuna spesa', psAbroad: 'Estero', psBiz: 'Lavoro', psBeach: 'Mare', psCold: 'Freddo', psCamp: 'Campeggio', psKids: 'Con bambini',

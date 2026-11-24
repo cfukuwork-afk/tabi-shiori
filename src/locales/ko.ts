@@ -1,6 +1,7 @@
 // 한국어
 export default {
   date: '날짜', nTomorrow: '내일 일정', share: '공유', shareHead: '여행 일정표', openMap: '지도에서 열기', budget: '예산', budgetSet: '예산 정하기', left: '남음', over: '초과',
+  nLeaveAirport: "공항으로 출발할 시간", nLeaveStation: "역으로 출발할 시간", nLeaveBody: "{place}까지 약 {min}분{guess}. {time} 출발에 늦지 않게 지금 출발하세요.", nGuess: " (예상)",
   spending: '여행 중 지출', addExpense: '지출 추가', expTitle: '어디에 썼나요? (예: 점심)', catMeal: '식비', catMove: '교통', catShop: '쇼핑', catSight: '관광', catEtc: '기타',
   bookingsTotal: '예약 합계', expensesTotal: '지출 합계', convert: '바로 환산', notify: '출발 전 알림 (전날 밤·출발 전)', pickTrip: '어느 여행에 넣을까요?', shared: '공유된 내용을 읽는 중',
   noExp: '아직 지출이 없어요', psAbroad: '해외', psBiz: '출장', psBeach: '해변', psCold: '추운 곳', psCamp: '캠핑', psKids: '아이 동반',

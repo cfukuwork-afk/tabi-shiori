@@ -1,6 +1,7 @@
 // 简体中文
 export default {
   date: '日期', nTomorrow: '明天的行程', share: '分享', shareHead: '旅行手册', openMap: '在地图中打开', budget: '预算', budgetSet: '设置预算', left: '剩余', over: '超支',
+  nLeaveAirport: "该去机场了", nLeaveStation: "该去车站了", nLeaveBody: "到{place}约{min}分钟{guess}。现在出发，从容赶上{time}。", nGuess: "（估计）",
   spending: '旅途中的花费', addExpense: '添加花费', expTitle: '花在哪里？（例：午餐）', catMeal: '餐饮', catMove: '交通', catShop: '购物', catSight: '观光', catEtc: '其他',
   bookingsTotal: '预订合计', expensesTotal: '花费合计', convert: '快速换算', notify: '出发前提醒（前一晚和出发前）', pickTrip: '放到哪个旅行里？', shared: '正在读取分享的内容',
   noExp: '还没有花费', psAbroad: '出国', psBiz: '出差', psBeach: '海边', psCold: '寒冷地区', psCamp: '露营', psKids: '带孩子',

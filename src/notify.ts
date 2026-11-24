@@ -4,7 +4,9 @@ import * as Notifications from 'expo-notifications';
 import { Trip, timeline, todayStr, parseDate } from './data';
 import { t, typeName, prettyDate } from './i18n';
 import { localToDate } from './airports';
-import { bookingTz, tripTz } from './geo';
+import { bookingTz, tripTz, cachedGeos } from './geo';
+import { estimate } from './eta';
+import { AIRPORT_NAME } from './airports';
 
 export async function askPermission() {
   if (Platform.OS === 'web') return false;
@@ -35,6 +37,11 @@ export async function rescheduleAll(trips: Trip[], on: boolean) {
     if (!perm.granted) return;
     const now = Date.now();
     const list: { when: Date; title: string; body: string }[] = [];
+    // 地図で一度調べた場所（宿・空港・駅）の位置。出発前の「そろそろ出る時間」に使う
+    const qs: string[] = [];
+    trips.forEach((tr) => tr.bookings.forEach((b) => [b.from, b.to].forEach((x) => x && qs.push(x))));
+    const geos = await cachedGeos([...new Set(qs.flatMap((q) => [q, AIRPORT_NAME[q.toUpperCase()] ?? '']).filter(Boolean))]);
+    const geoOf = (q?: string) => (q ? geos[q] ?? geos[AIRPORT_NAME[q.toUpperCase()] ?? ''] : undefined);
     const today = todayStr();
     trips.forEach((trip) =>
       timeline(trip).forEach(({ date, items }) => {
@@ -57,7 +64,23 @@ export async function rescheduleAll(trips: Trip[], on: boolean) {
         items.forEach((it) => {
           if (!it.time || it.edge === 'end') return;
           const b = it.booking;
-          const before = b.type === 'flight' ? 180 : b.type === 'train' || b.type === 'bus' ? 60 : 60;
+          // 飛行機・電車・バス：前の晩の宿から乗り場までの時間を見て「そろそろ出発」を知らせる
+          if (['flight', 'train', 'bus'].includes(b.type)) {
+            const stay = trip.bookings.find((h) => h.type === 'hotel' && !h.cancelled && (h.end === date || h.start === date) && h.from);
+            const a = geoOf(stay?.from);
+            const z = geoOf(b.from);
+            const e = a && z ? estimate(a, z) : null;
+            const move = e && e.mode !== 'far' ? e.min : b.type === 'flight' ? 60 : 30;
+            const buffer = b.type === 'flight' ? 120 : 15;
+            const leave = new Date(localToDate(date, it.time, bookingTz(b, trip)).getTime() - (buffer + move) * 60000);
+            list.push({
+              when: leave,
+              title: `${t(b.type === 'flight' ? 'nLeaveAirport' : 'nLeaveStation')} · ${b.title || typeName(b.type)}`,
+              body: t('nLeaveBody', { place: b.from || typeName(b.type), min: String(move), time: it.time, guess: e ? '' : t('nGuess') }),
+            });
+            return;
+          }
+          const before = 60;
           // 時刻は現地時間なので、その場所のタイムゾーンで実際の時刻に直す
           const w = new Date(localToDate(date, it.time, bookingTz(b, trip)).getTime() - before * 60000);
           list.push({

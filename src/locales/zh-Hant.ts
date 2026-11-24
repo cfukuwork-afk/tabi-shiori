@@ -1,6 +1,7 @@
 // 繁體中文（台灣）
 export default {
   date: '日期', nTomorrow: '明天的行程', share: '分享', shareHead: '旅行手冊', openMap: '在地圖中開啟', budget: '預算', budgetSet: '設定預算', left: '剩餘', over: '超支',
+  nLeaveAirport: "該去機場了", nLeaveStation: "該去車站了", nLeaveBody: "到{place}約{min}分鐘{guess}。現在出發，從容趕上{time}。", nGuess: "（估計）",
   spending: '旅途中的花費', addExpense: '新增花費', expTitle: '花在哪裡？（例：午餐）', catMeal: '餐飲', catMove: '交通', catShop: '購物', catSight: '觀光', catEtc: '其他',
   bookingsTotal: '預訂合計', expensesTotal: '花費合計', convert: '快速換算', notify: '出發前提醒（前一晚和出發前）', pickTrip: '放到哪個旅行裡？', shared: '正在讀取分享的內容',
   noExp: '還沒有花費', psAbroad: '出國', psBiz: '出差', psBeach: '海邊', psCold: '寒冷地區', psCamp: '露營', psKids: '帶孩子',
