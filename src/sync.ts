@@ -179,7 +179,7 @@ export async function syncTrip(trip: Trip): Promise<{ trip: Trip; rev: number; p
 }
 
 /* ---------- みんなのしおり ---------- */
-export type PubTrip = { id: string; author?: string; trip: { name: string; emoji?: string; days: number; cities: string[]; countries: string[]; note?: string; items: { type: string; title: string; day: number; time?: string; endDay?: number; endTime?: string; from?: string; to?: string }[] } };
+export type PubTrip = { id: string; author?: string; trip: { name: string; nameEn?: string; emoji?: string; days: number; cities: string[]; countries: string[]; note?: string; items: { type: string; title: string; en?: string; tip?: { ja?: string; en?: string }; day: number; time?: string; endDay?: number; endTime?: string; from?: string; to?: string }[] } };
 const pubBody = (trip: Trip, author: string, note: string, cities: string[], countries: string[], lang: string) =>
   JSON.stringify({
     author,

@@ -583,19 +583,21 @@ function Main() {
             const p = pubIn.trip;
             const tr: Trip = {
               id: uid(),
-              name: p.name,
+              name: (!(getLang() === 'ja') && p.nameEn) || p.name,
               emoji: p.emoji && COVERS.includes(p.emoji) ? p.emoji : COVERS[Math.floor(Math.random() * COVERS.length)],
               members: [{ id: 'me', name: settings.myName || t('me') }],
               bookings: p.items.map((it, i) => ({
                 id: uid(),
                 type: (TYPES.some((x) => x.id === it.type) ? it.type : 'plan') as BookingType,
-                title: it.title,
+                title: (!(getLang() === 'ja') && it.en) || it.title,
                 start: shiftDate(start, it.day - 1),
                 startTime: it.time,
                 end: it.endDay ? shiftDate(start, it.endDay - 1) : undefined,
                 endTime: it.endTime,
-                from: it.from,
+                // 公式しおりは英語の名前と都市を「場所」に入れて、地図で見つかりやすくする
+                from: it.from ?? (it.en && p.cities[0] ? `${it.en}, ${p.cities[0]}` : undefined),
                 to: it.to,
+                memo: it.tip ? ((getLang() === 'ja') ? it.tip.ja : it.tip.en) || undefined : undefined,
                 createdAt: Date.now() + i,
               })),
               checklist: t('defaultPack').split(',').map((x) => ({ id: uid(), text: x, done: false })),
