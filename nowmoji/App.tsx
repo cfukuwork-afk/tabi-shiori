@@ -227,6 +227,8 @@ function Main(props: { s: Sync; apply: (s: Sync) => void; refresh: () => Promise
   };
   const others = g ? g.members.filter((m) => m.id !== s.me.id) : [];
   const blocked = new Set(s.blocked.map((b) => b.id));
+  const ordered = g ? [...others].sort((a, b) => (blocked.has(b.id) ? 0 : g.latest[b.id]?.at || 0) - (blocked.has(a.id) ? 0 : g.latest[a.id]?.at || 0)) : [];
+  const { width } = useWindowDimensions();
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -246,7 +248,8 @@ function Main(props: { s: Sync; apply: (s: Sync) => void; refresh: () => Promise
           </Pressable>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, gap: 8 }} style={{ flexGrow: 0 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, gap: 8 }} style={{ flexGrow: 0, flex: 1 }}>
           {s.groups.map((x) => (
             <Pressable key={x.id} onPress={() => (x.id === g?.id ? setSheet({ k: 'group' }) : setGid(x.id))} style={[st.chip, x.id === g?.id && st.chipOn]}>
               <Text style={[st.chipT, x.id === g?.id && { color: '#fff' }]} numberOfLines={1}>{x.name}</Text>
@@ -256,30 +259,39 @@ function Main(props: { s: Sync; apply: (s: Sync) => void; refresh: () => Promise
             <Text style={[st.chipT, { color: C.sub }]}>{t.addGroup}</Text>
           </Pressable>
         </ScrollView>
+        {g ? (
+          <View style={[st.meChip, { backgroundColor: tint(s.me.color), marginRight: 14 }]}>
+            <MoodTile p={g.latest[s.me.id]} color={s.me.color} size={28} bare />
+            <Text style={{ fontSize: 11, fontWeight: '900', color: C.ink }}>{t.you}</Text>
+          </View>
+        ) : null}
+        </View>
 
         {!g ? (
           <NoGroup onNew={() => setSheet({ k: 'new' })} />
         ) : (
           <>
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 12 }}>
+              {others.length === 0 ? (
+                <Pressable onPress={() => setSheet({ k: 'group' })} style={[st.mem, { width: '100%', paddingVertical: 22 }]}>
+                  <Text style={{ fontSize: 26, color: C.ink, fontWeight: '800' }}>{ltr('(´ω`)')}</Text>
+                  <Text style={{ color: C.ink, fontWeight: '800', marginTop: 6 }}>{t.invite}</Text>
+                </Pressable>
+              ) : null}
+              {/* 友だちは最近送った順に、4人まで大きく。5人目からは小さく */}
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                {others.length === 0 ? (
-                  <Pressable onPress={() => setSheet({ k: 'group' })} style={[st.mem, { width: '100%', paddingVertical: 22 }]}>
-                    <Text style={{ fontSize: 26, color: C.ink, fontWeight: '800' }}>{ltr('(´ω`)')}</Text>
-                    <Text style={{ color: C.ink, fontWeight: '800', marginTop: 6 }}>{t.invite}</Text>
-                  </Pressable>
-                ) : null}
-                {others.map((m) => {
+                {ordered.map((m, i) => {
                   const p = blocked.has(m.id) ? undefined : g.latest[m.id];
+                  const big = i < 4;
                   return (
-                    <Pressable key={m.id} style={st.mem} onLongPress={() => setSheet({ k: 'person', u: m, post: p })} delayLongPress={350}>
-                      <MoodTile p={p} color={m.color} size={64} />
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
-                        <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: m.color }} />
-                        <Text style={{ fontWeight: '900', fontSize: 12, color: C.ink }} numberOfLines={1}>{m.name}</Text>
+                    <Pressable key={m.id} style={[st.mem, big ? { width: (width - 36) / 2, paddingVertical: 9 } : { width: (width - 48) / 3 }]} onLongPress={() => setSheet({ k: 'person', u: m, post: p })} delayLongPress={350}>
+                      <MoodTile p={p} color={m.color} size={big ? Math.min(104, (width - 38) / 2 - 30) : 52} />
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 }}>
+                        <View style={{ width: big ? 9 : 7, height: big ? 9 : 7, borderRadius: 5, backgroundColor: m.color }} />
+                        <Text style={{ fontWeight: '900', fontSize: big ? 15 : 12, color: C.ink }} numberOfLines={1}>{m.name}</Text>
                       </View>
-                      <Text style={{ fontSize: 13, color: C.ink, textAlign: 'center' }} numberOfLines={2}>{label(p) || t.nothingYet}</Text>
-                      {p ? <Text style={{ fontSize: 11, color: C.sub }}>{ago(p.at)}</Text> : null}
+                      <Text style={{ fontSize: big ? 14 : 12, color: C.ink, textAlign: 'center' }} numberOfLines={1}>{label(p) || t.nothingYet}</Text>
+                      {p ? <Text style={{ fontSize: big ? 12 : 11, color: C.sub }}>{ago(p.at)}</Text> : null}
                     </Pressable>
                   );
                 })}
@@ -348,8 +360,8 @@ const label = (p?: Post | null) => {
   return (p.mood && t.moods[p.mood]) || '';
 };
 
-function MoodTile({ p, color, size }: { p?: Post | null; color: string; size: number }) {
-  const box = { width: size, height: size, borderRadius: size * 0.24, backgroundColor: tint(color), alignItems: 'center' as const, justifyContent: 'center' as const, overflow: 'hidden' as const };
+function MoodTile({ p, color, size, bare }: { p?: Post | null; color: string; size: number; bare?: boolean }) {
+  const box = { width: size, height: size, borderRadius: size * 0.24, backgroundColor: bare ? 'transparent' : tint(color), alignItems: 'center' as const, justifyContent: 'center' as const, overflow: 'hidden' as const };
   if (!p)
     return (
       <View style={box}>
@@ -1033,7 +1045,8 @@ const st = StyleSheet.create({
   chip: { borderRadius: 999, paddingVertical: 9, paddingHorizontal: 16, backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#fff', maxWidth: 180 },
   chipOn: { backgroundColor: C.ink, borderColor: C.ink },
   chipT: { fontWeight: '900', color: C.ink, fontSize: 14 },
-  mem: { width: '31.9%', backgroundColor: '#fff', borderRadius: 18, padding: 8, alignItems: 'center', gap: 2 },
+  mem: { width: '31.9%', backgroundColor: '#fff', borderRadius: 20, padding: 8, alignItems: 'center', gap: 2 },
+  meChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingVertical: 3, paddingLeft: 4, paddingRight: 12, maxWidth: '70%' },
   comp: { backgroundColor: '#fff', borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingHorizontal: 14, paddingTop: 12, gap: 9, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 14, shadowOffset: { width: 0, height: -4 } },
   tab: { flex: 1, borderRadius: 14, paddingVertical: 9, alignItems: 'center', backgroundColor: C.soft },
   tabOn: { backgroundColor: C.ink },
