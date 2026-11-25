@@ -3,9 +3,10 @@
 name: iOS build
 
 on:
-  # 「ios-build-<日付など>」というタグを送っても動く（ブラウザでGitHubにログインしていなくても始められるように）
+  # .github/build-request を書きかえて main に送っても動く（ブラウザでGitHubにログインしていなくても始められるように）
   push:
-    tags: ['ios-build-*']
+    branches: [main]
+    paths: ['.github/build-request']
   workflow_dispatch:
     inputs:
       submit:
