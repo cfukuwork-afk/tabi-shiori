@@ -111,6 +111,7 @@ import { myTz } from './src/airports';
 import { isPdf, isPkpass, keepFile, readPkpass, TicketFile } from './src/pkpass';
 import { pickAnyFile, shareTextFile } from './src/files';
 import { buildIcs } from './src/ics';
+import { mailAddress, fetchMail, ackMail, pickTripFor, mailText } from './src/mailin';
 import * as Sharing from 'expo-sharing';
 import Constants from 'expo-constants';
 import { activityLinks, airhelpLink, carLinks, esimLinks, flightLinks, hotelLinks, inspireLinks, luggageLinks, transferLinks, FindLink } from './src/affiliate';
@@ -466,6 +467,76 @@ function Main() {
     return () => clearTimeout(tm);
   }, [dirtyKey]);
   const updateTrip = (id: string, fn: (t: Trip) => Trip) => updateTrips((all) => all.map((x) => (x.id === id ? fn(x) : x)));
+  // 転送されたメール（<10文字>@tripfold.net）を取りに行き、日付の合う旅行の「読み取り待ち」に入れる
+  const [mailOpen, setMailOpen] = useState(false);
+  const pulling = useRef(false);
+  const pullMail = async () => {
+    if (pulling.current) return;
+    pulling.current = true;
+    try {
+      const items = await fetchMail();
+      if (!items.length) return;
+      const cur = [...tripsRef.current];
+      let added = 0;
+      let target: string | null = null;
+      for (const m of [...items].reverse()) {
+        if (m.confirm) {
+          // Gmail の自動転送を設定したときの確認メール：確認のページを開くだけ
+          const link = m.confirm;
+          Alert.alert(t('mailGmailTitle'), t('mailGmailBody'), [
+            { text: t('close'), style: 'cancel' },
+            { text: t('mailGmailOpen'), onPress: () => Linking.openURL(link).catch(() => undefined) },
+          ]);
+          await ackMail(m.id);
+          continue;
+        }
+        const item = { id: 'm_' + m.id, text: mailText(m), at: m.at };
+        let id = pickTripFor(cur, item.text, todayStr());
+        if (!id) {
+          const tr: Trip = {
+            id: uid(),
+            name: t('newTrip'),
+            emoji: COVERS[Math.floor(Math.random() * COVERS.length)],
+            members: [{ id: 'me', name: settings.myName || t('me') }],
+            bookings: [],
+            checklist: t('defaultPack').split(',').map((x) => ({ id: uid(), text: x, done: false })),
+            inbox: [item],
+            createdAt: Date.now(),
+          };
+          cur.unshift(tr);
+          updateTrips((all) => [tr, ...all]);
+          id = tr.id;
+        } else {
+          const tid = id;
+          const i = cur.findIndex((x) => x.id === tid);
+          if (i >= 0) cur[i] = { ...cur[i], inbox: [item, ...(cur[i].inbox ?? [])] };
+          updateTrip(tid, (tr) => (tr.inbox?.some((x) => x.id === item.id) ? tr : { ...tr, inbox: [item, ...(tr.inbox ?? [])] }));
+        }
+        target = id;
+        added++;
+        await ackMail(m.id);
+      }
+      if (added && target) {
+        const go = target;
+        Alert.alert(t('mailArrived', { n: added }), t('mailArrivedSub'), [
+          { text: t('close'), style: 'cancel' },
+          { text: t('mailOpenTrip'), onPress: () => setOpenId(go) },
+        ]);
+      }
+    } finally {
+      pulling.current = false;
+    }
+  };
+  useEffect(() => {
+    if (!ready) return;
+    pullMail();
+    const iv = setInterval(() => AppState.currentState === 'active' && pullMail(), 60000);
+    const sub = AppState.addEventListener('change', (st) => st === 'active' && pullMail());
+    return () => {
+      clearInterval(iv);
+      sub.remove();
+    };
+  }, [ready]);
   const [undo, setUndo] = useState<UndoSnap | null>(null);
   useEffect(() => {
     undoBus.push = (u) => setUndo({ ...u, at: Date.now() });
@@ -533,6 +604,7 @@ function Main() {
           onSettings={() => setShowSettings(true)}
           onOpenBooking={(tripId, id) => setDetail({ tripId, id })}
           onDna={() => setDnaIn('')}
+          onMail={() => setMailOpen(true)}
           onDemo={() =>
             updateTrips((all) => (all.some((tr) => tr.id.startsWith('tpl_')) ? all.filter((tr) => !tr.id.startsWith('tpl_')) : [...makeDemoTrips(todayStr()), ...all]))
           }
@@ -595,6 +667,10 @@ function Main() {
           }}
         />
       )}
+
+      <Sheet visible={mailOpen} onClose={() => setMailOpen(false)}>
+        {mailOpen && <MailSheet onCheck={pullMail} />}
+      </Sheet>
 
       <Sheet visible={dnaIn !== null} onClose={() => setDnaIn(null)}>
         <View style={{ paddingHorizontal: 4, paddingBottom: 8 }}>{dnaIn !== null && <DnaView trips={trips} rate={rate} friendCode={dnaIn || undefined} />}</View>
@@ -813,12 +889,14 @@ function Home({
   onOpenBooking,
   onDemo,
   onDna,
+  onMail,
 }: {
   trips: Trip[];
   rate: RateInfo;
   onOpen: (id: string) => void;
   onNew: () => void;
   onDna: () => void;
+  onMail: () => void;
   onSettings: () => void;
   onOpenBooking: (tripId: string, id: string) => void;
   onDemo?: () => void;
@@ -892,6 +970,15 @@ function Home({
         <View style={{ flex: 1 }}>
           <Text style={[s.hint, { color: C.ink, fontWeight: '800', fontSize: 15 }]}>{t('dnaTitle')}</Text>
           <Text style={s.hint}>{t('dnaHomeSub')}</Text>
+        </View>
+        <Icon name="chevron-forward" size={18} color={C.sub} />
+      </Pressable>
+      {/* メールを転送して予定を取り込む */}
+      <Pressable style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14 }]} onPress={onMail}>
+        <Icon name="mail-unread-outline" size={22} color={C.pink} />
+        <View style={{ flex: 1 }}>
+          <Text style={[s.hint, { color: C.ink, fontWeight: '800', fontSize: 15 }]}>{t('mailHomeTitle')}</Text>
+          <Text style={s.hint}>{t('mailHomeSub')}</Text>
         </View>
         <Icon name="chevron-forward" size={18} color={C.sub} />
       </Pressable>
@@ -2226,6 +2313,69 @@ function JournalBlock({ entry, onPress }: { entry?: { text?: string; photos?: st
         </View>
       )}
     </Pressable>
+  );
+}
+
+/** メールの転送先（この端末専用の住所）と使い方 */
+function MailSheet({ onCheck }: { onCheck: () => Promise<void> }) {
+  const [addr, setAddr] = useState<string | null | undefined>(undefined);
+  const [copied, setCopied] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const load = () => {
+    setAddr(undefined);
+    mailAddress().then(setAddr);
+  };
+  useEffect(load, []);
+  return (
+    <View style={{ paddingHorizontal: 4, paddingBottom: 12 }}>
+      <Text style={[s.sheetTitle, { marginBottom: 6 }]}>{t('mailSheetTitle')}</Text>
+      <Text style={[s.hint, { marginBottom: 14 }]}>{t('mailSheetLead')}</Text>
+      <View style={[s.card, { alignItems: 'center', paddingVertical: 18 }]}>
+        {addr === undefined ? (
+          <ActivityIndicator />
+        ) : addr === null ? (
+          <Pressable onPress={load}>
+            <Text style={[s.hint, { textAlign: 'center' }]}>{t('mailErr')}</Text>
+          </Pressable>
+        ) : (
+          <>
+            <Text selectable style={{ fontSize: 19, fontWeight: '800', color: C.ink, letterSpacing: 0.3 }}>
+              {addr}
+            </Text>
+            <Pressable
+              style={[s.secondary, { marginTop: 12, alignSelf: 'stretch' }]}
+              onPress={async () => {
+                await Clipboard.setStringAsync(addr).catch(() => undefined);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1500);
+              }}
+            >
+              <Icon name={copied ? 'checkmark' : 'copy-outline'} size={17} />
+              <Text style={s.secondaryText}>{copied ? t('copied') : t('mailCopy')}</Text>
+            </Pressable>
+          </>
+        )}
+      </View>
+      {[t('mailStep1'), t('mailStep2'), t('mailStep3')].map((x, i) => (
+        <View key={i} style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+          <Text style={{ fontWeight: '800', color: C.pink, width: 18 }}>{i + 1}</Text>
+          <Text style={[s.hint, { flex: 1, color: C.ink }]}>{x}</Text>
+        </View>
+      ))}
+      <Pressable
+        style={[s.secondary, { marginTop: 16 }]}
+        disabled={checking || !addr}
+        onPress={async () => {
+          setChecking(true);
+          await onCheck();
+          setChecking(false);
+        }}
+      >
+        {checking ? <ActivityIndicator /> : <Icon name="refresh" size={17} />}
+        <Text style={s.secondaryText}>{t('mailCheckNow')}</Text>
+      </Pressable>
+      <Text style={[s.hint, { fontSize: 11, marginTop: 12 }]}>{t('mailPrivacy')}</Text>
+    </View>
   );
 }
 
