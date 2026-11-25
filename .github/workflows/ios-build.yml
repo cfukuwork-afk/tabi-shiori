@@ -3,6 +3,9 @@
 name: iOS build
 
 on:
+  # 「ios-build-<日付など>」というタグを送っても動く（ブラウザでGitHubにログインしていなくても始められるように）
+  push:
+    tags: ['ios-build-*']
   workflow_dispatch:
     inputs:
       submit:
@@ -65,5 +68,5 @@ jobs:
           retention-days: 7
 
       - name: Send to App Store Connect
-        if: ${{ inputs.submit }}
+        if: ${{ github.event_name == 'push' || inputs.submit }}
         run: eas submit -p ios --profile production --path "$RUNNER_TEMP/app.ipa" --non-interactive
