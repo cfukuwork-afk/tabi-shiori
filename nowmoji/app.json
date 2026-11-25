@@ -56,13 +56,28 @@
               "displayName": "Nowmoji",
               "description": "Your group's latest moods",
               "ios": {
-                "supportedFamilies": ["accessoryRectangular", "systemMedium", "systemLarge"],
+                "supportedFamilies": [
+                  "accessoryRectangular",
+                  "systemMedium",
+                  "systemLarge"
+                ],
                 "initialLayout": "./src/widgets/GroupWidget.tsx",
                 "configuration": {
                   "title": "Group",
                   "description": "Choose which group to show",
                   "parameters": {
-                    "group": { "title": "Group", "type": "enum", "dynamic": true, "values": [{ "name": "Auto", "value": "auto" }], "default": "auto" }
+                    "group": {
+                      "title": "Group",
+                      "type": "enum",
+                      "dynamic": true,
+                      "values": [
+                        {
+                          "name": "Auto",
+                          "value": "auto"
+                        }
+                      ],
+                      "default": "auto"
+                    }
                   }
                 }
               }
@@ -72,13 +87,27 @@
               "displayName": "Nowmoji",
               "description": "One friend's latest mood",
               "ios": {
-                "supportedFamilies": ["accessoryCircular", "systemSmall"],
+                "supportedFamilies": [
+                  "accessoryCircular",
+                  "systemSmall"
+                ],
                 "initialLayout": "./src/widgets/FriendWidget.tsx",
                 "configuration": {
                   "title": "Friend",
                   "description": "Choose whose mood to show",
                   "parameters": {
-                    "person": { "title": "Friend", "type": "enum", "dynamic": true, "values": [{ "name": "Auto", "value": "auto" }], "default": "auto" }
+                    "person": {
+                      "title": "Friend",
+                      "type": "enum",
+                      "dynamic": true,
+                      "values": [
+                        {
+                          "name": "Auto",
+                          "value": "auto"
+                        }
+                      ],
+                      "default": "auto"
+                    }
                   }
                 }
               }
@@ -88,6 +117,28 @@
       ],
       "expo-iap",
       "expo-localization"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "build": {
+          "experimental": {
+            "ios": {
+              "appExtensions": [
+                {
+                  "targetName": "ExpoWidgetsTarget",
+                  "bundleIdentifier": "com.fukuda.nowmoji.ExpoWidgetsTarget",
+                  "entitlements": {
+                    "com.apple.security.application-groups": [
+                      "group.com.fukuda.nowmoji"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "projectId": "14d7a22a-2f24-446e-a0d3-3c7871f41d64"
+      }
+    }
   }
 }
