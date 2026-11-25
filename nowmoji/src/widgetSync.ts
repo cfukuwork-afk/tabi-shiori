@@ -79,7 +79,7 @@ export async function updateWidgets(s: Sync | null, theme = 'paper') {
         if (img) used.add(img);
       }
     }
-    return { n: me ? t.you : u.name, c: u.color, bg: tint(u.color), k, img, t: p ? hhmm(p.at) : '', w: p?.word || '' };
+    return { n: me ? t.you : u.name, c: u.color, bg: tint(u.color), k, img, t: p ? hhmm(p.at) : '', w: p?.word || '', me };
   };
   const groups: GroupWidgetProps['groups'] = {};
   const people: FriendWidgetProps['people'] = {};

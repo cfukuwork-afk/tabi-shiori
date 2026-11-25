@@ -4,7 +4,7 @@ import { HStack, Image, Spacer, Text, VStack } from '@expo/ui/swift-ui';
 import { background, font, foregroundStyle, frame, lineLimit, minimumScaleFactor, padding, resizable, aspectRatio, shapes, containerBackground, widgetURL } from '@expo/ui/swift-ui/modifiers';
 import { createWidget, type WidgetEnvironment } from 'expo-widgets';
 
-export type WPerson = { n: string; c: string; bg: string; k: string; img: string; t: string; w: string };
+export type WPerson = { n: string; c: string; bg: string; k: string; img: string; t: string; w: string; me?: boolean };
 export type GroupWidgetProps = {
   groups: Record<string, { name: string; people: WPerson[] }>;
   order: string[];
@@ -65,52 +65,54 @@ const GroupWidget = (p: GroupWidgetProps, env: WidgetEnvironment<{ group: string
     );
   }
 
-  if (fam === 'systemLarge') {
+  // ホーム画面：友だち4人を大きく、自分は右上に小さく
+  const friends = g.people.filter((x) => !x.me).slice(0, 4);
+  const me = g.people.find((x) => x.me);
+  const big = fam === 'systemLarge';
+  const head = (
+    <HStack spacing={6}>
+      <Text modifiers={[font({ size: big ? 14 : 12, weight: 'heavy' }), foregroundStyle(sub), lineLimit(1)]}>{g.name}</Text>
+      <Spacer />
+      {me ? (
+        <HStack spacing={4} modifiers={[padding({ horizontal: 7, vertical: 2 }), background(me.bg, shapes.capsule())]}>
+          {me.img ? (
+            <Image uiImage={me.img} modifiers={[resizable(), aspectRatio({ contentMode: 'fit' }), frame({ width: 16, height: 16 })]} />
+          ) : (
+            <Text modifiers={[font({ size: 10, weight: 'heavy' }), foregroundStyle('#2B2633'), lineLimit(1), minimumScaleFactor(0.5)]}>{me.k || '·'}</Text>
+          )}
+          <Text modifiers={[font({ size: 9, weight: 'bold' }), foregroundStyle('#2B2633'), lineLimit(1)]}>{me.n}</Text>
+        </HStack>
+      ) : null}
+    </HStack>
+  );
+  const cell = (x: WPerson, i: number) => (
+    <VStack key={i} spacing={big ? 4 : 3} modifiers={[frame({ maxWidth: 9999 })]}>
+      <VStack modifiers={[frame({ maxWidth: 9999, minHeight: big ? 96 : 62, maxHeight: big ? 96 : 62 }), background(x.bg, shapes.roundedRectangle({ cornerRadius: big ? 18 : 14 }))]}>
+        {x.img ? (
+          <Image uiImage={x.img} modifiers={[resizable(), aspectRatio({ contentMode: 'fit' }), frame({ width: big ? 84 : 54, height: big ? 84 : 54 })]} />
+        ) : (
+          <Text modifiers={[font({ size: big ? 26 : 17, weight: 'heavy' }), foregroundStyle('#2B2633'), lineLimit(1), minimumScaleFactor(0.35), padding({ horizontal: 4 })]}>{x.k || '·'}</Text>
+        )}
+      </VStack>
+      <Text modifiers={[font({ size: big ? 13 : 11, weight: 'heavy' }), foregroundStyle(x.c), lineLimit(1)]}>{x.n}</Text>
+      {big ? <Text modifiers={[font({ size: 12 }), foregroundStyle(ink), lineLimit(1)]}>{x.w || ' '}</Text> : null}
+      <Text modifiers={[font({ size: big ? 10 : 9 }), foregroundStyle(sub), lineLimit(1)]}>{x.t || ' '}</Text>
+    </VStack>
+  );
+  if (big) {
     return (
-      <VStack alignment="leading" spacing={8} modifiers={[containerBackground(paper, 'widget'), widgetURL(url)]}>
-        <Text modifiers={[font({ size: 13, weight: 'heavy' }), foregroundStyle(sub), lineLimit(1)]}>{g.name}</Text>
-        {g.people.slice(0, 5).map((x, i) => (
-          <HStack key={i} spacing={10}>
-            <VStack modifiers={[frame({ width: 58, height: 52 }), background(x.bg, shapes.roundedRectangle({ cornerRadius: 12 }))]}>
-              {x.img ? (
-                <Image uiImage={x.img} modifiers={[resizable(), aspectRatio({ contentMode: 'fit' }), frame({ width: 46, height: 46 })]} />
-              ) : (
-                <Text modifiers={[font({ size: 14, weight: 'heavy' }), foregroundStyle(ink), lineLimit(1), minimumScaleFactor(0.4), padding({ horizontal: 3 })]}>{x.k || '·'}</Text>
-              )}
-            </VStack>
-            <VStack alignment="leading" spacing={1}>
-              <HStack spacing={6}>
-                <Text modifiers={[font({ size: 13, weight: 'heavy' }), foregroundStyle(x.c), lineLimit(1)]}>{x.n}</Text>
-                <Text modifiers={[font({ size: 11 }), foregroundStyle(sub)]}>{x.t}</Text>
-              </HStack>
-              <Text modifiers={[font({ size: 14 }), foregroundStyle(ink), lineLimit(2)]}>{x.w}</Text>
-            </VStack>
-            <Spacer />
-          </HStack>
-        ))}
+      <VStack alignment="leading" spacing={10} modifiers={[containerBackground(paper, 'widget'), widgetURL(url)]}>
+        {head}
+        <HStack spacing={10}>{friends.slice(0, 2).map(cell)}</HStack>
+        <HStack spacing={10}>{friends.slice(2, 4).map((x, i) => cell(x, i + 2))}{friends.length === 3 ? <Spacer /> : null}</HStack>
         <Spacer />
       </VStack>
     );
   }
-
   return (
     <VStack alignment="leading" spacing={6} modifiers={[containerBackground(paper, 'widget'), widgetURL(url)]}>
-      <Text modifiers={[font({ size: 12, weight: 'heavy' }), foregroundStyle(sub), lineLimit(1)]}>{g.name}</Text>
-      <HStack spacing={6}>
-        {g.people.slice(0, 5).map((x, i) => (
-          <VStack key={i} spacing={3} modifiers={[frame({ maxWidth: 9999 })]}>
-            <VStack modifiers={[frame({ maxWidth: 9999, minHeight: 54, maxHeight: 54 }), background(x.bg, shapes.roundedRectangle({ cornerRadius: 12 }))]}>
-              {x.img ? (
-                <Image uiImage={x.img} modifiers={[resizable(), aspectRatio({ contentMode: 'fit' }), frame({ width: 46, height: 46 })]} />
-              ) : (
-                <Text modifiers={[font({ size: 15, weight: 'heavy' }), foregroundStyle(ink), lineLimit(1), minimumScaleFactor(0.35), padding({ horizontal: 3 })]}>{x.k || '·'}</Text>
-              )}
-            </VStack>
-            <Text modifiers={[font({ size: 11, weight: 'heavy' }), foregroundStyle(x.c), lineLimit(1)]}>{x.n}</Text>
-            <Text modifiers={[font({ size: 9 }), foregroundStyle(sub), lineLimit(1)]}>{x.t}</Text>
-          </VStack>
-        ))}
-      </HStack>
+      {head}
+      <HStack spacing={7}>{friends.map(cell)}</HStack>
     </VStack>
   );
 };
