@@ -109,7 +109,8 @@ import { useCityPhoto } from './src/cityPhoto';
 import { dropVaultImage, keepVaultImage, loadVault, saveVault, unlock, VaultDoc } from './src/vault';
 import { myTz } from './src/airports';
 import { isPdf, isPkpass, keepFile, readPkpass, TicketFile } from './src/pkpass';
-import { pickAnyFile } from './src/files';
+import { pickAnyFile, shareTextFile } from './src/files';
+import { buildIcs } from './src/ics';
 import * as Sharing from 'expo-sharing';
 import Constants from 'expo-constants';
 import { activityLinks, airhelpLink, carLinks, esimLinks, flightLinks, hotelLinks, inspireLinks, luggageLinks, transferLinks, FindLink } from './src/affiliate';
@@ -170,6 +171,16 @@ const placeLabels = (ty: BookingType): [string, string | null] =>
 const catName = (c: ExpenseCat) => t(('cat' + c[0].toUpperCase() + c.slice(1)) as any);
 
 /** しおりを文字にして共有（LINE・メールなど） */
+/** カレンダー（.ics）にして共有メニューを開く。only を渡すとその予定だけ */
+function icsOf(trip: Trip, only?: Booking) {
+  return buildIcs(
+    trip,
+    { tzOf: (b) => bookingTz(b, trip), arrTzOf: (b) => arrivalTz(b, trip), typeLabel: typeName, L: { code: t('code'), seat: t('seat'), from: t('from'), to: t('to'), memo: t('memo'), trip: t('icsTrip') } },
+    only,
+  );
+}
+const shareIcs = (trip: Trip, only?: Booking) => shareTextFile(`${(only && (only.title || typeName(only.type))) || trip.name}.ics`, icsOf(trip, only), 'text/calendar').catch(() => undefined);
+
 function itineraryText(trip: Trip) {
   const { start, end } = tripRange(trip);
   const lines = [`${bracket(trip.name)} ${start ? prettyDate(start) : ''}${end && end !== start ? range() + prettyDate(end) : ''}`, ''];
@@ -1708,6 +1719,15 @@ function ShareSheet({ trip, stat, rate, onSyncNow, onClose, onShared, onStop }: 
         <Icon name="document-text-outline" size={17} />
         <Text style={s.secondaryText}>{t('sendItinerary')}</Text>
       </Pressable>
+      {trip.bookings.some((b) => !b.cancelled && isDate(b.start)) && (
+        <>
+          <Pressable style={[s.secondary, { marginTop: 8 }]} onPress={() => shareIcs(trip)}>
+            <Icon name="calendar-outline" size={17} />
+            <Text style={s.secondaryText}>{t('addTripToCal')}</Text>
+          </Pressable>
+          <Text style={[s.hint, { fontSize: 11, marginTop: 4 }]}>{t('calHint')}</Text>
+        </>
+      )}
       {/* 家計簿アプリ World Budget Book に旅費を送る（入っていなければ App Store を開く） */}
       {(trip.bookings.some((b) => b.price && b.currency && !b.cancelled) || (trip.expenses ?? []).length > 0) && (
         <Pressable
@@ -4039,10 +4059,47 @@ function BookingDetail({
         </View>
         {(b.type === 'plan' || (b.type === 'ticket' && !b.code)) && !!b.title && <FindRow title={t('findTickets')} links={activityLinks(b.title, tripCity(trip.bookings))} />}
         <Text style={[s.hint, { fontSize: 11, marginTop: 8 }]}>{t('tapToCopy')}</Text>
+        {(() => {
+          // 周辺を探す（ホテル・観光・お店・レンタカーなど、場所がわかる予定）
+          if (!['hotel', 'ticket', 'food', 'plan', 'car', 'other'].includes(b.type)) return null;
+          const q = placeQuery(b, 'from', tripCity(trip.bookings));
+          if (!q) return null;
+          const cats: ('nbFood' | 'nbCafe' | 'nbConv' | 'nbAtm' | 'nbPharm' | 'nbPark')[] = ['nbFood', 'nbCafe', 'nbConv', 'nbAtm', 'nbPharm', ...(b.type === 'car' || b.type === 'hotel' ? (['nbPark'] as const) : [])];
+          return (
+            <>
+              <Text style={[s.sec, { marginTop: 16 }]}>{t('nearby').toUpperCase()}</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ flexGrow: 0 }}>
+                {cats.map((k) => (
+                  <Pressable key={k} onPress={() => openMap(`${t(k)} near ${q}`)} style={[s.secondary, { paddingHorizontal: 14, minHeight: 40 }]}>
+                    <Text style={s.secondaryText}>{t(k)}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </>
+          );
+        })()}
         <Pressable style={[s.secondary, { marginTop: 12 }]} onPress={() => copyTxt(allText())}>
           <Icon name="copy-outline" size={17} />
           <Text style={s.secondaryText}>{t('copyAll')}</Text>
         </Pressable>
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+          {isDate(b.start) && !b.cancelled && (
+            <Pressable style={[s.secondary, { flex: 1 }]} onPress={() => shareIcs(trip, b)}>
+              <Icon name="calendar-outline" size={17} />
+              <Text style={s.secondaryText}>{t('addToCal')}</Text>
+            </Pressable>
+          )}
+          <Pressable
+            style={[s.secondary, { flex: 1 }]}
+            onPress={() => {
+              const q = placeQuery(b, 'from', tripCity(trip.bookings));
+              shareSafe({ message: q ? `${allText()}\nhttps://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}` : allText() });
+            }}
+          >
+            <Icon name="share-outline" size={17} />
+            <Text style={s.secondaryText}>{t('sendThis')}</Text>
+          </Pressable>
+        </View>
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
           <Pressable style={[s.secondary, { flex: 1 }]} onPress={onEdit}>
             <Icon name="create-outline" size={17} />
