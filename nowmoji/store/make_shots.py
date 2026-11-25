@@ -79,8 +79,8 @@ def homescreen():
     med=f"""<div style="position:absolute;left:20px;right:20px;top:68px;height:170px;border-radius:24px;background:#FFFDF8;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:13px 14px;box-sizing:border-box">
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><div style="font:800 13px {FONT};color:#8A8396">{G}</div><div style="display:flex;align-items:center;gap:4px;border-radius:99px;background:{tint('#7C6BC4')};padding:2px 8px"><span style="font:800 10px {KF};color:#2B2633">{KAO['miss']}</span><span style="font:700 9.5px {FONT};color:#2B2633">{you}</span></div></div>
 <div style="display:flex;gap:8px">{''.join(cell(*x) for x in fr)}</div></div>"""
-    small=f"""<div style="position:absolute;left:20px;top:258px;width:170px;height:170px;border-radius:24px;background:{tint(PEOPLE[4][1],.22)};box-shadow:0 8px 24px rgba(0,0,0,.18);padding:13px;box-sizing:border-box;display:flex;flex-direction:column">
-<div style="font:800 14px {FONT};color:{PEOPLE[4][1]}">{NAMES[4]}</div><div style="flex:1;display:flex;align-items:center;justify-content:center"><img src="data:image/png;base64,{ART['miss']}" style="width:86px;height:86px"></div><div style="font:500 12px {KF};color:#2B2633">{'早く会いたいな' if JA else 'see you soon!'}</div><div style="font:500 10px {FONT};color:#8A8396">21:05</div></div>"""
+    small=f"""<div style="position:absolute;left:20px;top:258px;width:170px;height:170px;border-radius:24px;background:{tint(PEOPLE[3][1],.22)};box-shadow:0 8px 24px rgba(0,0,0,.18);padding:13px;box-sizing:border-box;display:flex;flex-direction:column">
+<div style="font:800 14px {FONT};color:{PEOPLE[3][1]}">{NAMES[3]}</div><div style="flex:1;display:flex;align-items:center;justify-content:center"><img src="data:image/png;base64,{ART['miss']}" style="width:86px;height:86px"></div><div style="font:500 12px {KF};color:#2B2633">{'早く会いたいな' if JA else 'see you soon!'}</div><div style="font:500 10px {FONT};color:#8A8396">21:05</div></div>"""
     labels=APPS_JA if JA else APPS_EN
     grid=''.join(icon(i,labels[i]) for i in [0,1,2,3])
     grid2=''.join(icon(i,labels[i]) for i in [4,5])
@@ -105,7 +105,7 @@ async def run():
         auth=await pg.evaluate("localStorage.getItem('nm.auth.v1')")
         r=call(auth,'POST','/v1/groups',{'name':G}); code=r['group']['code']; gid=r['group']['id']
         call(auth,'POST',f'/v1/groups/{gid}/posts',{'kind':'kao','mood':'happy','word':'おはよ' if JA else 'morning'})
-        for n,(k,m,w) in zip(NAMES,POSTS):
+        for n,(k,m,w) in zip(NAMES[:4],POSTS[:4]):
             u=call(None,'POST','/v1/register',{'name':n,'lang':LANG}); tk=u['uid']+'.'+u['token']
             call(tk,'POST','/v1/join',{'code':code}); call(tk,'POST',f'/v1/groups/{gid}/posts',{'kind':k,'mood':m,'word':w})
         await pg.reload(); await pg.wait_for_timeout(2500)

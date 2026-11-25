@@ -31,7 +31,7 @@ Nowmoji は、親しい人だけで「いまの気分」を置いておくアプ
 ・ロック画面のウィジェット（グループの最近の3人・1人を大きく）
 ・ホーム画面のウィジェット（グループ全員・1人を大きく）
 ・カレンダーで、その日のみんなの流れを見返す
-・グループは自分＋5人まで。招待した人だけ
+・グループは自分を入れて5人まで。招待した人だけ
 
 ■ 親しい人だけの、静かな場所
 フォロワーも「いいね」の数もありません。グループに入れるのは、招待コードを受け取った人だけ。いつも最新のひとつだけがウィジェットに表示されます。
@@ -77,7 +77,7 @@ WHAT YOU CAN DO
 • Lock screen widgets: your group’s 3 latest, or one friend up close
 • Home screen widgets: the whole group, or one friend up close
 • Look back on each day’s flow in the calendar
-• Groups of up to 6 people, invite-only
+• Groups of up to 5 people, invite-only
 
 A QUIET PLACE FOR CLOSE FRIENDS
 No followers, no like counts. Only people with your invite code can join. Widgets always show just the latest post.

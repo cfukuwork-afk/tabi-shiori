@@ -255,8 +255,8 @@ function Main(props: { s: Sync; apply: (s: Sync) => void; refresh: () => Promise
               <Text style={[st.chipT, x.id === g?.id && { color: '#fff' }]} numberOfLines={1}>{x.name}</Text>
             </Pressable>
           ))}
-          <Pressable onPress={() => setSheet({ k: 'new' })} style={[st.chip, { borderStyle: 'dashed', borderColor: '#D8CDBF', backgroundColor: 'transparent' }]}>
-            <Text style={[st.chipT, { color: C.sub }]}>{t.addGroup}</Text>
+          <Pressable onPress={() => setSheet({ k: 'new' })} accessibilityLabel={t.makeGroup} style={[st.chip, { borderStyle: 'dashed', borderColor: '#D8CDBF', backgroundColor: 'transparent', paddingHorizontal: 0, width: 40, alignItems: 'center' }]}>
+            <Text style={[st.chipT, { color: C.sub, fontSize: 18, lineHeight: 20 }]}>＋</Text>
           </Pressable>
         </ScrollView>
         {g ? (
@@ -624,7 +624,7 @@ function GroupSheet({ g, me, apply, close, say, onPerson }: { g: Group; me: User
       <TextInput value={name} onChangeText={setName} maxLength={12} style={st.input} />
       <Text style={st.note}>{t.renameNote}</Text>
       <Btn label={t.save} onPress={save} />
-      <Text style={st.label}>{`${t.members}（${g.members.length}/6）`}</Text>
+      <Text style={st.label}>{`${t.members}（${g.members.length}/5）`}</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {g.members.map((m) => (
           <Pressable key={m.id} disabled={m.id === me.id} onPress={() => onPerson(m)} style={[st.pill, { backgroundColor: tint(m.color) }]}>
@@ -632,7 +632,7 @@ function GroupSheet({ g, me, apply, close, say, onPerson }: { g: Group; me: User
           </Pressable>
         ))}
       </View>
-      {g.members.length < 6 ? (
+      {g.members.length < 5 ? (
         <View style={{ gap: 8 }}>
           <Btn label={t.invite} onPress={invite} />
           <Pressable
@@ -754,7 +754,7 @@ function JoinSheet({ code, s, plus, apply, close, say, onJoined, needPlus }: { c
       {err ? <Text style={{ color: C.danger }}>{err}</Text> : !info ? <ActivityIndicator color={C.accent} /> : (
         <>
           <Text style={[st.h3, { textAlign: 'center' }]}>{LANG === 'ja' ? `「${info.name}」に参加しますか？` : `Join “${info.name}”?`}</Text>
-          <Text style={st.note}>{`${info.count}/6`}</Text>
+          <Text style={st.note}>{`${info.count}/5`}</Text>
           {info.joined ? <Btn label={t.close} onPress={close} /> : info.full ? <Text style={{ color: C.danger }}>{t.full}</Text> : <Btn label={t.join} onPress={join} />}
         </>
       )}
