@@ -1,0 +1,93 @@
+{
+  "expo": {
+    "name": "Nowmoji",
+    "slug": "nowmoji",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "nowmoji",
+    "owner": "chihayax",
+    "backgroundColor": "#FFF6EE",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFF6EE"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.fukuda.nowmoji",
+      "buildNumber": "1",
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "CFBundleDevelopmentRegion": "en",
+        "CFBundleAllowMixedLocalizations": true,
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryUsageDescription": "Nowmoji uses your photo library so you can send a picture to your group as a square sticker."
+      }
+    },
+    "locales": {
+      "ja": "./locales/ja.json",
+      "en": "./locales/en.json"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Nowmoji uses your photo library so you can send a picture to your group as a square sticker.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "enableBackgroundRemoteNotifications": true
+        }
+      ],
+      [
+        "expo-widgets",
+        {
+          "widgets": [
+            {
+              "name": "GroupMoods",
+              "displayName": "Nowmoji",
+              "description": "Your group's latest moods",
+              "ios": {
+                "supportedFamilies": ["accessoryRectangular", "systemMedium", "systemLarge"],
+                "initialLayout": "./src/widgets/GroupWidget.tsx",
+                "configuration": {
+                  "title": "Group",
+                  "description": "Choose which group to show",
+                  "parameters": {
+                    "group": { "title": "Group", "type": "enum", "dynamic": true, "values": [{ "name": "Auto", "value": "auto" }], "default": "auto" }
+                  }
+                }
+              }
+            },
+            {
+              "name": "FriendMood",
+              "displayName": "Nowmoji",
+              "description": "One friend's latest mood",
+              "ios": {
+                "supportedFamilies": ["accessoryCircular", "systemSmall"],
+                "initialLayout": "./src/widgets/FriendWidget.tsx",
+                "configuration": {
+                  "title": "Friend",
+                  "description": "Choose whose mood to show",
+                  "parameters": {
+                    "person": { "title": "Friend", "type": "enum", "dynamic": true, "values": [{ "name": "Auto", "value": "auto" }], "default": "auto" }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "expo-iap",
+      "expo-localization"
+    ]
+  }
+}

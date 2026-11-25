@@ -1,0 +1,81 @@
+# Nowmoji の iOS アプリを GitHub の Mac でビルドして、App Store Connect へ送る（Tripfold と同じやり方）
+# 始め方：.github/nowmoji-build-request を書きかえて main に送る（または Actions の画面から Run workflow）
+name: Nowmoji iOS build
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/nowmoji-build-request']
+  workflow_dispatch:
+    inputs:
+      submit:
+        description: 'ビルド後にApp Store Connectへ送る'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: nowmoji
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EAS_BUILD_NO_EXPO_GO_WARNING: 'true'
+      EAS_LOCAL_BUILD_WORKINGDIR: /Users/runner/eas-build
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: nowmoji/package-lock.json
+
+      - name: Install packages
+        run: npm ci || npm install
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      # 初回だけ：Expo にプロジェクトを作って、その番号を app.json に書いて保存する
+      - name: Create the Expo project (first time only)
+        run: |
+          if node -e 'process.exit(require("./app.json").expo.extra?.eas?.projectId ? 0 : 1)'; then echo "projectId あり"; exit 0; fi
+          eas init --non-interactive --force
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add app.json
+          git commit -m "Nowmoji: link the Expo project" || true
+          git push || echo "::warning::app.json を保存できませんでした"
+
+      # ウィジェットのビルド番号も本体とそろえる
+      - name: Align build number for extensions
+        run: |
+          CUR=$(eas build:version:get -p ios --profile production --json 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s);console.log(j.buildNumber??j.ios?.buildNumber??"")}catch{console.log("")}})' || true)
+          if ! [[ "$CUR" =~ ^[0-9]+$ ]]; then echo "::warning::ビルド番号を取得できなかったので 1 で始めます: $CUR"; CUR=0; fi
+          NEXT=$((CUR + 1))
+          node -e 'const f="app.json";const fs=require("fs");const j=JSON.parse(fs.readFileSync(f));j.expo.ios.buildNumber=process.argv[1];fs.writeFileSync(f,JSON.stringify(j,null,2))' "$NEXT"
+          echo "buildNumber -> $NEXT"
+
+      - name: Build (on this Mac)
+        run: eas build -p ios --profile production --local --non-interactive --output "$RUNNER_TEMP/nowmoji.ipa"
+
+      - name: Keep the .ipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: nowmoji-ipa
+          path: ${{ runner.temp }}/nowmoji.ipa
+          retention-days: 7
+
+      - name: Send to App Store Connect
+        if: ${{ github.event_name == 'push' || inputs.submit }}
+        run: |
+          if ! node -e 'process.exit(require("./eas.json").submit?.production?.ios?.ascAppId ? 0 : 1)'; then
+            echo "::warning::App Store Connect のアプリ番号（ascAppId）がまだないので、送信はしません"; exit 0
+          fi
+          eas submit -p ios --profile production --path "$RUNNER_TEMP/nowmoji.ipa" --non-interactive
