@@ -63,7 +63,14 @@ jobs:
           echo "buildNumber -> $NEXT"
 
       - name: Build (on this Mac)
-        run: eas build -p ios --profile production --local --non-interactive --output "$RUNNER_TEMP/nowmoji.ipa"
+        run: |
+          set -o pipefail
+          if ! eas build -p ios --profile production --local --non-interactive --output "$RUNNER_TEMP/nowmoji.ipa" 2>&1 | tee "$RUNNER_TEMP/build.log"; then
+            # ログイン無しでも見られるように、最後の部分を注釈として出す
+            grep -iE "error|fail|credential|certificate|provision|❌" "$RUNNER_TEMP/build.log" | tail -25 | while IFS= read -r l; do echo "::error::${l:0:300}"; done
+            tail -15 "$RUNNER_TEMP/build.log" | while IFS= read -r l; do echo "::warning::${l:0:300}"; done
+            exit 1
+          fi
 
       - name: Keep the .ipa
         uses: actions/upload-artifact@v4
