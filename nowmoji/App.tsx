@@ -225,6 +225,8 @@ function Main(props: { s: Sync; apply: (s: Sync) => void; refresh: () => Promise
     const sub = AppState.addEventListener('change', (st) => st === 'active' && check());
     return () => sub.remove();
   }, []);
+  // 落書き・イラストを大きく見る
+  const [view, setView] = useState<{ p: Post; who: string } | null>(null);
   const turnOnPush = async () => {
     if (push === 'denied') return Linking.openSettings();
     await registerPush(true);
@@ -278,7 +280,7 @@ function Main(props: { s: Sync; apply: (s: Sync) => void; refresh: () => Promise
           <NoGroup onNew={() => setSheet({ k: 'new' })} />
         ) : (
           <>
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 12 }}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 40 }}>
               {push !== 'granted' ? (
                 <Pressable onPress={turnOnPush} style={st.pushBanner} accessibilityRole="button">
                   <Text style={{ fontSize: 20 }}>🔔</Text>
@@ -290,17 +292,17 @@ function Main(props: { s: Sync; apply: (s: Sync) => void; refresh: () => Promise
                 </Pressable>
               ) : null}
               {/* 自分の今の気分（横長の帯で、友だちのカードの上に） */}
-              <View style={st.meRow}>
+              <Pressable style={st.meRow} onPress={() => { const mp = g.latest[s.me.id]; if (mp?.img) setView({ p: mp, who: t.you }); }}>
                 <MoodTile p={g.latest[s.me.id]} color={s.me.color} size={76} />
                 <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                     <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: s.me.color }} />
                     <Text style={{ fontSize: 15, fontWeight: '900', color: C.ink }}>{t.you}</Text>
                   </View>
-                  <Text style={{ fontSize: 14, color: C.ink }} numberOfLines={2}>{label(g.latest[s.me.id]) || t.youNothing}</Text>
+                  <Text style={{ fontSize: 14, color: C.ink }} numberOfLines={2}>{label(g.latest[s.me.id], true) || t.youNothing}</Text>
                   {g.latest[s.me.id] ? <Text style={{ fontSize: 12, color: C.sub }}>{ago(g.latest[s.me.id]!.at)}</Text> : null}
                 </View>
-              </View>
+              </Pressable>
               {others.length === 0 ? (
                 <Pressable onPress={() => setSheet({ k: 'group' })} style={[st.mem, { width: '100%', paddingVertical: 22 }]}>
                   <Text style={{ fontSize: 26, color: C.ink, fontWeight: '800' }}>{ltr('(´ω`)')}</Text>
@@ -313,7 +315,7 @@ function Main(props: { s: Sync; apply: (s: Sync) => void; refresh: () => Promise
                   const p = blocked.has(m.id) ? undefined : g.latest[m.id];
                   const big = i < 4;
                   return (
-                    <Pressable key={m.id} style={[st.mem, big ? { width: (width - 36) / 2, paddingVertical: 9 } : { width: (width - 48) / 3 }]} onLongPress={() => setSheet({ k: 'person', u: m, post: p })} delayLongPress={350}>
+                    <Pressable key={m.id} style={[st.mem, big ? { width: (width - 36) / 2, paddingVertical: 9 } : { width: (width - 48) / 3 }]} onPress={() => p?.img && setView({ p, who: m.name })} onLongPress={() => setSheet({ k: 'person', u: m, post: p })} delayLongPress={350}>
                       <MoodTile p={p} color={m.color} size={big ? Math.min(104, (width - 38) / 2 - 30) : 52} />
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 }}>
                         <View style={{ width: big ? 9 : 7, height: big ? 9 : 7, borderRadius: 5, backgroundColor: m.color }} />
@@ -349,6 +351,23 @@ function Main(props: { s: Sync; apply: (s: Sync) => void; refresh: () => Promise
         </View>
       ) : null}
 
+      <Modal visible={!!view} transparent animationType="fade" onRequestClose={() => setView(null)}>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(20,16,24,.92)', alignItems: 'center', justifyContent: 'center', padding: 18 }} onPress={() => setView(null)}>
+          {view?.p.img ? (
+            <View style={{ width: '100%', aspectRatio: view.p.kind === 'doodle' ? 1.15 : 1, borderRadius: 22, overflow: 'hidden', backgroundColor: '#FFFFFF' }}>
+              <Image source={{ uri: api.imgUrl(view.p.img) }} resizeMode="contain" style={{ width: '100%', height: '100%' }} />
+            </View>
+          ) : null}
+          {view ? (
+            <View style={{ alignItems: 'center', marginTop: 14, gap: 4 }}>
+              <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '900' }}>{view.who}</Text>
+              {view.p.word ? <Text style={{ color: '#FFFFFF', fontSize: 15 }}>{view.p.word}</Text> : null}
+              <Text style={{ color: '#C9C2D2', fontSize: 12 }}>{ago(view.p.at)}</Text>
+            </View>
+          ) : null}
+          <Text style={{ color: '#C9C2D2', fontSize: 12, marginTop: 18 }}>{t.tapToClose}</Text>
+        </Pressable>
+      </Modal>
       <Modal visible={!!sheet} transparent animationType="slide" onRequestClose={() => setSheet(null)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <Pressable style={st.dim} onPress={() => setSheet(null)} />
@@ -384,11 +403,11 @@ function Main(props: { s: Sync; apply: (s: Sync) => void; refresh: () => Promise
   );
 }
 
-const label = (p?: Post | null) => {
+const label = (p?: Post | null, mine = false) => {
   if (!p) return '';
   if (p.word) return p.word;
-  if (p.kind === 'doodle') return t.doodleGot;
-  if (p.kind === 'stamp') return t.stampGot;
+  if (p.kind === 'doodle') return mine ? t.doodleSent : t.doodleGot;
+  if (p.kind === 'stamp') return mine ? t.stampSent : t.stampGot;
   return (p.mood && t.moods[p.mood]) || '';
 };
 
@@ -401,7 +420,7 @@ function MoodTile({ p, color, size, bare }: { p?: Post | null; color: string; si
       </View>
     );
   if (p.kind === 'art' && p.mood && ART[p.mood as MoodId]) return <View style={box}><Image source={ART[p.mood as MoodId]} style={{ width: size * 0.9, height: size * 0.9 }} /></View>;
-  if (p.img) return <View style={box}><Image source={{ uri: api.imgUrl(p.img) }} style={{ width: size * (p.kind === 'stamp' ? 0.84 : 0.92), height: size * (p.kind === 'stamp' ? 0.84 : 0.92), borderRadius: p.kind === 'stamp' ? size * 0.1 : 0 }} /></View>;
+  if (p.img) return <View style={box}><Image source={{ uri: api.imgUrl(p.img) }} resizeMode="contain" style={{ width: size * (p.kind === 'stamp' ? 0.84 : 0.92), height: size * (p.kind === 'stamp' ? 0.84 : 0.92), borderRadius: p.kind === 'stamp' ? size * 0.1 : 0 }} /></View>;
   const k = p.kao || (p.mood ? KAO[p.mood as MoodId] : '');
   return (
     <View style={box}>
@@ -601,7 +620,7 @@ const DoodlePad = React.forwardRef<DoodleHandle, { plus: boolean; needPlus: () =
         return await new Promise<string | null>((resolve) => {
           const svg = shot.current;
           if (!svg?.toDataURL) return resolve(null);
-          svg.toDataURL((b64: string) => resolve(b64 ? b64.replace(/^data:image\/png;base64,/, '') : null), { width: 760, height: 400 });
+          svg.toDataURL((b64: string) => resolve(b64 ? b64.replace(/^data:image\/png;base64,/, '') : null));
         });
       } catch {
         return null;
@@ -611,7 +630,7 @@ const DoodlePad = React.forwardRef<DoodleHandle, { plus: boolean; needPlus: () =
   const pens = plus ? PENS_PLUS : PENS_PLUS.slice(0, 6);
   return (
     <View style={{ gap: 8 }}>
-      <View style={{ aspectRatio: 1.9, borderRadius: 16, backgroundColor: '#fff', borderWidth: 1, borderColor: C.line, overflow: 'hidden' }} {...responder.panHandlers}>
+      <View style={{ aspectRatio: 1.15, borderRadius: 16, backgroundColor: '#fff', borderWidth: 1, borderColor: C.line, overflow: 'hidden' }} {...responder.panHandlers}>
         <Svg ref={shot} width="100%" height="100%">
           <Rect x={0} y={0} width="100%" height="100%" fill="#FFFFFF" />
           {[...lines, ...(cur.current ? [cur.current] : [])].map((l, i) => (
