@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { hasAuth, loadAuth, sync, updateMe } from './api';
 import { updateWidgets } from './widgetSync';
+import { t } from './i18n';
 
 export const BG_TASK = 'nowmoji-background-notification';
 export const BG_REFRESH = 'nowmoji-background-refresh';
@@ -58,6 +59,7 @@ export async function registerPush(ask: boolean) {
     let { status } = await Notifications.getPermissionsAsync();
     if (status !== 'granted' && ask) status = (await Notifications.requestPermissionsAsync()).status;
     if (status !== 'granted') return;
+    scheduleHourly();
     const projectId = (Constants.expoConfig as any)?.extra?.eas?.projectId;
     const tok = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
     if (tok?.data) {
@@ -66,6 +68,35 @@ export async function registerPush(ask: boolean) {
     }
   } catch {}
 }
+// 1時間ごとのお知らせ（7時〜23時の毎正時。0時〜6時は送らない）
+const K_HOURLY = 'nm.hourly.v1';
+export const HOURS = Array.from({ length: 17 }, (_, i) => i + 7); // 7..23
+export const hourlyOn = async () => (await AsyncStorage.getItem(K_HOURLY).catch(() => null)) !== 'off';
+export async function scheduleHourly(on?: boolean, words?: { body: string }) {
+  if (Platform.OS !== 'ios') return;
+  try {
+    if (on !== undefined) await AsyncStorage.setItem(K_HOURLY, on ? 'on' : 'off');
+    const enabled = on ?? (await hourlyOn());
+    const all = await Notifications.getAllScheduledNotificationsAsync();
+    const mine = all.filter((n) => n.identifier.startsWith('hourly-'));
+    if (!enabled) {
+      for (const n of mine) await Notifications.cancelScheduledNotificationAsync(n.identifier);
+      return;
+    }
+    if ((await Notifications.getPermissionsAsync()).status !== 'granted') return;
+    if (mine.length === HOURS.length && on === undefined) return; // もう入っている
+    for (const n of mine) await Notifications.cancelScheduledNotificationAsync(n.identifier);
+    const body = words?.body || t.hourlyBody;
+    for (const h of HOURS) {
+      await Notifications.scheduleNotificationAsync({
+        identifier: `hourly-${h}`,
+        content: { title: `${h}:00`, body, sound: undefined, data: { t: 'hourly' } },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour: h, minute: 0 },
+      });
+    }
+  } catch {}
+}
+
 /** 通知の許可の状態：'granted'（オン）/'undetermined'（まだ聞いていない）/'denied'（オフ） */
 export async function pushStatus(): Promise<string> {
   if (Platform.OS !== 'ios') return 'granted';

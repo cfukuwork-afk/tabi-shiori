@@ -15,7 +15,7 @@ import type { Group, Post, Sync, User } from './src/api';
 import { ago, LANG, t } from './src/i18n';
 import { ART, fitFont, KAO, ltr, MOOD_IDS, type MoodId, tint } from './src/kao';
 import { usePlus, EULA_URL, SKU_MONTH, SKU_YEAR, type PlusApi } from './src/plus';
-import { loadTheme, pushStatus, registerPush, registerRefresh, saveTheme } from './src/push';
+import { hourlyOn, loadTheme, pushStatus, registerPush, registerRefresh, saveTheme, scheduleHourly } from './src/push';
 import { THEMES, updateWidgets } from './src/widgetSync';
 
 const C = { bg: '#FFF6EE', card: '#FFFFFF', ink: '#2B2633', sub: '#8A8396', line: 'rgba(43,38,51,.09)', accent: '#F27A5E', soft: '#F3ECE2', danger: '#D0453A' };
@@ -1087,9 +1087,32 @@ function PlusSheet({ api: p, why, close, say }: { api: PlusApi; why?: string; cl
 /* ---------- 設定 ---------- */
 function SettingsSheet({ s, apply, plusApi, theme, setTheme, close, say, needPlus, onSignedOut }: { s: Sync; apply: (s: Sync) => void; plusApi: PlusApi; theme: string; setTheme: (v: string) => void; close: () => void; say: (m: string) => void; needPlus: (why: string) => void; onSignedOut: () => void }) {
   const [name, setName] = useState(s.me.name);
+  const [hourly, setHourly] = useState(true);
+  useEffect(() => {
+    hourlyOn().then(setHourly);
+  }, []);
   return (
     <ScrollView contentContainerStyle={{ gap: 10 }} keyboardShouldPersistTaps="handled">
       <Text style={st.h3}>{t.settings}</Text>
+      <Pressable
+        onPress={async () => {
+          const v = !hourly;
+          setHourly(v);
+          if (v) await registerPush(true);
+          await scheduleHourly(v);
+        }}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.card, borderRadius: 14, padding: 12 }}
+        accessibilityRole="switch"
+        accessibilityState={{ checked: hourly }}
+      >
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 14, fontWeight: '900', color: C.ink }}>{t.hourlyTitle}</Text>
+          <Text style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>{t.hourlyNote}</Text>
+        </View>
+        <View style={{ width: 46, height: 28, borderRadius: 14, backgroundColor: hourly ? '#3BB273' : '#D9D2CA', padding: 3, alignItems: hourly ? 'flex-end' : 'flex-start' }}>
+          <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff' }} />
+        </View>
+      </Pressable>
       <Text style={st.label}>{t.name}</Text>
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <TextInput value={name} onChangeText={setName} maxLength={12} style={[st.input, { flex: 1 }]} />
