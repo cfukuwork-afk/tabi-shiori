@@ -9,7 +9,6 @@ import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
-import { captureRef } from 'react-native-view-shot';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as api from './src/api';
 import type { Group, Post, Sync, User } from './src/api';
@@ -565,7 +564,12 @@ const DoodlePad = React.forwardRef<DoodleHandle, { plus: boolean; needPlus: () =
     clear: () => setLines([]),
     capture: async () => {
       try {
-        return await captureRef(shot, { format: 'png', quality: 1, result: 'base64', width: 512, height: 512 });
+        // react-native-svg の画像書き出し（PNG・base64）
+        return await new Promise<string | null>((resolve) => {
+          const svg = shot.current;
+          if (!svg?.toDataURL) return resolve(null);
+          svg.toDataURL((b64: string) => resolve(b64 ? b64.replace(/^data:image\/png;base64,/, '') : null), { width: 760, height: 400 });
+        });
       } catch {
         return null;
       }
@@ -574,8 +578,9 @@ const DoodlePad = React.forwardRef<DoodleHandle, { plus: boolean; needPlus: () =
   const pens = plus ? PENS_PLUS : PENS_PLUS.slice(0, 6);
   return (
     <View style={{ gap: 8 }}>
-      <View ref={shot} collapsable={false} style={{ aspectRatio: 1.9, borderRadius: 16, backgroundColor: '#fff', borderWidth: 1, borderColor: C.line, overflow: 'hidden' }} {...responder.panHandlers}>
-        <Svg width="100%" height="100%">
+      <View style={{ aspectRatio: 1.9, borderRadius: 16, backgroundColor: '#fff', borderWidth: 1, borderColor: C.line, overflow: 'hidden' }} {...responder.panHandlers}>
+        <Svg ref={shot} width="100%" height="100%">
+          <Rect x={0} y={0} width="100%" height="100%" fill="#FFFFFF" />
           {[...lines, ...(cur.current ? [cur.current] : [])].map((l, i) => (
             <Path key={i} d={l.d} stroke={l.c} strokeWidth={l.w} strokeLinecap="round" strokeLinejoin="round" fill="none" />
           ))}
