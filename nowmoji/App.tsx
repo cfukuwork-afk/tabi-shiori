@@ -25,6 +25,9 @@ const PENS_PLUS = ['#2B2633', '#F27A5E', '#6C9BD2', '#E8546B', '#F2B233', '#5AA3
 const WIDTHS = [4, 8, 14];
 const K_FAV = 'nm.fav.v1';
 const K_STY = 'nm.sty.v1';
+const K_MYKAO = 'nm.mykao.v1'; // 登録した顔文字
+const MYKAO_FREE = 3;
+const MYKAO_PLUS = 20;
 
 export default function App() {
   return (
@@ -455,7 +458,27 @@ function Composer({ g, plus, say, onSent, needPlus, bottom }: { g: Group; plus: 
   const cellW = (useWindowDimensions().width - 28) / 4;
   useEffect(() => {
     AsyncStorage.getItem(K_STY).then((v) => (v === 'art' || v === 'kao') && setSty(v)).catch(() => {});
+    AsyncStorage.getItem(K_MYKAO).then((v) => v && setMine(JSON.parse(v))).catch(() => {});
   }, []);
+  // 自分の顔文字の登録（無料は3つ、Plusは20こ）
+  const [mine, setMine] = useState<string[]>([]);
+  const saveMine = (l: string[]) => {
+    setMine(l);
+    AsyncStorage.setItem(K_MYKAO, JSON.stringify(l)).catch(() => {});
+  };
+  const register = () => {
+    const k = own.trim();
+    if (!k || mine.includes(k)) return;
+    if (mine.length >= (plus ? MYKAO_PLUS : MYKAO_FREE)) return plus ? say(t.kaoFull(MYKAO_PLUS)) : needPlus(t.kaoPlus(MYKAO_FREE, MYKAO_PLUS));
+    saveMine([k, ...mine]);
+    Haptics.selectionAsync().catch(() => {});
+    say(t.kaoSaved);
+  };
+  const forget = (k: string) =>
+    Alert.alert(ltr(k), t.kaoDelQ, [
+      { text: t.cancel, style: 'cancel' },
+      { text: t.del, style: 'destructive', onPress: () => saveMine(mine.filter((x) => x !== k)) },
+    ]);
 
   const send = async () => {
     if (busy) return;
@@ -551,7 +574,34 @@ function Composer({ g, plus, say, onSent, needPlus, bottom }: { g: Group; plus: 
               );
             })}
           </View>
-          {sty === 'kao' ? <TextInput value={own} onChangeText={setOwn} placeholder={t.ownKao} placeholderTextColor="#B5AEBB" maxLength={14} autoCapitalize="none" autoCorrect={false} style={[st.input, { paddingVertical: 8, fontSize: 15 }]} /> : null}
+          {sty === 'kao' && mine.length ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 6 }}>
+              {mine.map((k) => (
+                <Pressable
+                  key={k}
+                  onPress={() => {
+                    setOwn(own === k ? '' : k);
+                    Haptics.selectionAsync().catch(() => {});
+                  }}
+                  onLongPress={() => forget(k)}
+                  delayLongPress={400}
+                  style={[st.kaoChip, own === k && { backgroundColor: C.ink }]}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: own === k ? '#fff' : C.ink }} numberOfLines={1}>{ltr(k)}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          ) : null}
+          {sty === 'kao' ? (
+            <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+              <TextInput value={own} onChangeText={setOwn} placeholder={t.ownKao} placeholderTextColor="#B5AEBB" maxLength={14} autoCapitalize="none" autoCorrect={false} style={[st.input, { paddingVertical: 8, fontSize: 15, flex: 1 }]} />
+              {own.trim() && !mine.includes(own.trim()) ? (
+                <Pressable onPress={register} style={st.kaoSave} accessibilityRole="button">
+                  <Text style={{ fontSize: 13, fontWeight: '900', color: C.ink }}>{t.kaoSave}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
         </>
       ) : tab === 'doodle' ? (
         <DoodlePad ref={pad} plus={plus} needPlus={() => needPlus(t.penPlus)} />
@@ -1106,6 +1156,8 @@ const st = StyleSheet.create({
   chipOn: { backgroundColor: C.ink, borderColor: C.ink },
   chipT: { fontWeight: '900', color: C.ink, fontSize: 14 },
   mem: { width: '31.9%', backgroundColor: '#fff', borderRadius: 20, padding: 8, alignItems: 'center', gap: 2 },
+  kaoChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: C.soft },
+  kaoSave: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, backgroundColor: '#FFE3D3' },
   pushBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 18, padding: 12, marginBottom: 8, backgroundColor: '#FFE3D3' },
   meRow: { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: 22, padding: 10, marginBottom: 8, backgroundColor: '#FFFFFF' },
   meChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingVertical: 3, paddingLeft: 4, paddingRight: 12, maxWidth: '70%' },
