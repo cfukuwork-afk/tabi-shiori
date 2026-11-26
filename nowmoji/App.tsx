@@ -319,6 +319,7 @@ function Main(props: { s: Sync; apply: (s: Sync) => void; refresh: () => Promise
       ) : null}
 
       <Modal visible={!!sheet} transparent animationType="slide" onRequestClose={() => setSheet(null)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <Pressable style={st.dim} onPress={() => setSheet(null)} />
         <View style={[st.sheet, { paddingBottom: insets.bottom + 18 }]}>
           {sheet?.k === 'group' && g ? <GroupSheet g={g} me={s.me} apply={apply} close={() => setSheet(null)} say={say} onPerson={(u) => setSheet({ k: 'person', u, post: g.latest[u.id] })} /> : null}
@@ -346,6 +347,7 @@ function Main(props: { s: Sync; apply: (s: Sync) => void; refresh: () => Promise
             />
           ) : null}
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
