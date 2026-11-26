@@ -15,7 +15,7 @@ import type { Group, Post, Sync, User } from './src/api';
 import { ago, LANG, t } from './src/i18n';
 import { ART, fitFont, KAO, ltr, MOOD_IDS, type MoodId, tint } from './src/kao';
 import { usePlus, EULA_URL, SKU_MONTH, SKU_YEAR, type PlusApi } from './src/plus';
-import { loadTheme, registerPush, saveTheme } from './src/push';
+import { loadTheme, registerPush, registerRefresh, saveTheme } from './src/push';
 import { THEMES, updateWidgets } from './src/widgetSync';
 
 const C = { bg: '#FFF6EE', card: '#FFFFFF', ink: '#2B2633', sub: '#8A8396', line: 'rgba(43,38,51,.09)', accent: '#F27A5E', soft: '#F3ECE2', danger: '#D0453A' };
@@ -73,6 +73,7 @@ function Root() {
         setReady(true);
         await refresh();
         registerPush(false);
+        registerRefresh();
       } else setReady(true);
     })();
   }, [refresh]);
@@ -310,6 +311,8 @@ function Main(props: { s: Sync; apply: (s: Sync) => void; refresh: () => Promise
               onSent={(n) => {
                 apply(n);
                 registerPush(true);
+                registerRefresh();
+      registerRefresh();
               }}
               needPlus={(why) => setSheet({ k: 'plus', why })}
               bottom={insets.bottom}
@@ -708,6 +711,7 @@ function NewGroupSheet({ s, plus, apply, close, say, onMade, needPlus }: { s: Sy
       onMade(r.group.id);
       close();
       registerPush(true);
+      registerRefresh();
     } catch (e: any) {
       if (e?.status === 402) needPlus();
       else say(t.network);
@@ -724,6 +728,7 @@ function NewGroupSheet({ s, plus, apply, close, say, onMade, needPlus }: { s: Sy
       say(t.joined(r.group.name));
       close();
       registerPush(true);
+      registerRefresh();
     } catch (e: any) {
       say(e?.status === 404 ? t.badCode : e?.status === 409 ? t.full : e?.status === 402 ? t.groupsPlus : t.network);
     }
@@ -757,6 +762,7 @@ function JoinSheet({ code, s, plus, apply, close, say, onJoined, needPlus }: { c
       say(t.joined(r.group.name));
       close();
       registerPush(true);
+      registerRefresh();
     } catch (e: any) {
       say(e?.status === 409 ? t.full : e?.status === 402 ? t.groupsPlus : t.network);
     }
