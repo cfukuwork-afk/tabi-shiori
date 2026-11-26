@@ -15,7 +15,7 @@ import type { Group, Post, Sync, User } from './src/api';
 import { ago, LANG, t } from './src/i18n';
 import { ART, fitFont, KAO, ltr, MOOD_IDS, type MoodId, tint } from './src/kao';
 import { usePlus, EULA_URL, SKU_MONTH, SKU_YEAR, type PlusApi } from './src/plus';
-import { loadTheme, registerPush, registerRefresh, saveTheme } from './src/push';
+import { loadTheme, pushStatus, registerPush, registerRefresh, saveTheme } from './src/push';
 import { THEMES, updateWidgets } from './src/widgetSync';
 
 const C = { bg: '#FFF6EE', card: '#FFFFFF', ink: '#2B2633', sub: '#8A8396', line: 'rgba(43,38,51,.09)', accent: '#F27A5E', soft: '#F3ECE2', danger: '#D0453A' };
@@ -217,6 +217,19 @@ function Main(props: { s: Sync; apply: (s: Sync) => void; refresh: () => Promise
   useEffect(() => {
     AsyncStorage.getItem(K_FAV).then((v) => v && setFav(JSON.parse(v))).catch(() => {});
   }, []);
+  // 通知がオフだとウィジェットがすぐ更新されないので、オンにする案内を出す
+  const [push, setPush] = useState('granted');
+  useEffect(() => {
+    const check = () => pushStatus().then(setPush);
+    check();
+    const sub = AppState.addEventListener('change', (st) => st === 'active' && check());
+    return () => sub.remove();
+  }, []);
+  const turnOnPush = async () => {
+    if (push === 'denied') return Linking.openSettings();
+    await registerPush(true);
+    setPush(await pushStatus());
+  };
   useEffect(() => {
     if (plusApi.error) say(t.buyError);
   }, [plusApi.error]);
@@ -266,6 +279,16 @@ function Main(props: { s: Sync; apply: (s: Sync) => void; refresh: () => Promise
         ) : (
           <>
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 12 }}>
+              {push !== 'granted' ? (
+                <Pressable onPress={turnOnPush} style={st.pushBanner} accessibilityRole="button">
+                  <Text style={{ fontSize: 20 }}>🔔</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '900', color: C.ink }}>{t.pushTitle}</Text>
+                    <Text style={{ fontSize: 12, color: C.ink, lineHeight: 17, marginTop: 2 }}>{t.pushBody}</Text>
+                  </View>
+                  <Text style={{ fontSize: 13, fontWeight: '900', color: '#9A4A21' }}>{push === 'denied' ? t.pushOpen : t.pushOn}</Text>
+                </Pressable>
+              ) : null}
               {/* 自分の今の気分（横長の帯で、友だちのカードの上に） */}
               <View style={st.meRow}>
                 <MoodTile p={g.latest[s.me.id]} color={s.me.color} size={76} />
@@ -312,7 +335,6 @@ function Main(props: { s: Sync; apply: (s: Sync) => void; refresh: () => Promise
                 apply(n);
                 registerPush(true);
                 registerRefresh();
-      registerRefresh();
               }}
               needPlus={(why) => setSheet({ k: 'plus', why })}
               bottom={insets.bottom}
@@ -1065,6 +1087,7 @@ const st = StyleSheet.create({
   chipOn: { backgroundColor: C.ink, borderColor: C.ink },
   chipT: { fontWeight: '900', color: C.ink, fontSize: 14 },
   mem: { width: '31.9%', backgroundColor: '#fff', borderRadius: 20, padding: 8, alignItems: 'center', gap: 2 },
+  pushBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 18, padding: 12, marginBottom: 8, backgroundColor: '#FFE3D3' },
   meRow: { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: 22, padding: 10, marginBottom: 8, backgroundColor: '#FFFFFF' },
   meChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingVertical: 3, paddingLeft: 4, paddingRight: 12, maxWidth: '70%' },
   comp: { backgroundColor: '#fff', borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingHorizontal: 14, paddingTop: 12, gap: 9, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 14, shadowOffset: { width: 0, height: -4 } },

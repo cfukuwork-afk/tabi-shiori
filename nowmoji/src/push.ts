@@ -66,5 +66,14 @@ export async function registerPush(ask: boolean) {
     }
   } catch {}
 }
+/** 通知の許可の状態：'granted'（オン）/'undetermined'（まだ聞いていない）/'denied'（オフ） */
+export async function pushStatus(): Promise<string> {
+  if (Platform.OS !== 'ios') return 'granted';
+  try {
+    return (await Notifications.getPermissionsAsync()).status;
+  } catch {
+    return 'granted';
+  }
+}
 export const saveTheme = (v: string) => AsyncStorage.setItem(K_THEME, v).catch(() => {});
 export const loadTheme = async () => (await AsyncStorage.getItem(K_THEME).catch(() => null)) || 'paper';
