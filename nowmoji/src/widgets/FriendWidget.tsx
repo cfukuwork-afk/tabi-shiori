@@ -23,7 +23,7 @@ const FriendWidget = (p: FriendWidgetProps, env: WidgetEnvironment<{ person: str
       <ZStack modifiers={[widgetURL(url)]}>
         <AccessoryWidgetBackground />
         <VStack spacing={0}>
-          {x?.img ? (
+          {x?.img && !x.k ? (
             <Image uiImage={x.img} modifiers={[resizable(), aspectRatio({ contentMode: 'fit' }), frame({ width: 34, height: 30 })]} />
           ) : (
             <Text modifiers={[font({ size: 13, weight: 'heavy' }), lineLimit(1), minimumScaleFactor(0.35), padding({ horizontal: 4 })]}>{x ? x.k || '·' : '(´ω`)'}</Text>

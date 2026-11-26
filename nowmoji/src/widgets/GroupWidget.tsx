@@ -42,10 +42,10 @@ const GroupWidget = (p: GroupWidgetProps, env: WidgetEnvironment<{ group: string
           <HStack spacing={4}>
             {top.map((x, i) => (
               <VStack key={i} spacing={1} modifiers={[frame({ maxWidth: 9999 })]}>
-                {x.img ? (
-                  <Image uiImage={x.img} modifiers={[resizable(), aspectRatio({ contentMode: 'fit' }), frame({ height: 24 })]} />
+                {x.k || !x.img ? (
+                  <Text modifiers={[font({ size: 13, weight: 'heavy' }), lineLimit(1), minimumScaleFactor(0.45), frame({ height: 24 })]}>{x.k || '·'}</Text>
                 ) : (
-                  <Text modifiers={[font({ size: 13, weight: 'heavy' }), lineLimit(1), minimumScaleFactor(0.45), frame({ height: 24 })]}>{x.k}</Text>
+                  <Image uiImage={x.img} modifiers={[resizable(), aspectRatio({ contentMode: 'fit' }), frame({ height: 24 })]} />
                 )}
                 <Text modifiers={[font({ size: 9, weight: 'semibold' }), lineLimit(1)]}>{x.n}</Text>
               </VStack>

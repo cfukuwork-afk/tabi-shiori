@@ -73,12 +73,17 @@ export async function updateWidgets(s: Sync | null, theme = 'paper') {
     let img = '';
     if (p) {
       if (p.kind === 'kao') k = p.kao || (p.mood ? KAO[p.mood as MoodId] : '');
-      else if (p.kind === 'art' && p.mood && dir) img = new FSFile(dir, `m_${p.mood}.png`).uri;
+      else if (p.kind === 'art' && p.mood) {
+        // ロック画面は単色なので、キャラの絵のときも同じ気分の顔文字を持たせる（ホーム画面は絵を使う）
+        k = KAO[p.mood as MoodId] || '';
+        if (dir) img = new FSFile(dir, `m_${p.mood}.png`).uri;
+      }
       else if (p.img) {
         img = await remote(p.img);
         if (img) used.add(img);
       }
     }
+    k = k.replace(/[\u200E\u200F\u202A-\u202E\u2066-\u2069]/g, '');
     // まだ気分を送っていない（または画像を読み込めない）ときは「・」だけにせず、待っている顔と一言を出す
     if (!k && !img) return { n: me ? t.you : u.name, c: u.color, bg: tint(u.color), k: '( ˘ω˘ )', img: '', t: '', w: p ? p.word || '' : me ? t.wNoPostMe : t.wNoPost, me, np: !p };
     return { n: me ? t.you : u.name, c: u.color, bg: tint(u.color), k, img, t: p ? hhmm(p.at) : '', w: p?.word || '', me };

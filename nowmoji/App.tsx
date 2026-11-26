@@ -248,7 +248,7 @@ function Main(props: { s: Sync; apply: (s: Sync) => void; refresh: () => Promise
         </View>
 
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, gap: 8 }} style={{ flexGrow: 0, flex: 1 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, gap: 8 }} style={{ flex: 1 }}>
           {s.groups.map((x) => (
             <Pressable key={x.id} onPress={() => (x.id === g?.id ? setSheet({ k: 'group' }) : setGid(x.id))} style={[st.chip, x.id === g?.id && st.chipOn]}>
               <Text style={[st.chipT, x.id === g?.id && { color: '#fff' }]} numberOfLines={1}>{x.name}</Text>
@@ -258,12 +258,6 @@ function Main(props: { s: Sync; apply: (s: Sync) => void; refresh: () => Promise
             <Text style={[st.chipT, { color: C.sub, fontSize: 18, lineHeight: 20 }]}>＋</Text>
           </Pressable>
         </ScrollView>
-        {g ? (
-          <View style={[st.meChip, { backgroundColor: tint(s.me.color), marginRight: 14 }]}>
-            <MoodTile p={g.latest[s.me.id]} color={s.me.color} size={28} bare />
-            <Text style={{ fontSize: 11, fontWeight: '900', color: C.ink }}>{t.you}</Text>
-          </View>
-        ) : null}
         </View>
 
         {!g ? (
@@ -271,6 +265,18 @@ function Main(props: { s: Sync; apply: (s: Sync) => void; refresh: () => Promise
         ) : (
           <>
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 12 }}>
+              {/* 自分の今の気分（横長の帯で、友だちのカードの上に） */}
+              <View style={st.meRow}>
+                <MoodTile p={g.latest[s.me.id]} color={s.me.color} size={76} />
+                <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                    <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: s.me.color }} />
+                    <Text style={{ fontSize: 15, fontWeight: '900', color: C.ink }}>{t.you}</Text>
+                  </View>
+                  <Text style={{ fontSize: 14, color: C.ink }} numberOfLines={2}>{label(g.latest[s.me.id]) || t.youNothing}</Text>
+                  {g.latest[s.me.id] ? <Text style={{ fontSize: 12, color: C.sub }}>{ago(g.latest[s.me.id]!.at)}</Text> : null}
+                </View>
+              </View>
               {others.length === 0 ? (
                 <Pressable onPress={() => setSheet({ k: 'group' })} style={[st.mem, { width: '100%', paddingVertical: 22 }]}>
                   <Text style={{ fontSize: 26, color: C.ink, fontWeight: '800' }}>{ltr('(´ω`)')}</Text>
@@ -1053,6 +1059,7 @@ const st = StyleSheet.create({
   chipOn: { backgroundColor: C.ink, borderColor: C.ink },
   chipT: { fontWeight: '900', color: C.ink, fontSize: 14 },
   mem: { width: '31.9%', backgroundColor: '#fff', borderRadius: 20, padding: 8, alignItems: 'center', gap: 2 },
+  meRow: { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: 22, padding: 10, marginBottom: 8, backgroundColor: '#FFFFFF' },
   meChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingVertical: 3, paddingLeft: 4, paddingRight: 12, maxWidth: '70%' },
   comp: { backgroundColor: '#fff', borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingHorizontal: 14, paddingTop: 12, gap: 9, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 14, shadowOffset: { width: 0, height: -4 } },
   tab: { flex: 1, borderRadius: 14, paddingVertical: 9, alignItems: 'center', backgroundColor: C.soft },
