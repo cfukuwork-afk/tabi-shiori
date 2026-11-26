@@ -466,13 +466,26 @@ function Composer({ g, plus, say, onSent, needPlus, bottom }: { g: Group; plus: 
     setMine(l);
     AsyncStorage.setItem(K_MYKAO, JSON.stringify(l)).catch(() => {});
   };
-  const register = () => {
-    const k = own.trim();
-    if (!k || mine.includes(k)) return;
-    if (mine.length >= (plus ? MYKAO_PLUS : MYKAO_FREE)) return plus ? say(t.kaoFull(MYKAO_PLUS)) : needPlus(t.kaoPlus(MYKAO_FREE, MYKAO_PLUS));
-    saveMine([k, ...mine]);
+  const [showMine, setShowMine] = useState(false);
+  const register = (raw: string) => {
+    const k = [...raw.trim()].slice(0, 14).join('');
+    if (!k) return;
+    if (!mine.includes(k)) {
+      if (mine.length >= (plus ? MYKAO_PLUS : MYKAO_FREE)) return plus ? say(t.kaoFull(MYKAO_PLUS)) : needPlus(t.kaoPlus(MYKAO_FREE, MYKAO_PLUS));
+      saveMine([k, ...mine]);
+      say(t.kaoSaved);
+    }
+    setOwn(k);
+    setShowMine(true);
     Haptics.selectionAsync().catch(() => {});
-    say(t.kaoSaved);
+  };
+  const addNew = () => {
+    if (!mine.length || mine.length < (plus ? MYKAO_PLUS : MYKAO_FREE)) {
+      if (Platform.OS === 'ios') return Alert.prompt(t.kaoNew, t.kaoNewHint, [{ text: t.cancel, style: 'cancel' }, { text: t.kaoSave, onPress: (v?: string) => register(v || '') }], 'plain-text');
+      const v = typeof window !== 'undefined' ? window.prompt(t.kaoNew) : null;
+      if (v) register(v);
+    } else if (plus) say(t.kaoFull(MYKAO_PLUS));
+    else needPlus(t.kaoPlus(MYKAO_FREE, MYKAO_PLUS));
   };
   const forget = (k: string) =>
     Alert.alert(ltr(k), t.kaoDelQ, [
@@ -574,33 +587,39 @@ function Composer({ g, plus, say, onSent, needPlus, bottom }: { g: Group; plus: 
               );
             })}
           </View>
-          {sty === 'kao' && mine.length ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 6 }}>
-              {mine.map((k) => (
-                <Pressable
-                  key={k}
-                  onPress={() => {
-                    setOwn(own === k ? '' : k);
-                    Haptics.selectionAsync().catch(() => {});
-                  }}
-                  onLongPress={() => forget(k)}
-                  delayLongPress={400}
-                  style={[st.kaoChip, own === k && { backgroundColor: C.ink }]}
-                >
-                  <Text style={{ fontSize: 14, fontWeight: '800', color: own === k ? '#fff' : C.ink }} numberOfLines={1}>{ltr(k)}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          ) : null}
           {sty === 'kao' ? (
-            <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-              <TextInput value={own} onChangeText={setOwn} placeholder={t.ownKao} placeholderTextColor="#B5AEBB" maxLength={14} autoCapitalize="none" autoCorrect={false} style={[st.input, { paddingVertical: 8, fontSize: 15, flex: 1 }]} />
-              {own.trim() && !mine.includes(own.trim()) ? (
-                <Pressable onPress={register} style={st.kaoSave} accessibilityRole="button">
-                  <Text style={{ fontSize: 13, fontWeight: '900', color: C.ink }}>{t.kaoSave}</Text>
-                </Pressable>
-              ) : null}
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              <Pressable onPress={() => setShowMine(!showMine)} style={[st.kaoBtn, { flex: 1 }, !!own && { backgroundColor: C.ink }]} accessibilityRole="button">
+                <Text style={{ fontSize: 14, fontWeight: '900', color: own ? '#fff' : C.ink }} numberOfLines={1}>
+                  {own ? ltr(own) : `${t.kaoList}${mine.length ? `（${mine.length}）` : ''}`}  {showMine ? '▴' : '▾'}
+                </Text>
+              </Pressable>
+              <Pressable onPress={addNew} style={[st.kaoBtn, { width: 54 }]} accessibilityLabel={t.kaoNew}>
+                <Text style={{ fontSize: 20, fontWeight: '900', color: C.ink, lineHeight: 22 }}>＋</Text>
+              </Pressable>
             </View>
+          ) : null}
+          {sty === 'kao' && showMine ? (
+            mine.length ? (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                {mine.map((k) => (
+                  <Pressable
+                    key={k}
+                    onPress={() => {
+                      setOwn(own === k ? '' : k);
+                      Haptics.selectionAsync().catch(() => {});
+                    }}
+                    onLongPress={() => forget(k)}
+                    delayLongPress={400}
+                    style={[st.kaoChip, own === k && { backgroundColor: C.ink }]}
+                  >
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: own === k ? '#fff' : C.ink }} numberOfLines={1}>{ltr(k)}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : (
+              <Text style={{ fontSize: 12, color: C.sub, textAlign: 'center' }}>{t.kaoEmpty}</Text>
+            )
           ) : null}
         </>
       ) : tab === 'doodle' ? (
@@ -1157,7 +1176,7 @@ const st = StyleSheet.create({
   chipT: { fontWeight: '900', color: C.ink, fontSize: 14 },
   mem: { width: '31.9%', backgroundColor: '#fff', borderRadius: 20, padding: 8, alignItems: 'center', gap: 2 },
   kaoChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: C.soft },
-  kaoSave: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, backgroundColor: '#FFE3D3' },
+  kaoBtn: { alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 12, backgroundColor: C.soft },
   pushBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 18, padding: 12, marginBottom: 8, backgroundColor: '#FFE3D3' },
   meRow: { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: 22, padding: 10, marginBottom: 8, backgroundColor: '#FFFFFF' },
   meChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingVertical: 3, paddingLeft: 4, paddingRight: 12, maxWidth: '70%' },
