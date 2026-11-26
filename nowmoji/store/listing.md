@@ -6,8 +6,8 @@
 - 利用規約（EULA）：https://nowmoji.160-251-171-249.sslip.io/terms
 - 価格：無料（アプリ内課金あり）
 - サブスク（グループ「Nowmoji Plus」）
-  - com.fukuda.nowmoji.plus.monthly … 月額 300円 / $2.99
-  - com.fukuda.nowmoji.plus.yearly … 年額 2,400円 / $19.99（1週間の無料体験）
+  - com.fukuda.nowmoji.plus.monthly … 月額 300円 / $1.99
+  - com.fukuda.nowmoji.plus.yearly … 年額 2,500円 / $14.99（1週間の無料体験）
 
 ## 日本語
 
@@ -47,7 +47,7 @@ Nowmoji は、親しい人だけで「いまの気分」を置いておくアプ
 ・ペンの色と太さが増える
 ・ウィジェットの背景の着せ替え
 ・お気に入りを1枚残せる
-月額300円／年額2,400円（年額は1週間無料）。期間の終わる24時間前までに解約しない限り自動で更新されます。
+月額300円／年額2,500円（年額は1週間無料）。期間の終わる24時間前までに解約しない限り自動で更新されます。
 
 利用規約：https://nowmoji.160-251-171-249.sslip.io/terms
 プライバシーポリシー：https://nowmoji.160-251-171-249.sslip.io/privacy
