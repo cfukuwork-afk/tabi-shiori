@@ -4,7 +4,7 @@ import { AccessoryWidgetBackground, Image, Spacer, Text, VStack, ZStack } from '
 import { containerBackground, font, foregroundStyle, frame, lineLimit, minimumScaleFactor, padding, resizable, aspectRatio, widgetURL } from '@expo/ui/swift-ui/modifiers';
 import { createWidget, type WidgetEnvironment } from 'expo-widgets';
 
-export type FPerson = { n: string; c: string; bg: string; k: string; img: string; t: string; w: string; g: string };
+export type FPerson = { n: string; c: string; bg: string; k: string; img: string; t: string; w: string; g: string; np?: boolean };
 export type FriendWidgetProps = { people: Record<string, FPerson>; order: string[]; empty: string; theme?: string };
 
 const FriendWidget = (p: FriendWidgetProps, env: WidgetEnvironment<{ person: string }>) => {
@@ -49,11 +49,11 @@ const FriendWidget = (p: FriendWidgetProps, env: WidgetEnvironment<{ person: str
         {x.img ? (
           <Image uiImage={x.img} modifiers={[resizable(), aspectRatio({ contentMode: 'fit' }), frame({ width: 78, height: 70 })]} />
         ) : (
-          <Text modifiers={[font({ size: 28, weight: 'heavy' }), foregroundStyle(ink), lineLimit(1), minimumScaleFactor(0.3)]}>{x.k || '·'}</Text>
+          <Text modifiers={[font({ size: 28, weight: 'heavy' }), foregroundStyle(x.np ? sub : ink), lineLimit(1), minimumScaleFactor(0.3)]}>{x.k || '·'}</Text>
         )}
       </VStack>
       <Spacer />
-      <Text modifiers={[font({ size: 12 }), foregroundStyle(ink), lineLimit(1)]}>{x.w}</Text>
+      <Text modifiers={[font({ size: 12 }), foregroundStyle(x.np ? sub : ink), lineLimit(1), minimumScaleFactor(0.8)]}>{x.w}</Text>
       <Text modifiers={[font({ size: 10 }), foregroundStyle(sub)]}>{x.t}</Text>
     </VStack>
   );

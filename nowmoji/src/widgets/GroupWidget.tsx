@@ -4,7 +4,7 @@ import { HStack, Image, Spacer, Text, VStack } from '@expo/ui/swift-ui';
 import { background, font, foregroundStyle, frame, lineLimit, minimumScaleFactor, padding, resizable, aspectRatio, shapes, containerBackground, widgetURL } from '@expo/ui/swift-ui/modifiers';
 import { createWidget, type WidgetEnvironment } from 'expo-widgets';
 
-export type WPerson = { n: string; c: string; bg: string; k: string; img: string; t: string; w: string; me?: boolean };
+export type WPerson = { n: string; c: string; bg: string; k: string; img: string; t: string; w: string; me?: boolean; np?: boolean };
 export type GroupWidgetProps = {
   groups: Record<string, { name: string; people: WPerson[] }>;
   order: string[];
@@ -27,7 +27,7 @@ const GroupWidget = (p: GroupWidgetProps, env: WidgetEnvironment<{ group: string
 
   if (fam === 'accessoryRectangular' || fam === 'accessoryInline') {
     if (!g) return <Text modifiers={[font({ size: 12, weight: 'bold' }), widgetURL(url)]}>{p.empty}</Text>;
-    const top = g.people.filter((x) => x.k || x.img).slice(0, 3);
+    const top = g.people.filter((x) => !x.np && (x.k || x.img)).slice(0, 3);
     const rest = g.people.length - top.length;
     return (
       <VStack alignment="leading" spacing={2} modifiers={[widgetURL(url)]}>

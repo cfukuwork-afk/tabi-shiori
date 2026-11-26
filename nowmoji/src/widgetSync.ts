@@ -79,6 +79,8 @@ export async function updateWidgets(s: Sync | null, theme = 'paper') {
         if (img) used.add(img);
       }
     }
+    // まだ気分を送っていない（または画像を読み込めない）ときは「・」だけにせず、待っている顔と一言を出す
+    if (!k && !img) return { n: me ? t.you : u.name, c: u.color, bg: tint(u.color), k: '( ˘ω˘ )', img: '', t: '', w: p ? p.word || '' : me ? t.wNoPostMe : t.wNoPost, me, np: !p };
     return { n: me ? t.you : u.name, c: u.color, bg: tint(u.color), k, img, t: p ? hhmm(p.at) : '', w: p?.word || '', me };
   };
   const groups: GroupWidgetProps['groups'] = {};
