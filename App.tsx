@@ -1745,8 +1745,9 @@ function ShareSheet({ trip, stat, rate, onSyncNow, onClose, onShared, onStop }: 
               try {
                 const named = { ...trip, myId: meId, members: trip.members.map((m) => (m.id === meId ? { ...m, name: myName.trim(), u: Date.now() } : m)) };
                 onShared(await startShare(named));
-              } catch {
-                setErr(t('netErr'));
+              } catch (e: any) {
+                // 電波以外の理由（混み合い・データが大きすぎる等）のときは番号も出して原因を追えるように
+                setErr(t('netErr') + (e?.status ? ` (${e.status})` : ''));
               }
               setBusy(false);
             }}

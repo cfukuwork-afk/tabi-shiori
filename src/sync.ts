@@ -10,9 +10,32 @@ const safe = (x: any): Trip => {
   return t;
 };
 
-export const SERVER = process.env.EXPO_PUBLIC_TF_SERVER || 'https://tripfold.160-251-171-249.sslip.io';
-// 公式サイト（Webページへのリンクはこちら。APIは古いアプリのため SERVER のまま）
+// 自分のドメイン（tripfold.net）を使う。sslip.io の住所はモバイル回線のDNSで引けないことがあるため、予備に回す
+export const SERVER = process.env.EXPO_PUBLIC_TF_SERVER || 'https://tripfold.net';
+export const LEGACY = 'https://tripfold.160-251-171-249.sslip.io';
+// 公式サイト（Webページへのリンク）
 export const SITE = 'https://tripfold.net';
+/** 古い住所で保存された写真URLを、今の住所に直す */
+export const netUrl = (u: string) => (u.startsWith(LEGACY) ? SERVER + u.slice(LEGACY.length) : u);
+/** 返事が来ないまま止まらないよう、ms で打ち切る fetch */
+async function fetchT(url: string, init: RequestInit = {}, ms = 20000) {
+  const ctl = new AbortController();
+  const tm = setTimeout(() => ctl.abort(), ms);
+  try {
+    return await fetch(url, { ...init, signal: ctl.signal });
+  } finally {
+    clearTimeout(tm);
+  }
+}
+/** 今の住所で届かなければ（DNSや回線の問題）、古い住所でもう一度試す */
+export async function fetchServer(path: string, init: RequestInit = {}, ms = 20000) {
+  try {
+    return await fetchT(SERVER + path, init, ms);
+  } catch (e) {
+    if (SERVER === LEGACY) throw e;
+    return await fetchT(LEGACY + path, init, ms);
+  }
+}
 const K_PHOTOS = 'ts.photomap.v1';
 
 /** 共有コードの表示（XXXX-XXXX） */
@@ -30,10 +53,10 @@ export async function loadPhotoMap() {
 }
 const savePhotoMap = () => AsyncStorage.setItem(K_PHOTOS, JSON.stringify(photoMap)).catch(() => {});
 /** サーバーの写真を、端末に保存済みならその場所に置き換える */
-export const localPhoto = (u: string) => photoMap[u] ?? u;
+export const localPhoto = (u: string) => photoMap[u] ?? photoMap[netUrl(u)] ?? netUrl(u);
 
 const isLocalUri = (u?: string) => !!u && !/^https?:/.test(u) && !u.startsWith('asset:');
-const isServerUri = (u?: string) => !!u && u.startsWith(SERVER);
+const isServerUri = (u?: string) => !!u && (u.startsWith(SERVER) || u.startsWith(LEGACY));
 
 /** 旅行の中の写真すべてに fn をかける */
 function mapPhotos(trip: Trip, fn: (u: string) => string): Trip {
@@ -64,7 +87,7 @@ async function uploadOne(code: string, uri: string): Promise<string | null> {
     }
     const ext = uri.toLowerCase().split('?')[0].split('.').pop();
     const type = ext === 'png' ? 'image/png' : ext === 'heic' ? 'image/heic' : 'image/jpeg';
-    const r = await fetch(`${SERVER}/v1/trips/${code}/photos`, { method: 'POST', headers: { 'Content-Type': type }, body });
+    const r = await fetchServer(`/v1/trips/${code}/photos`, { method: 'POST', headers: { 'Content-Type': type }, body }, 90000);
     if (!r.ok) return null;
     const j = await r.json();
     const url = `${SERVER}${j.path}`;
@@ -112,7 +135,7 @@ async function downloadPhotos(trip: Trip) {
       try {
         const name = u.split('/').pop()!;
         const dest = new File(dir, `shared-${name}`);
-        if (!dest.exists) await File.downloadFileAsync(u, dest);
+        if (!dest.exists) await File.downloadFileAsync(netUrl(u), dest).catch(() => File.downloadFileAsync(u, dest));
         photoMap[u] = dest.uri;
       } catch {}
     }
@@ -126,15 +149,8 @@ const strip = (t: Trip) => {
   return rest;
 };
 async function call(path: string, init?: RequestInit) {
-  // 電波が弱い・Wi-Fiからモバイル回線に切り替わった直後などで返事が来ないまま止まらないよう、15秒で打ち切る
-  const ctl = new AbortController();
-  const tm = setTimeout(() => ctl.abort(), 15000);
-  let r: Response;
-  try {
-    r = await fetch(`${SERVER}${path}`, { ...init, signal: ctl.signal, headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) } });
-  } finally {
-    clearTimeout(tm);
-  }
+  // 電波が弱い・回線の切り替え直後でも止まらないよう打ち切り、届かなければ予備の住所でもう一度
+  const r = await fetchServer(path, { ...init, headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) } }, 25000);
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw Object.assign(new Error(j.error || `HTTP ${r.status}`), { status: r.status });
   return j;

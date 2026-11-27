@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 import { Booking, Trip } from './data';
 import { AIRPORT_TZ } from './airports';
 import { placeQuery } from './maps';
-import { SERVER } from './sync';
+import { fetchServer } from './sync';
 
 export type Geo = { lat: number; lng: number; tz?: string };
 const KEY = 'ts.geo.v1';
@@ -126,8 +126,8 @@ export async function searchPlace(q: string, near?: { lat: number; lng: number }
   const key = `n4:${q}${near ? `@${near.lat.toFixed(1)},${near.lng.toFixed(1)}` : ''}`;
   if (key in c) return c[key];
   try {
-    const u = `${SERVER}/v1/geo/search?q=${encodeURIComponent(q)}${near ? `&lat=${near.lat}&lng=${near.lng}` : ''}`;
-    const r = await fetch(u);
+    const u = `/v1/geo/search?q=${encodeURIComponent(q)}${near ? `&lat=${near.lat}&lng=${near.lng}` : ''}`;
+    const r = await fetchServer(u);
     if (r.status === 404) {
       c[key] = null;
       saveCache();
@@ -160,7 +160,7 @@ export async function getRoute(mode: 'foot' | 'car', a: Geo, b: Geo): Promise<Ro
   const key = `r:${mode}|${r4(a.lat)},${r4(a.lng)}|${r4(b.lat)},${r4(b.lng)}`;
   if (key in c) return (c as any)[key] ?? null;
   try {
-    const res = await fetch(`${SERVER}/v1/geo/route?mode=${mode}&from=${a.lat},${a.lng}&to=${b.lat},${b.lng}`);
+    const res = await fetchServer(`/v1/geo/route?mode=${mode}&from=${a.lat},${a.lng}&to=${b.lat},${b.lng}`);
     if (res.status === 404) {
       (c as any)[key] = null;
       saveCache();

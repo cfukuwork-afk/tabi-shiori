@@ -2,7 +2,7 @@
 //  - この端末専用の転送先「<10文字>@tripfold.net」を作る（アカウント不要）
 //  - 届いたメールを取りに行き、日付が合う旅行の「読み取り待ち」に入れる
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SERVER } from './sync';
+import { fetchServer } from './sync';
 import { parseBooking } from './parse';
 import { isDate, isPast, tripRange, type Trip } from './data';
 
@@ -31,7 +31,7 @@ export async function mailAddress(): Promise<string | null> {
   if (!st.token) await AsyncStorage.setItem(KEY, JSON.stringify({ token, ok: false }));
   if (!st.ok) {
     try {
-      const r = await fetch(`${SERVER}/v1/mail/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) });
+      const r = await fetchServer(`/v1/mail/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) });
       if (!r.ok) return null;
       await AsyncStorage.setItem(KEY, JSON.stringify({ token, ok: true }));
     } catch {
@@ -45,7 +45,7 @@ export async function fetchMail(): Promise<MailItem[]> {
   const st = await readTok();
   if (!st.token || !st.ok) return [];
   try {
-    const r = await fetch(`${SERVER}/v1/mail/${st.token}`);
+    const r = await fetchServer(`/v1/mail/${st.token}`);
     if (!r.ok) return [];
     const j = await r.json();
     return Array.isArray(j.items) ? j.items.filter((x: any) => x && typeof x.id === 'string' && typeof x.text === 'string') : [];
@@ -56,7 +56,7 @@ export async function fetchMail(): Promise<MailItem[]> {
 export async function ackMail(id: string) {
   const st = await readTok();
   if (!st.token) return;
-  await fetch(`${SERVER}/v1/mail/${st.token}/${id}`, { method: 'DELETE' }).catch(() => undefined);
+  await fetchServer(`/v1/mail/${st.token}/${id}`, { method: 'DELETE' }).catch(() => undefined);
 }
 
 const shift = (d: string, n: number) => {
