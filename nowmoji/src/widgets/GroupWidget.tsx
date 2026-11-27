@@ -4,7 +4,7 @@ import { HStack, Image, Spacer, Text, VStack } from '@expo/ui/swift-ui';
 import { background, font, foregroundStyle, frame, lineLimit, minimumScaleFactor, padding, resizable, aspectRatio, shapes, containerBackground, widgetURL } from '@expo/ui/swift-ui/modifiers';
 import { createWidget, type WidgetEnvironment } from 'expo-widgets';
 
-export type WPerson = { n: string; c: string; bg: string; k: string; img: string; t: string; w: string; me?: boolean; np?: boolean };
+export type WPerson = { id?: string; n: string; c: string; bg: string; k: string; img: string; t: string; w: string; me?: boolean; np?: boolean };
 export type GroupWidgetProps = {
   groups: Record<string, { name: string; people: WPerson[] }>;
   order: string[];

@@ -26,6 +26,11 @@
         "CFBundleAllowMixedLocalizations": true,
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryUsageDescription": "Nowmoji uses your photo library so you can send a picture to your group as a square sticker."
+      },
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.fukuda.nowmoji"
+        ]
       }
     },
     "locales": {
@@ -117,7 +122,8 @@
       ],
       "expo-iap",
       "expo-localization",
-      "expo-background-task"
+      "expo-background-task",
+      "@bacons/apple-targets"
     ],
     "extra": {
       "eas": {
@@ -128,6 +134,15 @@
                 {
                   "targetName": "ExpoWidgetsTarget",
                   "bundleIdentifier": "com.fukuda.nowmoji.ExpoWidgetsTarget",
+                  "entitlements": {
+                    "com.apple.security.application-groups": [
+                      "group.com.fukuda.nowmoji"
+                    ]
+                  }
+                },
+                {
+                  "targetName": "NowmojiNSE",
+                  "bundleIdentifier": "com.fukuda.nowmoji.nse",
                   "entitlements": {
                     "com.apple.security.application-groups": [
                       "group.com.fukuda.nowmoji"

@@ -85,8 +85,8 @@ export async function updateWidgets(s: Sync | null, theme = 'paper') {
     }
     k = k.replace(/[\u200E\u200F\u202A-\u202E\u2066-\u2069]/g, '');
     // まだ気分を送っていない（または画像を読み込めない）ときは「・」だけにせず、待っている顔と一言を出す
-    if (!k && !img) return { n: me ? t.you : u.name, c: u.color, bg: tint(u.color), k: '( ˘ω˘ )', img: '', t: '', w: p ? p.word || '' : me ? t.wNoPostMe : t.wNoPost, me, np: !p };
-    return { n: me ? t.you : u.name, c: u.color, bg: tint(u.color), k, img, t: p ? hhmm(p.at) : '', w: p?.word || '', me };
+    if (!k && !img) return { id: u.id, n: me ? t.you : u.name, c: u.color, bg: tint(u.color), k: '( ˘ω˘ )', img: '', t: '', w: p ? p.word || '' : me ? t.wNoPostMe : t.wNoPost, me, np: !p };
+    return { id: u.id, n: me ? t.you : u.name, c: u.color, bg: tint(u.color), k, img, t: p ? hhmm(p.at) : '', w: p?.word || '', me };
   };
   const groups: GroupWidgetProps['groups'] = {};
   const people: FriendWidgetProps['people'] = {};
