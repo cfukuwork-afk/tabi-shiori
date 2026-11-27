@@ -1,0 +1,255 @@
+// SkyLab の計算（端末上）
+// 天文計算は astronomy-engine（MIT, VSOP87/ELP 系の精密計算）。気象条件はサーバーの /api/sky（3モデルの平均と幅）
+// 判定の目安は docs/conditions.md に根拠と一緒に書く。検証前のものは exp=true（実験中）として表示する
+import * as A from 'astronomy-engine';
+
+export type Level = 3 | 2 | 1 | 0 | -1; // 3 良い / 2 まあまあ / 1 見込み薄 / 0 見えない / -1 データなし
+export type Hour = {
+  t: string;
+  cloud_cover: V; cloud_cover_low: V; cloud_cover_mid: V; cloud_cover_high: V;
+  precipitation: V; showers: V; visibility: V; temperature_2m: V;
+};
+type V = { mean: number; min: number; max: number; n: number } | null;
+export type SkyData = {
+  weather: { hours: Hour[]; models: string[] } | null;
+  aurora: { overhead: number; visible_max: number; visible_km: number | null; visible_dir: number | null; reach_km: number; observed: string; valid: string } | null;
+  kp_forecast: { t: string; kp: number; kind: string; scale: string | null }[] | null;
+};
+export type Item = {
+  key: string;
+  level: Level;
+  exp: boolean;          // 実験中（精度未検証）
+  start?: Date; peak?: Date; end?: Date;
+  dir?: number;          // 方位（北=0, 東=90）
+  facts: string[];       // 根拠（表示用、言語ごとに組み立て）
+  extra?: any;
+};
+
+const obsOf = (lat: number, lon: number) => new A.Observer(lat, lon, 0);
+export function sunPos(lat: number, lon: number, d: Date) {
+  const o = obsOf(lat, lon);
+  const eq = A.Equator(A.Body.Sun, d, o, true, true);
+  const h = A.Horizon(d, o, eq.ra, eq.dec, 'normal');
+  return { alt: h.altitude, az: h.azimuth };
+}
+export function moonPos(lat: number, lon: number, d: Date) {
+  const o = obsOf(lat, lon);
+  const eq = A.Equator(A.Body.Moon, d, o, true, true);
+  const h = A.Horizon(d, o, eq.ra, eq.dec, 'normal');
+  const ill = A.Illumination(A.Body.Moon, d);
+  return { alt: h.altitude, az: h.azimuth, frac: ill.phase_fraction, phase: A.MoonPhase(d) };
+}
+// 太陽が高度 alt を通る時刻（dir=+1 昇るとき, -1 沈むとき）
+function crossing(lat: number, lon: number, dir: 1 | -1, from: Date, alt: number): Date | null {
+  const t = A.SearchAltitude(A.Body.Sun, obsOf(lat, lon), dir, from, 1.2, alt);
+  return t ? t.date : null;
+}
+
+function hourAt(w: SkyData['weather'], d: Date): Hour | null {
+  if (!w) return null;
+  let best: Hour | null = null, bd = Infinity;
+  for (const h of w.hours) {
+    const dd = Math.abs(Date.parse(h.t) - d.getTime());
+    if (dd < bd) { bd = dd; best = h; }
+  }
+  return bd <= 45 * 60e3 ? best : null;
+}
+const m = (v: V) => (v ? v.mean : null);
+
+// 夕焼け・朝焼け（実験）：色づくのは中・上層の雲に低い角度の光が当たるとき。地平線側の低い雲・雨は光を遮る
+function glow(kind: 'sunset' | 'sunrise', lat: number, lon: number, w: SkyData['weather'], now: Date): Item | null {
+  const dir = kind === 'sunset' ? -1 : 1;
+  const t0 = crossing(lat, lon, dir, now, -0.833);
+  if (!t0) return null;
+  const h = hourAt(w, t0);
+  const sp = sunPos(lat, lon, t0);
+  const it: Item = { key: kind, level: -1, exp: true, peak: t0, start: new Date(t0.getTime() - 20 * 60e3), end: new Date(t0.getTime() + 25 * 60e3), dir: sp.az, facts: [] };
+  if (!h) return it;
+  const low = m(h.cloud_cover_low) ?? 0, mid = m(h.cloud_cover_mid) ?? 0, high = m(h.cloud_cover_high) ?? 0, pr = m(h.precipitation) ?? 0, tot = m(h.cloud_cover) ?? 0;
+  const upper = Math.max(mid, high);
+  if (low >= 70 || pr >= 0.5) it.level = 1;
+  else if (tot < 10) it.level = 2; // 雲がほぼない：空は色づくが、雲が焼ける夕焼けにはならない
+  else if (upper >= 20 && upper <= 80 && low < 40 && pr < 0.2) it.level = 3;
+  else it.level = 2;
+  it.extra = { low, mid, high, pr, tot };
+  return it;
+}
+
+export function goldenBlue(lat: number, lon: number, w: SkyData['weather'], now: Date) {
+  // ゴールデンアワー：太陽高度 -4°〜6°、ブルーアワー：-6°〜-4°（写真の分野で広く使われる定義）。2 分刻みで 40 時間先まで調べる
+  const out: Item[] = [];
+  const kindOf = (alt: number) => (alt >= -4 && alt <= 6 ? 'goldenhour' : alt >= -6 && alt < -4 ? 'bluehour' : null);
+  let cur: { key: string; start: Date } | null = null;
+  const step = 2 * 60e3, t0 = now.getTime() - 90 * 60e3;
+  const close = (end: Date) => {
+    if (!cur) return;
+    if (end.getTime() > now.getTime()) {
+      const mid = new Date((cur.start.getTime() + end.getTime()) / 2);
+      const h = hourAt(w, mid);
+      const c = h ? m(h.cloud_cover) : null;
+      out.push({ key: cur.key, level: c == null ? -1 : c < 40 ? 3 : c < 75 ? 2 : 1, exp: false, start: cur.start, end, peak: mid, dir: sunPos(lat, lon, mid).az, facts: [], extra: { cloud: c } });
+    }
+    cur = null;
+  };
+  for (let t = t0; t <= now.getTime() + 40 * 3600e3; t += step) {
+    const d = new Date(t), k = kindOf(sunPos(lat, lon, d).alt);
+    if (cur && k !== cur.key) close(d);
+    if (k && !cur) cur = { key: k, start: d };
+  }
+  close(new Date(now.getTime() + 40 * 3600e3));
+  return out;
+}
+
+// 虹（実験）：太陽の反対側、太陽高度 42° 未満で、にわか雨があり、太陽が出ている（低い雲が少ない）時間
+export function rainbow(lat: number, lon: number, w: SkyData['weather'], now: Date): Item {
+  const it: Item = { key: 'rainbow', level: -1, exp: true, facts: [] };
+  if (!w) return it;
+  const hits: { t: Date; alt: number; az: number; sh: number; low: number }[] = [];
+  for (const h of w.hours) {
+    const t = new Date(h.t);
+    if (t.getTime() < now.getTime() - 30 * 60e3 || t.getTime() > now.getTime() + 36 * 3600e3) continue;
+    const sp = sunPos(lat, lon, t);
+    if (sp.alt <= 0 || sp.alt >= 42) continue;
+    const sh = Math.max(m(h.showers) ?? 0, m(h.precipitation) ?? 0), low = m(h.cloud_cover_low) ?? 100, tot = m(h.cloud_cover) ?? 100;
+    if (sh >= 0.1 && low < 80 && tot < 95) hits.push({ t, alt: sp.alt, az: sp.az, sh, low });
+  }
+  if (!hits.length) { it.level = 0; return it; }
+  const best = hits.reduce((a, b) => (b.sh * (100 - b.low) > a.sh * (100 - a.low) ? b : a));
+  it.level = best.low < 50 ? 3 : 2;
+  it.peak = best.t; it.start = hits[0].t; it.end = hits[hits.length - 1].t;
+  it.dir = (best.az + 180) % 360;
+  it.extra = { top: 42 - best.alt, hours: hits.length };
+  return it;
+}
+
+// 星空・天の川：天文薄明の終わり（太陽 -18°）以降、月が沈んでいるか細いとき、雲が少ない時間
+export function stars(lat: number, lon: number, w: SkyData['weather'], now: Date) {
+  const res: { t: Date; cloud: number | null; moonUp: boolean; moonFrac: number }[] = [];
+  for (let k = 0; k < 30; k++) {
+    const t = new Date(Math.ceil(now.getTime() / 3600e3) * 3600e3 + k * 3600e3);
+    if (sunPos(lat, lon, t).alt > -18) continue;
+    const mp = moonPos(lat, lon, t);
+    const h = hourAt(w, t);
+    res.push({ t, cloud: h ? m(h.cloud_cover) : null, moonUp: mp.alt > 0, moonFrac: mp.frac });
+  }
+  const score = (r: (typeof res)[0]) => (r.cloud == null ? -1 : r.cloud < 20 ? 3 : r.cloud < 50 ? 2 : 1);
+  const night = res.filter((r) => r.t.getTime() < now.getTime() + 20 * 3600e3);
+  const star: Item = { key: 'stars', level: -1, exp: false, facts: [] };
+  const milky: Item = { key: 'milkyway', level: -1, exp: false, facts: [] };
+  if (!night.length) { star.level = 0; milky.level = 0; return [star, milky]; }
+  const good = night.filter((r) => score(r) >= 2);
+  const bestS = night.reduce((a, b) => (score(b) > score(a) ? b : a));
+  star.level = score(bestS) as Level; star.peak = bestS.t;
+  if (good.length) { star.start = good[0].t; star.end = new Date(good[good.length - 1].t.getTime() + 3600e3); }
+  star.extra = { cloud: bestS.cloud, nightHours: night.length };
+  const dark = night.filter((r) => !r.moonUp || r.moonFrac < 0.15);
+  if (!dark.length) { milky.level = 0; milky.extra = { reason: 'moon' }; }
+  else {
+    const bm = dark.reduce((a, b) => (score(b) > score(a) ? b : a));
+    milky.level = score(bm) as Level; milky.peak = bm.t; milky.extra = { cloud: bm.cloud };
+    const g = dark.filter((r) => score(r) >= 2);
+    if (g.length) { milky.start = g[0].t; milky.end = new Date(g[g.length - 1].t.getTime() + 3600e3); }
+  }
+  return [star, milky];
+}
+
+// オーロラ：今（OVATION は 30〜90 分先までの短時間予報）＋ 今夜の雲・暗さ・Kp 予報
+export function aurora(lat: number, lon: number, d: SkyData, now: Date): Item {
+  const it: Item = { key: 'aurora', level: -1, exp: false, facts: [] };
+  const a = d.aurora;
+  const darkNow = sunPos(lat, lon, now).alt < -10;
+  const h = hourAt(d.weather, now);
+  const cloud = h ? m(h.cloud_cover) : null;
+  const tonightKp = (d.kp_forecast || []).filter((k) => Date.parse(k.t) >= now.getTime() - 3 * 3600e3 && Date.parse(k.t) <= now.getTime() + 24 * 3600e3);
+  const maxKp = tonightKp.length ? Math.max(...tonightKp.map((k) => k.kp)) : null;
+  it.extra = { ovation: a?.visible_max ?? null, overhead: a?.overhead ?? null, km: a?.visible_km, cloud, darkNow, maxKp, valid: a?.valid };
+  if (!a) return it;
+  it.dir = a.visible_dir ?? undefined;
+  if (!darkNow) { it.level = 1; it.extra.waitDark = true; }
+  else if (a.visible_max >= 30) it.level = 3;
+  else if (a.visible_max >= 10) it.level = 2;
+  else if (a.visible_max >= 3) it.level = 1;
+  else it.level = 0;
+  if (darkNow && it.level > 0 && cloud != null) { if (cloud >= 80) it.level = 1; else if (cloud >= 50 && it.level > 1) it.level = (it.level - 1) as Level; }
+  // 次に暗くなる時刻
+  if (!darkNow) { const t = crossing(lat, lon, -1, now, -10); if (t) it.start = t; }
+  return it;
+}
+
+// 月：月齢、次の満月・新月、スーパームーン（満月の地心距離 36 万 km 未満を目安とする。定義は団体により異なる）
+export function moonInfo(lat: number, lon: number, now: Date) {
+  const mp = moonPos(lat, lon, now);
+  const full = A.SearchMoonPhase(180, now, 40)!.date, nw = A.SearchMoonPhase(0, now, 40)!.date;
+  const dist = (t: Date) => A.GeoMoon(t).Length() * A.KM_PER_AU;
+  const fulls: { t: Date; km: number }[] = [];
+  let t = now;
+  for (let i = 0; i < 14; i++) { const f = A.SearchMoonPhase(180, t, 40)!.date; fulls.push({ t: f, km: dist(f) }); t = new Date(f.getTime() + 5 * 86400e3); }
+  const rise = A.SearchRiseSet(A.Body.Moon, obsOf(lat, lon), 1, now, 1.5)?.date ?? null;
+  return { ...mp, full, newMoon: nw, fullKm: dist(full), supermoons: fulls.filter((f) => f.km < 360000), rise };
+}
+
+// 流星群：極大は太陽黄経で決まる（IMO 流星群カレンダーの値, J2000）。日付は毎年この計算で出す
+export const SHOWERS = [
+  { id: 'QUA', ja: 'しぶんぎ座流星群', en: 'Quadrantids', lam: 283.15, zhr: 80, ra: 230, dec: 49.5 },
+  { id: 'LYR', ja: 'こと座流星群', en: 'Lyrids', lam: 32.32, zhr: 18, ra: 271, dec: 34 },
+  { id: 'ETA', ja: 'みずがめ座η流星群', en: 'Eta Aquariids', lam: 45.5, zhr: 50, ra: 338, dec: -1 },
+  { id: 'PER', ja: 'ペルセウス座流星群', en: 'Perseids', lam: 140.0, zhr: 100, ra: 48, dec: 58 },
+  { id: 'ORI', ja: 'オリオン座流星群', en: 'Orionids', lam: 208, zhr: 20, ra: 95, dec: 16 },
+  { id: 'LEO', ja: 'しし座流星群', en: 'Leonids', lam: 235.27, zhr: 15, ra: 152, dec: 22 },
+  { id: 'GEM', ja: 'ふたご座流星群', en: 'Geminids', lam: 262.2, zhr: 150, ra: 112, dec: 33 },
+  { id: 'URS', ja: 'こぐま座流星群', en: 'Ursids', lam: 270.7, zhr: 10, ra: 217, dec: 75 },
+];
+export function meteorShowers(lat: number, lon: number, now: Date) {
+  const o = obsOf(lat, lon);
+  return SHOWERS.map((s) => {
+    // SearchSunLongitude は開始日が目標の直前だと見落とすことがあるため、40 日前から探して、過ぎていれば翌年を探す
+    let peak = A.SearchSunLongitude(s.lam, new Date(now.getTime() - 40 * 86400e3), 370)!.date;
+    if (peak.getTime() < now.getTime() - 2 * 86400e3) peak = A.SearchSunLongitude(s.lam, new Date(peak.getTime() + 300 * 86400e3), 120)!.date;
+    // 極大の夜の、放射点が最も高い時刻（暗い時間のうち）と、そのときの月
+    let best = { t: peak, alt: -90 };
+    for (let k = -14; k <= 14; k++) {
+      const t = new Date(peak.getTime() + k * 3600e3);
+      if (sunPos(lat, lon, t).alt > -12) continue;
+      const hz = A.Horizon(t, o, s.ra / 15, s.dec, 'normal');
+      if (hz.altitude > best.alt) best = { t, alt: hz.altitude };
+    }
+    const mp = moonPos(lat, lon, best.t);
+    // 見える数の目安：ZHR × sin(放射点高度)（限界等級 6.5 等の空での理論値。街明かり・月明かりで減る）
+    const rate = best.alt > 0 ? Math.round(s.zhr * Math.sin((best.alt * Math.PI) / 180)) : 0;
+    return { ...s, peak, best: best.t, radiantAlt: best.alt, rate, moonFrac: mp.frac, moonUp: mp.alt > 0 };
+  }).sort((a, b) => a.peak.getTime() - b.peak.getTime());
+}
+
+// 日食・月食（この先 3 年）
+export function eclipses(lat: number, lon: number, now: Date) {
+  const out: { kind: 'lunar' | 'solar'; type: string; peak: Date; visible: boolean; obscuration?: number; alt?: number }[] = [];
+  const until = now.getTime() + 3 * 365 * 86400e3;
+  let le = A.SearchLunarEclipse(now);
+  while (le.peak.date.getTime() < until) {
+    const mp = moonPos(lat, lon, le.peak.date);
+    if (le.kind !== 'penumbral') out.push({ kind: 'lunar', type: le.kind, peak: le.peak.date, visible: mp.alt > 0, alt: mp.alt });
+    le = A.NextLunarEclipse(le.peak);
+  }
+  let se = A.SearchLocalSolarEclipse(now, obsOf(lat, lon));
+  while (se.peak.time.date.getTime() < until) {
+    out.push({ kind: 'solar', type: se.kind, peak: se.peak.time.date, visible: se.peak.altitude > 0, obscuration: se.obscuration, alt: se.peak.altitude });
+    se = A.NextLocalSolarEclipse(se.peak.time, obsOf(lat, lon));
+  }
+  return out.sort((a, b) => a.peak.getTime() - b.peak.getTime());
+}
+
+export function today(lat: number, lon: number, d: SkyData, now = new Date()) {
+  const items: Item[] = [];
+  const ss = glow('sunset', lat, lon, d.weather, now); if (ss) items.push(ss);
+  items.push(rainbow(lat, lon, d.weather, now));
+  items.push(...stars(lat, lon, d.weather, now));
+  items.push(aurora(lat, lon, d, now));
+  const sr = glow('sunrise', lat, lon, d.weather, now); if (sr) items.push(sr);
+  return items;
+}
+
+export function compass(deg: number | undefined, ja: boolean) {
+  if (deg == null) return '';
+  const J = ['北', '北東', '東', '南東', '南', '南西', '西', '北西'], E = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  return (ja ? J : E)[Math.round(deg / 45) % 8];
+}
