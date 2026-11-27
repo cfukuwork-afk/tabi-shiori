@@ -4,7 +4,24 @@
 import * as A from 'astronomy-engine';
 
 // 予測ロジックの版。判定を変えたら必ず上げる（報告・予測ログに記録し、版ごとに精度を比べる）
-export const ENGINE_VERSION = 'sky-1.0.0';
+export const ENGINE_VERSION = 'sky-1.1.0';
+
+// 晴れ間の確率の較正表（サーバーが配る。過去の予報と空港観測から作ったもの）。無いときは雲量から素朴に出し、信頼度を下げる
+export type Calib = { by_lead: Record<string, { table: { lo: number; hi: number; n: number; p: number }[] }> } | null;
+export type Conf = 'high' | 'mid' | 'low';
+export type Factor = { key: string; v: number }; // 0〜1
+export function pClear(cloud: number | null, leadH: number, cal: Calib): { p: number | null; calibrated: boolean } {
+  if (cloud == null) return { p: null, calibrated: false };
+  const leads = cal ? Object.keys(cal.by_lead).map(Number).sort((a, b) => a - b) : [];
+  if (leads.length) {
+    const day = Math.max(1, Math.round(leadH / 24));
+    const L = leads.reduce((a, b) => (Math.abs(b - day) < Math.abs(a - day) ? b : a));
+    const tab = cal!.by_lead[String(L)].table;
+    const row = tab[Math.min(tab.length - 1, Math.floor(cloud / 10))];
+    return { p: row.p, calibrated: true };
+  }
+  return { p: Math.max(0, Math.min(1, 1 - cloud / 100)), calibrated: false };
+}
 
 export type Level = 3 | 2 | 1 | 0 | -1; // 3 良い / 2 まあまあ / 1 見込み薄 / 0 見えない / -1 データなし
 export type Hour = {
@@ -14,6 +31,7 @@ export type Hour = {
 };
 type V = { mean: number; min: number; max: number; n: number } | null;
 export type SkyData = {
+  calibration?: Calib;
   weather: { hours: Hour[]; models: string[] } | null;
   aurora: { overhead: number; visible_max: number; visible_km: number | null; visible_dir: number | null; reach_km: number; observed: string; valid: string } | null;
   kp_forecast: { t: string; kp: number; kind: string; scale: string | null }[] | null;
@@ -25,6 +43,9 @@ export type Item = {
   start?: Date; peak?: Date; end?: Date;
   dir?: number;          // 方位（北=0, 東=90）
   facts: string[];       // 根拠（表示用、言語ごとに組み立て）
+  p?: number | null;     // 確率（0〜1）。exp のものは研究段階の推定
+  conf?: Conf;           // 信頼度
+  factors?: Factor[];    // 内訳（0〜1）
   extra?: any;
 };
 
@@ -255,4 +276,68 @@ export function compass(deg: number | undefined, ja: boolean) {
   if (deg == null) return '';
   const J = ['北', '北東', '東', '南東', '南', '南西', '西', '北西'], E = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
   return (ja ? J : E)[Math.round(deg / 45) % 8];
+}
+
+// ---- 確率と内訳を付ける（判定の後段）。exp（研究段階）のものは推定式で、信頼度は低
+const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
+export function withProb(items: Item[], lat: number, lon: number, d: SkyData, now = new Date()): Item[] {
+  const cal = d.calibration ?? null;
+  for (const it of items) {
+    const at = it.peak || it.start;
+    if (!at) { it.p = it.level === 0 ? 0 : null; it.conf = 'low'; it.factors = []; continue; }
+    const h = hourAt(d.weather, at);
+    const leadH = Math.max(0, (at.getTime() - now.getTime()) / 3600e3);
+    const cloud = h ? m(h.cloud_cover) : null;
+    const pc = pClear(cloud, leadH, cal);
+    const confOf = (base: Conf): Conf => (pc.calibrated ? base : 'low');
+    const F: Factor[] = [];
+    if (pc.p != null) F.push({ key: 'clear', v: pc.p });
+    switch (it.key) {
+      case 'stars':
+        it.p = pc.p; it.conf = confOf('mid');
+        F.push({ key: 'dark', v: 1 });
+        break;
+      case 'milkyway': {
+        if (it.level === 0) { it.p = 0; it.conf = 'mid'; break; }
+        const mp = moonPos(lat, lon, at);
+        const moonDark = mp.alt <= 0 ? 1 : 1 - mp.frac;
+        F.push({ key: 'dark', v: 1 }, { key: 'moon', v: moonDark });
+        it.p = pc.p; it.conf = confOf('mid');
+        break;
+      }
+      case 'goldenhour': case 'bluehour':
+        it.p = pc.p; it.conf = confOf('mid');
+        break;
+      case 'aurora': {
+        const a = d.aurora;
+        const ov = a ? a.visible_max / 100 : 0; // NOAA OVATION の値（その場所でオーロラが出る確率として配信される値）
+        const dark = it.extra?.darkNow ? 1 : 0;
+        F.push({ key: 'aurora', v: ov }, { key: 'dark', v: dark });
+        it.p = pc.p == null ? null : ov * pc.p * (dark || 1); // 明るい時間は「暗くなったら」の見込みとして出す
+        it.conf = pc.calibrated ? 'mid' : 'low';
+        break;
+      }
+      case 'sunset': case 'sunrise': {
+        const x = it.extra || {};
+        if (x.low == null) { it.p = null; it.conf = 'low'; break; }
+        const lowOK = 1 - x.low / 100, upper = Math.max(x.mid, x.high) / 100, dry = 1 - clamp01(x.pr);
+        const canvas = 1 - Math.abs(upper - 0.5) / 0.5; // 中・上層の雲が半分くらいのとき最も色づきやすいとする（研究段階の仮定）
+        F.push({ key: 'lowcloud', v: lowOK }, { key: 'canvas', v: canvas });
+        it.p = clamp01(lowOK * (0.25 + 0.75 * canvas) * dry); it.conf = 'low';
+        break;
+      }
+      case 'rainbow': {
+        if (it.level === 0 || !h) { it.p = it.level === 0 ? 0.02 : null; it.conf = 'low'; break; }
+        const sh = Math.max(m(h.showers) ?? 0, m(h.precipitation) ?? 0), low = m(h.cloud_cover_low) ?? 100;
+        const pShower = clamp01(sh / 0.5), pSun = 1 - low / 100;
+        F.push({ key: 'shower', v: pShower }, { key: 'sun', v: pSun });
+        it.p = clamp01(pShower * pSun); it.conf = 'low';
+        break;
+      }
+      default:
+        it.p = pc.p; it.conf = confOf('mid');
+    }
+    it.factors = F;
+  }
+  return items;
 }

@@ -3,7 +3,21 @@ import { getLocales } from 'expo-localization';
 export const ja = (getLocales()[0]?.languageCode || 'en') === 'ja';
 
 const J = {
-  today: '今日の空', pick: '今日のおすすめ', changePlace: '場所を変える', useHere: '現在地を使う', searchCity: '都市名で探す', search: '検索', noResults: '見つかりませんでした', calendar: '予定', settings: '設定',
+  home: 'ホーム', reportTab: '報告', recTime: 'おすすめの時間', direction: '方向', condition: '観測条件', prob: (n: string) => `${n}の可能性`,
+  startT: '予想開始', peakT: 'ピーク', endT: '終了', viewDir: '観測方向', breakdown: '予測の内訳',
+  conf: { high: '信頼度 高', mid: '信頼度 中', low: '信頼度 低' } as Record<string, string>,
+  factor: { clear: '晴れ間', dark: '空の暗さ', moon: '月明かりの影響の少なさ', aurora: 'オーロラの強さ（NOAA）', lowcloud: '地平線付近の低い雲の少なさ', canvas: '色づく中・上層の雲', shower: 'にわか雨', sun: '日差し' } as Record<string, string>,
+  probNote: '晴れ間の確率は、過去2年半の予報と空港の観測を照らし合わせて較正しています。',
+  probNoteExp: 'この確率は研究段階の推定です。皆さんの報告で較正していきます。',
+  probNoteRaw: '較正前の推定です（雲量から計算）。',
+  reportPrompt: '空で見たもの・見えなかったものを報告してください。予報の精度を上げるために使います。',
+  myReports: 'これまでの報告', noReports: 'まだ報告はありません',
+  hourly: '時間ごとの晴れ間の確率', close: '閉じる', tonightChance: '今夜のチャンス',
+  outcomeName: { seen: '見えた', looked_not_seen: '見えなかった', clouded: '雲で見えず', not_observed: '観測せず' } as Record<string, string>,
+  monthTitle: (y: number, m: number) => `${y}年${m}月`, weekdays: ['月', '火', '水', '木', '金', '土', '日'],
+  evMeteor: '流星群（極大）', evFull: '満月', evNew: '新月', evSuper: 'スーパームーン', evEclipse: '食',
+  pct: (p: number) => `${Math.round(p * 100)}%`,
+  today: '今日の空', pick: '今日のおすすめ', changePlace: '場所を変える', useHere: '現在地を使う', searchCity: '都市名で探す', search: '検索', noResults: '見つかりませんでした', calendar: 'カレンダー', settings: '設定',
   locating: '現在地を確認しています…', noLoc: '位置情報が使えません。設定から許可してください。', retry: 'もう一度',
   loading: '空の予報を読み込んでいます…', offline: '予報を取得できませんでした。通信状態を確認してください。',
   exp: '研究段階', expNote: '研究段階の予測で、信頼度は高くありません。報告で精度を確かめています',
@@ -44,6 +58,20 @@ const J = {
 };
 type T = typeof J;
 const E: T = {
+  home: 'Home', reportTab: 'Report', recTime: 'Best time', direction: 'Direction', condition: 'Conditions', prob: (n: string) => `Chance of ${n.toLowerCase()}`,
+  startT: 'Starts', peakT: 'Peak', endT: 'Ends', viewDir: 'Look toward', breakdown: 'Breakdown',
+  conf: { high: 'High confidence', mid: 'Medium confidence', low: 'Low confidence' },
+  factor: { clear: 'Clear sky', dark: 'Darkness', moon: 'Low moonlight', aurora: 'Aurora strength (NOAA)', lowcloud: 'Few low clouds on the horizon', canvas: 'Mid/high clouds to light up', shower: 'Showers', sun: 'Sunshine' },
+  probNote: 'Clear-sky chances are calibrated against 2.5 years of past forecasts and airport observations.',
+  probNoteExp: 'This chance is a research-stage estimate. Your reports help calibrate it.',
+  probNoteRaw: 'Uncalibrated estimate (from cloud cover).',
+  reportPrompt: 'Tell us what you saw — or didn\'t. Every report improves the forecast.',
+  myReports: 'Your reports', noReports: 'No reports yet',
+  hourly: 'Hourly clear-sky chance', close: 'Close', tonightChance: "Tonight's chance",
+  outcomeName: { seen: 'Seen', looked_not_seen: 'Not seen', clouded: 'Clouded out', not_observed: "Didn't look" },
+  monthTitle: (y: number, m: number) => new Date(y, m - 1, 1).toLocaleDateString(undefined, { year: 'numeric', month: 'long' }), weekdays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+  evMeteor: 'Meteor shower peak', evFull: 'Full moon', evNew: 'New moon', evSuper: 'Supermoon', evEclipse: 'Eclipse',
+  pct: (p: number) => `${Math.round(p * 100)}%`,
   today: "Today's sky", pick: "Today's pick", changePlace: 'Change place', useHere: 'Use my location', searchCity: 'Search a city', search: 'Search', noResults: 'No results', calendar: 'Calendar', settings: 'Settings',
   locating: 'Finding your location…', noLoc: 'Location is unavailable. Please allow it in Settings.', retry: 'Retry',
   loading: 'Loading the sky forecast…', offline: 'Could not load the forecast. Check your connection.',
