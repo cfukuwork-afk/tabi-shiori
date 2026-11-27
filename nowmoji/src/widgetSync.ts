@@ -4,7 +4,7 @@ import { requireOptionalNativeModule } from 'expo';
 import { Asset } from 'expo-asset';
 import { Directory, File as FSFile } from 'expo-file-system';
 import type { Sync } from './api';
-import { SERVER } from './api';
+import { SERVER, LEGACY, loadAuth } from './api';
 import { hhmm, t } from './i18n';
 import { ART, KAO, MOOD_IDS, type MoodId, tint } from './kao';
 import type { GroupWidgetProps, WPerson } from './widgets/GroupWidget';
@@ -132,4 +132,9 @@ export async function updateWidgets(s: Sync | null, theme = 'paper') {
     );
   } catch {}
   cleanup(used);
+  // ウィジェット自身がサーバーから最新を取りに行けるように、取りに行く先と鍵を共有フォルダに置く（アプリを開かなくても更新される）
+  try {
+    const auth = await loadAuth();
+    if (auth && dir) new FSFile(dir, 'remote.json').write(JSON.stringify({ urls: [SERVER, LEGACY], auth, theme: bg }));
+  } catch {}
 }

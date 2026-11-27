@@ -1,0 +1,108 @@
+diff --git a/node_modules/expo-widgets/ios/Widgets/TimelineProvider.swift b/node_modules/expo-widgets/ios/Widgets/TimelineProvider.swift
+index f339d98..b4323fb 100644
+--- a/node_modules/expo-widgets/ios/Widgets/TimelineProvider.swift
++++ b/node_modules/expo-widgets/ios/Widgets/TimelineProvider.swift
+@@ -29,10 +29,15 @@ public struct WidgetsTimelineProvider: TimelineProvider {
+       fatalError("Could not get the app group identifier from Info.plist")
+     }
+ 
+-    let entries = parseTimeline(identifier: groupIdentifier, name: name, family: context.family)
+-
+-    let timeline = Timeline<WidgetsTimelineEntry>(entries: entries, policy: .atEnd)
+-    completion(timeline)
++    let family = context.family
++    let widgetName = name
++    // 【Nowmoji の追加】共有フォルダに remote.json（取りに行く先と鍵）があれば、ウィジェット自身が最新の中身を取りに行く。
++    // アプリを開いていなくても、iOS がウィジェットを読み直すたびに（目安 15〜30 分ごと）更新される。失敗したら保存済みの中身を使う。
++    WidgetsRemote.refresh(group: groupIdentifier) {
++      let entries = parseTimeline(identifier: groupIdentifier, name: widgetName, family: family)
++      let policy: TimelineReloadPolicy = WidgetsRemote.enabled(group: groupIdentifier) ? .after(Date().addingTimeInterval(15 * 60)) : .atEnd
++      completion(Timeline<WidgetsTimelineEntry>(entries: entries, policy: policy))
++    }
+   }
+ 
+   public typealias Entry = WidgetsTimelineEntry
+@@ -43,3 +48,83 @@ public struct WidgetsTimelineProvider: TimelineProvider {
+     self.name = name
+   }
+ }
++
++
++// 【Nowmoji の追加】ウィジェットが自分でサーバーから中身を取る
++enum WidgetsRemote {
++  private static var lastFetch: Date?
++  private static func dir(_ group: String) -> URL? {
++    FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group)?.appendingPathComponent("ExpoWidgets", isDirectory: true)
++  }
++  private static func config(_ group: String) -> [String: Any]? {
++    guard let d = dir(group), let data = try? Data(contentsOf: d.appendingPathComponent("remote.json")) else { return nil }
++    return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
++  }
++  static func enabled(group: String) -> Bool { config(group) != nil }
++
++  static func refresh(group: String, _ done: @escaping () -> Void) {
++    guard let cfg = config(group), let urls = cfg["urls"] as? [String], let auth = cfg["auth"] as? String, let d = dir(group) else { return done() }
++    // 同じ読み直しで複数のウィジェットが続けて呼ぶので、20 秒以内の再取得はしない
++    if let l = lastFetch, Date().timeIntervalSince(l) < 20 { return done() }
++    lastFetch = Date()
++    let tz = TimeZone.current.secondsFromGMT() / 60
++    let theme = (cfg["theme"] as? String ?? "#FFFDF8").addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
++    func get(_ i: Int) {
++      guard i < urls.count, let u = URL(string: "\(urls[i])/v1/widget?tz=\(tz)&theme=\(theme)") else { return done() }
++      var req = URLRequest(url: u)
++      req.timeoutInterval = 10
++      req.setValue("Bearer " + auth, forHTTPHeaderField: "Authorization")
++      URLSession.shared.dataTask(with: req) { data, resp, err in
++        guard err == nil, (resp as? HTTPURLResponse)?.statusCode == 200, let data,
++              let all = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return get(i + 1) }
++        resolveImages(all, base: urls[i], dir: d) { resolved in
++          let ud = UserDefaults(suiteName: group)
++          let ts = Int(Date().timeIntervalSince1970 * 1000)
++          for (name, props) in resolved {
++            ud?.set([["timestamp": ts, "props": props]], forKey: "__expo_widgets_\(name)_timeline")
++          }
++          done()
++        }
++      }.resume()
++    }
++    get(0)
++  }
++
++  // "art:<気分>" → 端末にある絵、"remote:/img/..." → 取りに行って共有フォルダへ
++  private static func resolveImages(_ all: [String: Any], base: String, dir: URL, _ done: @escaping ([String: Any]) -> Void) {
++    var need: Set<String> = []
++    func scan(_ v: Any) {
++      if let s = v as? String, s.hasPrefix("remote:") { need.insert(String(s.dropFirst(7))) }
++      else if let d = v as? [String: Any] { d.values.forEach(scan) }
++      else if let a = v as? [Any] { a.forEach(scan) }
++    }
++    scan(all)
++    let group = DispatchGroup()
++    for path in need {
++      let dest = dir.appendingPathComponent("r_" + (path.split(separator: "/").last.map(String.init) ?? "x"))
++      if FileManager.default.fileExists(atPath: dest.path) { continue }
++      guard let u = URL(string: base + path) else { continue }
++      group.enter()
++      URLSession.shared.downloadTask(with: u) { tmp, resp, _ in
++        if let tmp, (resp as? HTTPURLResponse)?.statusCode == 200 { try? FileManager.default.moveItem(at: tmp, to: dest) }
++        group.leave()
++      }.resume()
++    }
++    group.notify(queue: .global()) {
++      func map(_ v: Any) -> Any {
++        if let s = v as? String {
++          if s.hasPrefix("art:") { return dir.appendingPathComponent("m_\(s.dropFirst(4)).png").absoluteString }
++          if s.hasPrefix("remote:") {
++            let f = dir.appendingPathComponent("r_" + (s.split(separator: "/").last.map(String.init) ?? "x"))
++            return FileManager.default.fileExists(atPath: f.path) ? f.absoluteString : ""
++          }
++          return s
++        }
++        if let d = v as? [String: Any] { return d.mapValues(map) }
++        if let a = v as? [Any] { return a.map(map) }
++        return v
++      }
++      done((map(all) as? [String: Any]) ?? [:])
++    }
++  }
++}
