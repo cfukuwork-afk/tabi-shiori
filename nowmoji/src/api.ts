@@ -2,7 +2,26 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LANG } from './i18n';
 
-export const SERVER = process.env.EXPO_PUBLIC_SERVER || 'https://nowmoji.160-251-171-249.sslip.io';
+// 自分のドメイン（tripfold.net）経由を先に使う。sslip.io の住所は携帯回線（4G/5G）の DNS で引けないことがあるため、予備に回す
+export const SERVER = process.env.EXPO_PUBLIC_SERVER || 'https://tripfold.net/nowmoji';
+export const LEGACY = 'https://nowmoji.160-251-171-249.sslip.io';
+let base = SERVER; // 直近につながった方を覚えておく
+// 通信：つながらない・時間切れのときは、もう一方の住所で 1 回だけやり直す
+async function fetchAny(path: string, init: RequestInit, ms = 20000): Promise<Response> {
+  const order = base === SERVER ? [SERVER, LEGACY] : [LEGACY, SERVER];
+  let last: unknown;
+  for (const b of order) {
+    const ctl = new AbortController();
+    const tm = setTimeout(() => ctl.abort(), ms);
+    try {
+      const r = await fetch(b + path, { ...init, signal: ctl.signal });
+      clearTimeout(tm);
+      base = b;
+      return r;
+    } catch (e) { clearTimeout(tm); last = e; }
+  }
+  throw last;
+}
 const K_AUTH = 'nm.auth.v1';
 const K_SYNC = 'nm.sync.v1';
 
@@ -28,7 +47,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   const a = await loadAuth();
   let r: Response;
   try {
-    r = await fetch(SERVER + path, {
+    r = await fetchAny(path, {
       method,
       headers: { 'Content-Type': 'application/json', ...(a ? { Authorization: 'Bearer ' + a } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body),
