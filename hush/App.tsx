@@ -86,9 +86,30 @@ function Main() {
     const sub = ExpoLinking.addEventListener('url', (e) => url(e.url));
     return () => sub.remove();
   }, []);
+  // アプリを開いている間は、変更があれば数秒以内に反映する（Wi-Fi・4G・5G どれでも動く普通の HTTPS）
+  useEffect(() => {
+    let stop = false;
+    let v = -1;
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    (async () => {
+      while (!stop) {
+        if (AppState.currentState !== 'active') { await sleep(1500); continue; }
+        try {
+          const r = await A.waitChange(v);
+          if (stop) break;
+          if (r.changed && v >= 0) await refresh();
+          v = r.v;
+        } catch {
+          await sleep(4000);
+        }
+      }
+    })();
+    return () => { stop = true; };
+  }, [refresh]);
+
   useEffect(() => {
     const tick = setInterval(() => setNow(Date.now()), 1000);
-    const poll = setInterval(() => AppState.currentState === 'active' && refresh(), 15000);
+    const poll = setInterval(() => AppState.currentState === 'active' && refresh(), 60000); // 予備（ロングポーリングが止まったとき）
     const st = AppState.addEventListener('change', (x) => x === 'active' && refresh());
     return () => {
       clearInterval(tick);

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Image, ImageBackground, Linking, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, AppState, Image, ImageBackground, Linking, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -102,7 +102,12 @@ function Main() {
     setBusy(false);
   }, [loc]);
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { const i = setInterval(load, 15 * 60e3); return () => clearInterval(i); }, [load]);
+  // 開いている間は 5 分ごと（オーロラ予報の更新に合わせる）、画面に戻ったときはすぐ読み直す
+  useEffect(() => {
+    const i = setInterval(() => AppState.currentState === 'active' && load(), 5 * 60e3);
+    const sub = AppState.addEventListener('change', (st) => st === 'active' && load());
+    return () => { clearInterval(i); sub.remove(); };
+  }, [load]);
 
   useEffect(() => {
     if (!loc) return;

@@ -81,6 +81,14 @@ export async function register(name: string) {
   await AsyncStorage.setItem(K_AUTH, auth);
   return keep(r);
 }
+// 変更を待つ（ロングポーリング）。サーバーは変更があればすぐ、なければ 25 秒で返す
+export async function waitChange(v: number): Promise<{ v: number; changed: boolean }> {
+  const a = await loadAuth();
+  if (!a) throw new ApiError(401, 'auth');
+  const r = await fetchAny(`/v1/wait?v=${v}`, { method: 'GET', headers: { Authorization: 'Bearer ' + a } }, 35000);
+  if (!r.ok) throw new ApiError(r.status, 'server');
+  return r.json();
+}
 export const sync = async () => keep(await call<Sync>('GET', '/v1/sync'));
 export const updateMe = async (b: { name?: string; pushToken?: string | null; lang?: string; notify?: boolean }) => keep(await call<Sync>('PUT', '/v1/me', { ...b, tz: tz() }));
 export async function deleteMe() {
