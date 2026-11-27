@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Linking, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, TextInput, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -9,6 +9,7 @@ import Constants from 'expo-constants';
 import * as S from './src/sky';
 import { t, ja, fmtTime, fmtDay, fmtDayTime } from './src/i18n';
 
+const DEFAULT_PREFS = { aurora: true, golden: true, stars: true, events: true, sunset: false };
 const SERVERS = ['https://tripfold.net/skylab', 'https://skylab.160-251-171-249.sslip.io'];
 const WEB = 'https://tripfold.net/skylab';
 const C = { bg: '#0B1026', card: '#151C3B', line: '#252E57', text: '#EEF1FF', sub: '#9AA3CC', accent: '#7FD1FF', good: '#5BE3A5', fair: '#F5C451', poor: '#8A90B5', exp: '#C69CFF' };
@@ -56,12 +57,18 @@ function Main() {
   const [busy, setBusy] = useState(false);
   const [at, setAt] = useState<Date | null>(null);
   const [report, setReport] = useState<{ key: string; item?: S.Item } | null>(null);
-  const [prefs, setPrefs] = useState({ aurora: true, golden: false });
+  const [prefs, setPrefs] = useState(DEFAULT_PREFS);
+  const [meta, setMeta] = useState<{ issued_at?: string }>({});
+  const [picker, setPicker] = useState(false);
 
-  useEffect(() => { AsyncStorage.getItem('prefs').then((s) => s && setPrefs(JSON.parse(s))); }, []);
+  useEffect(() => { AsyncStorage.getItem('prefs').then((s) => s && setPrefs({ ...DEFAULT_PREFS, ...JSON.parse(s) })); }, []);
 
-  const locate = useCallback(async () => {
+  const locate = useCallback(async (force = false) => {
     setLocErr(false);
+    if (!force) {
+      const saved = await AsyncStorage.getItem('place');
+      if (saved) { setLoc(JSON.parse(saved)); return; }
+    } else await AsyncStorage.removeItem('place');
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') { setLocErr(true); return; }
@@ -79,6 +86,7 @@ function Main() {
     try {
       const j = await api(`/api/sky?lat=${loc.lat.toFixed(3)}&lon=${loc.lon.toFixed(3)}`);
       setData({ weather: j.weather, aurora: j.aurora, kp_forecast: j.kp_forecast });
+      setMeta({ issued_at: j.issued_at });
       setAt(new Date());
     } catch { setErr(true); }
     setBusy(false);
@@ -92,7 +100,7 @@ function Main() {
     (async () => {
       const uid = await userId();
       let token: string | null = null;
-      if (prefs.aurora || prefs.golden) {
+      if (Object.values(prefs).some(Boolean)) {
         const { status } = await Notifications.requestPermissionsAsync();
         if (status === 'granted' && prefs.aurora) {
           try { token = (await Notifications.getExpoPushTokenAsync({ projectId: Constants.expoConfig?.extra?.eas?.projectId })).data; } catch {}
@@ -105,24 +113,14 @@ function Main() {
   const items = useMemo(() => (loc && data ? S.today(loc.lat, loc.lon, data) : []), [loc, data]);
   const gb = useMemo(() => (loc ? S.goldenBlue(loc.lat, loc.lon, data?.weather ?? null, new Date()) : []), [loc, data]);
 
-  useEffect(() => {
-    (async () => {
-      await Notifications.cancelAllScheduledNotificationsAsync().catch(() => {});
-      if (!prefs.golden || !items.length) return;
-      const ss = items.find((i) => i.key === 'sunset');
-      if (!ss?.peak) return;
-      const when = new Date(ss.peak.getTime() - 30 * 60e3);
-      if (when.getTime() < Date.now() + 60e3) return;
-      await Notifications.scheduleNotificationAsync({ content: { title: t.notifyGolden(t.names.sunset), body: t.notifyGoldenBody(t.lv[String(ss.level)]) }, trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when } }).catch(() => {});
-    })();
-  }, [prefs.golden, items]);
+  useEffect(() => { if (loc && data) scheduleLocal(loc, items, gb, prefs); }, [loc, items, gb, prefs]);
 
   const savePrefs = (p: typeof prefs) => { setPrefs(p); AsyncStorage.setItem('prefs', JSON.stringify(p)); };
 
   return (
     <SafeAreaView style={st.root} edges={['top']}>
       <View style={{ flex: 1 }}>
-        {tab === 'today' && <Today loc={loc} locErr={locErr} locate={locate} data={data} err={err} busy={busy} at={at} items={items} gb={gb} reload={load} onReport={(key, item) => setReport({ key, item })} />}
+        {tab === 'today' && <Today openPicker={() => setPicker(true)} loc={loc} locErr={locErr} locate={() => locate()} data={data} err={err} busy={busy} at={at} items={items} gb={gb} reload={load} onReport={(key, item) => setReport({ key, item })} />}
         {tab === 'calendar' && loc && <Calendar loc={loc} onReport={(key) => setReport({ key })} />}
         {tab === 'calendar' && !loc && <Center><Text style={st.sub}>{t.locating}</Text></Center>}
         {tab === 'settings' && <Settings prefs={prefs} setPrefs={savePrefs} />}
@@ -134,15 +132,16 @@ function Main() {
           </Pressable>
         ))}
       </SafeAreaView>
-      <ReportSheet r={report} loc={loc} onClose={() => setReport(null)} />
+      <ReportSheet r={report} loc={loc} issuedAt={meta.issued_at} onClose={() => setReport(null)} />
+      <PlacePicker open={picker} onClose={() => setPicker(false)} onPick={async (l) => { setPicker(false); if (l) { await AsyncStorage.setItem('place', JSON.stringify(l)); setLoc(l); } else locate(true); }} />
     </SafeAreaView>
   );
 }
 
 const Center = ({ children }: any) => <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>{children}</View>;
 
-function Today(p: { loc: Loc | null; locErr: boolean; locate: () => void; data: S.SkyData | null; err: boolean; busy: boolean; at: Date | null; items: S.Item[]; gb: S.Item[]; reload: () => void; onReport: (k: string, i?: S.Item) => void }) {
-  if (p.locErr) return <Center><Text style={st.sub}>{t.noLoc}</Text><Btn label={t.retry} onPress={p.locate} /></Center>;
+function Today(p: { openPicker: () => void; loc: Loc | null; locErr: boolean; locate: () => void; data: S.SkyData | null; err: boolean; busy: boolean; at: Date | null; items: S.Item[]; gb: S.Item[]; reload: () => void; onReport: (k: string, i?: S.Item) => void }) {
+  if (p.locErr) return <Center><Text style={st.sub}>{t.noLoc}</Text><Btn label={t.searchCity} onPress={p.openPicker} /><Btn label={t.retry} onPress={p.locate} ghost /></Center>;
   if (!p.loc) return <Center><ActivityIndicator color={C.accent} /><Text style={[st.sub, { marginTop: 12 }]}>{t.locating}</Text></Center>;
   if (!p.data && p.err) return <Center><Text style={st.sub}>{t.offline}</Text><Btn label={t.retry} onPress={p.reload} /></Center>;
   if (!p.data) return <Center><ActivityIndicator color={C.accent} /><Text style={[st.sub, { marginTop: 12 }]}>{t.loading}</Text></Center>;
@@ -158,7 +157,20 @@ function Today(p: { loc: Loc | null; locErr: boolean; locate: () => void; data: 
   return (
     <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} refreshControl={<RefreshControl refreshing={p.busy} onRefresh={p.reload} tintColor={C.accent} />}>
       <Text style={st.h1}>{t.today}</Text>
-      <Text style={st.sub}>{p.loc.name || `${p.loc.lat.toFixed(2)}, ${p.loc.lon.toFixed(2)}`}{p.at ? ` ・ ${t.updated(fmtTime(p.at))}` : ''}</Text>
+      <Pressable onPress={p.openPicker}><Text style={st.sub}>{p.loc.name || `${p.loc.lat.toFixed(2)}, ${p.loc.lon.toFixed(2)}`}{p.at ? ` ・ ${t.updated(fmtTime(p.at))}` : ''}  <Text style={{ color: C.accent }}>{t.changePlace}</Text></Text></Pressable>
+      {(() => {
+        const cand = [...sorted, ...nextG].filter((i) => i.level === 3 && (i.start || i.peak) && (i.end || i.peak || new Date()).getTime() > Date.now());
+        const pick = cand[0];
+        if (!pick) return null;
+        return (
+          <View style={[st.card, st.hero]}>
+            <Text style={[st.small, { color: C.accent, fontWeight: '700' }]}>{t.pick}</Text>
+            <Text style={[st.h1, { fontSize: 24, marginTop: 4 }]}>{t.names[pick.key]}</Text>
+            <Text style={st.time}>{relDay(pick.start || pick.peak!)}{pick.start && pick.end ? `${fmtTime(pick.start)}〜${fmtTime(pick.end)}` : fmtTime(pick.peak)}{pick.dir != null ? ` ・ ${t.dirSky(S.compass(pick.dir, ja))}` : ''}</Text>
+            {pick.exp && <Text style={[st.small, { marginTop: 4 }]}>{t.expNote}</Text>}
+          </View>
+        );
+      })()}
       {sorted.map((it) => <ItemCard key={it.key} it={it} data={p.data!} onReport={() => p.onReport(it.key, it)} />)}
       {nextG.map((it, i) => <ItemCard key={it.key + i} it={it} data={p.data!} onReport={() => p.onReport(it.key, it)} />)}
     </ScrollView>
@@ -251,21 +263,23 @@ function Calendar({ loc, onReport }: { loc: Loc; onReport: (k: string) => void }
           <Text style={st.h2}>{e.kind === 'lunar' ? t.lunar[e.type] || e.type : t.solar[e.type] || e.type}</Text>
           <Text style={st.time}>{fmtDayTime(e.peak)}</Text>
           <Text style={st.line}>{e.visible ? t.visibleHere : t.notHere}{e.kind === 'solar' && e.visible && e.obscuration != null ? ` ・ ${t.obsc(Math.round(e.obscuration * 100))}` : ''}</Text>
+          {e.kind === 'solar' && <Text style={[st.small, { color: '#FFB27A', marginTop: 6 }]}>{t.eclipseSafety}</Text>}
         </View>
       ))}
     </ScrollView>
   );
 }
 
-function Settings({ prefs, setPrefs }: { prefs: { aurora: boolean; golden: boolean }; setPrefs: (p: any) => void }) {
+function Settings({ prefs, setPrefs }: { prefs: typeof DEFAULT_PREFS; setPrefs: (p: any) => void }) {
   const [msg, setMsg] = useState('');
   return (
     <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
       <Text style={st.h1}>{t.settings}</Text>
       <Text style={st.h3}>{t.notif}</Text>
       <View style={st.card}>
-        <View style={st.row}><Text style={[st.line, { flex: 1 }]}>{t.auroraAlert}</Text><Switch value={prefs.aurora} onValueChange={(v) => setPrefs({ ...prefs, aurora: v })} /></View>
-        <View style={[st.row, { marginTop: 8 }]}><Text style={[st.line, { flex: 1 }]}>{t.goldenAlert}</Text><Switch value={prefs.golden} onValueChange={(v) => setPrefs({ ...prefs, golden: v })} /></View>
+        {([['aurora', t.auroraAlert], ['golden', t.goldenAlert], ['stars', t.starsAlert], ['events', t.eventsAlert], ['sunset', t.sunsetAlert]] as const).map(([k, l], i) => (
+          <View key={k} style={[st.row, i > 0 && { marginTop: 8 }]}><Text style={[st.line, { flex: 1 }]}>{l}</Text><Switch value={(prefs as any)[k]} onValueChange={(v) => setPrefs({ ...prefs, [k]: v })} /></View>
+        ))}
       </View>
       <View style={st.card}><Text style={st.line}>{t.about}</Text></View>
       {[[t.privacy, '/privacy'], [t.terms, '/terms'], [t.support, '/support']].map(([l, u]) => (
@@ -280,45 +294,106 @@ function Settings({ prefs, setPrefs }: { prefs: { aurora: boolean; golden: boole
   );
 }
 
-function ReportSheet({ r, loc, onClose }: { r: { key: string; item?: S.Item } | null; loc: Loc | null; onClose: () => void }) {
-  const [done, setDone] = useState(false);
+function ReportSheet({ r, loc, issuedAt, onClose }: { r: { key: string; item?: S.Item } | null; loc: Loc | null; issuedAt?: string; onClose: () => void }) {
+  const [done, setDone] = useState<string | null>(null);
   const [strength, setStrength] = useState<number | null>(null);
-  useEffect(() => { if (r) { setDone(false); setStrength(null); } }, [r]);
+  const [beauty, setBeauty] = useState<number | null>(null);
+  useEffect(() => { if (r) { setDone(null); setStrength(null); setBeauty(null); } }, [r]);
   if (!r) return null;
   const name = t.names[r.key] || r.key;
-  const send = async (seen: boolean) => {
+  const hasBeauty = ['sunset', 'sunrise', 'rainbow', 'aurora', 'goldenhour', 'bluehour', 'milkyway', 'stars'].includes(r.key);
+  const hasStrength = ['aurora', 'rainbow', 'meteor'].includes(r.key);
+  const send = async (outcome: 'seen' | 'looked_not_seen' | 'clouded' | 'not_observed') => {
     if (!loc) return;
     const uid = await userId();
-    const shown = r.item ? { level: r.item.level, exp: r.item.exp, extra: r.item.extra, peak: r.item.peak } : null;
-    api('/api/report', { method: 'POST', body: JSON.stringify({ user: uid, phenomenon: r.key, seen, lat: loc.lat, lon: loc.lon, at: new Date().toISOString(), strength, app: 'ios-' + (Constants.expoConfig?.version || ''), shown }) }).catch(() => {});
-    setDone(true);
+    const shown = r.item ? { level: r.item.level, exp: r.item.exp, extra: r.item.extra, start: r.item.start, peak: r.item.peak, end: r.item.end, dir: r.item.dir } : null;
+    api('/api/report', { method: 'POST', body: JSON.stringify({ user: uid, phenomenon: r.key, outcome, lat: loc.lat, lon: loc.lon, at: new Date().toISOString(), strength: outcome === 'seen' ? strength : null, beauty: outcome === 'seen' ? beauty : null, app: 'ios-' + (Constants.expoConfig?.version || ''), engine: S.ENGINE_VERSION, issued_at: issuedAt, shown }) }).catch(() => {});
+    setDone(outcome === 'seen' || outcome === 'looked_not_seen' ? t.thanks : t.thanksNo);
     setTimeout(onClose, 1400);
   };
   return (
     <Modal transparent animationType="slide" visible onRequestClose={onClose}>
       <Pressable style={st.backdrop} onPress={onClose} />
       <View style={st.sheet}>
-        {done ? <Text style={[st.h2, { textAlign: 'center', marginVertical: 24 }]}>{t.thanks}</Text> : (
+        {done ? <Text style={[st.h2, { textAlign: 'center', marginVertical: 24 }]}>{done}</Text> : (
           <>
             <Text style={[st.h2, { marginBottom: 14 }]}>{t.reportTitle(name)}</Text>
-            {['aurora', 'sunset', 'sunrise', 'rainbow', 'meteor'].includes(r.key) && (
-              <View style={[st.row, { marginBottom: 14 }]}>
-                <Text style={[st.sub, { marginRight: 10 }]}>{t.strength}</Text>
+            {hasStrength && (
+              <View style={[st.row, { marginBottom: 12 }]}>
+                <Text style={[st.sub, { width: 56 }]}>{t.strength}</Text>
                 {[t.weak, t.mid, t.strong].map((l, i) => (
-                  <Pressable key={i} onPress={() => setStrength(i + 1)} style={[st.chip, strength === i + 1 && { borderColor: C.accent, backgroundColor: C.accent + '22' }]}><Text style={st.chipText}>{l}</Text></Pressable>
+                  <Pressable key={i} onPress={() => setStrength(i + 1)} style={[st.chip, strength === i + 1 && st.chipOn]}><Text style={st.chipText}>{l}</Text></Pressable>
                 ))}
               </View>
             )}
-            <View style={st.row}>
-              <Btn label={t.seen} onPress={() => send(true)} flex />
-              <View style={{ width: 10 }} />
-              <Btn label={t.notSeen} onPress={() => send(false)} flex ghost />
-            </View>
+            {hasBeauty && (
+              <View style={[st.row, { marginBottom: 14 }]}>
+                <Text style={[st.sub, { width: 56 }]}>{t.beauty}</Text>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <Pressable key={n} onPress={() => setBeauty(n)} hitSlop={6}><Text style={{ fontSize: 26, color: beauty != null && n <= beauty ? C.fair : C.line, marginRight: 6 }}>★</Text></Pressable>
+                ))}
+              </View>
+            )}
+            <Btn label={t.seen} onPress={() => send('seen')} />
+            <Btn label={t.lookedNot} onPress={() => send('looked_not_seen')} ghost />
+            <Btn label={t.clouded} onPress={() => send('clouded')} ghost />
+            <Btn label={t.notObserved} onPress={() => send('not_observed')} ghost />
           </>
         )}
       </View>
     </Modal>
   );
+}
+
+function PlacePicker({ open, onClose, onPick }: { open: boolean; onClose: () => void; onPick: (l: Loc | null) => void }) {
+  const [q, setQ] = useState('');
+  const [res, setRes] = useState<any[] | null>(null);
+  const go = async () => { try { const j = await api(`/api/geo?q=${encodeURIComponent(q)}&lang=${ja ? 'ja' : 'en'}`); setRes(j.results || []); } catch { setRes([]); } };
+  return (
+    <Modal transparent animationType="slide" visible={open} onRequestClose={onClose}>
+      <Pressable style={st.backdrop} onPress={onClose} />
+      <View style={[st.sheet, { maxHeight: '75%' }]}>
+        <Btn label={t.useHere} onPress={() => onPick(null)} />
+        <View style={[st.row, { marginTop: 14 }]}>
+          <TextInput value={q} onChangeText={setQ} onSubmitEditing={go} placeholder={t.searchCity} placeholderTextColor={C.sub} style={st.input} returnKeyType="search" />
+          <Pressable onPress={go} style={[st.reportBtn, { marginLeft: 8 }]}><Text style={st.reportText}>{t.search}</Text></Pressable>
+        </View>
+        <ScrollView style={{ marginTop: 8 }}>
+          {res && !res.length && <Text style={[st.sub, { marginTop: 10 }]}>{t.noResults}</Text>}
+          {(res || []).map((x, i) => (
+            <Pressable key={i} onPress={() => onPick({ lat: x.lat, lon: x.lon, name: x.name })} style={{ paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.line }}>
+              <Text style={st.line}>{x.name}</Text><Text style={st.small}>{[x.admin, x.country].filter(Boolean).join(', ')}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
+// 端末で予約する通知（天文の出来事は確実に計算できる。気象に左右されるものは、開いた時点の予報で予約し直す）
+async function scheduleLocal(loc: Loc, items: S.Item[], gb: S.Item[], prefs: typeof DEFAULT_PREFS) {
+  try {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') return;
+    const now = Date.now();
+    const plan: { at: Date; title: string; body: string }[] = [];
+    if (prefs.golden) for (const g of gb.filter((x) => x.key === 'goldenhour' && x.start && x.start.getTime() > now + 60e3).slice(0, 2)) plan.push({ at: new Date(g.start!.getTime() - 10 * 60e3), title: t.names.goldenhour, body: `${fmtTime(g.start)}〜${fmtTime(g.end)} ・ ${t.dirSky(S.compass(g.dir, ja))}` });
+    const stars = items.find((i) => i.key === 'stars');
+    if (prefs.stars && stars?.level === 3 && stars.start && stars.start.getTime() > now) plan.push({ at: stars.start, title: t.names.stars, body: `${t.lv['3']} ・ ${fmtTime(stars.start)}〜${fmtTime(stars.end)}` });
+    const ss = items.find((i) => i.key === 'sunset');
+    if (prefs.sunset && ss?.level === 3 && ss.peak) plan.push({ at: new Date(ss.peak.getTime() - 30 * 60e3), title: t.names.sunset, body: `${t.exp} ・ ${fmtTime(ss.peak)} ・ ${t.dirSky(S.compass(ss.dir, ja))}` });
+    if (prefs.events) {
+      for (const m of S.meteorShowers(loc.lat, loc.lon, new Date())) if (m.best.getTime() - now < 30 * 86400e3 && m.rate >= 10) plan.push({ at: new Date(m.best.getTime() - 3 * 3600e3), title: ja ? m.ja : m.en, body: `${fmtTime(m.best)} ・ ${t.perHour(m.rate)}` });
+      const mi = S.moonInfo(loc.lat, loc.lon, new Date());
+      plan.push({ at: new Date(mi.full.getTime() - 6 * 3600e3), title: t.fullMoon, body: fmtDayTime(mi.full) });
+      for (const e of S.eclipses(loc.lat, loc.lon, new Date())) if (e.visible && e.peak.getTime() - now < 60 * 86400e3) plan.push({ at: new Date(e.peak.getTime() - 24 * 3600e3), title: e.kind === 'lunar' ? t.lunar[e.type] : t.solar[e.type], body: fmtDayTime(e.peak) + (e.kind === 'solar' ? ' ・ ' + t.eclipseSafety : '') });
+    }
+    for (const n of plan.filter((x) => x.at.getTime() > now + 60e3).slice(0, 40)) {
+      await Notifications.scheduleNotificationAsync({ content: { title: n.title, body: n.body }, trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: n.at } });
+    }
+  } catch {}
 }
 
 function Btn({ label, onPress, flex, ghost }: { label: string; onPress: () => void; flex?: boolean; ghost?: boolean }) {
@@ -355,4 +430,7 @@ const st = StyleSheet.create({
   sheet: { backgroundColor: C.card, padding: 20, paddingBottom: Platform.OS === 'ios' ? 40 : 20, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
   chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: C.line, marginRight: 8 },
   chipText: { color: C.text, fontSize: 13 },
+  chipOn: { borderColor: C.accent, backgroundColor: C.accent + '22' },
+  hero: { borderColor: C.accent, borderWidth: 1, backgroundColor: '#18244F' },
+  input: { flex: 1, color: C.text, borderWidth: 1, borderColor: C.line, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 16 },
 });

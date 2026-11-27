@@ -3,6 +3,9 @@
 // 判定の目安は docs/conditions.md に根拠と一緒に書く。検証前のものは exp=true（実験中）として表示する
 import * as A from 'astronomy-engine';
 
+// 予測ロジックの版。判定を変えたら必ず上げる（報告・予測ログに記録し、版ごとに精度を比べる）
+export const ENGINE_VERSION = 'sky-1.0.0';
+
 export type Level = 3 | 2 | 1 | 0 | -1; // 3 良い / 2 まあまあ / 1 見込み薄 / 0 見えない / -1 データなし
 export type Hour = {
   t: string;
