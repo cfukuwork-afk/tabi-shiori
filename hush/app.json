@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "Hush",
+    "slug": "hush-study",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "scheme": "hush",
+    "owner": "chihayax",
+    "backgroundColor": "#1B1A26",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1B1A26"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.fukuda.hush",
+      "buildNumber": "1",
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "CFBundleDevelopmentRegion": "en",
+        "CFBundleAllowMixedLocalizations": true,
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "locales": {
+      "ja": "./locales/ja.json",
+      "en": "./locales/en.json"
+    },
+    "plugins": [
+      "expo-notifications",
+      "expo-localization"
+    ]
+  }
+}
