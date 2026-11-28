@@ -1,6 +1,28 @@
 import { getLocales } from 'expo-localization';
+import { OTHER } from './locales';
 
-export const ja = (getLocales()[0]?.languageCode || 'en') === 'ja';
+export type Lang = 'ja' | 'en' | 'ko' | 'zh-Hans' | 'zh-Hant' | 'es' | 'fr' | 'de' | 'it' | 'pt';
+/** 選べる言語（その言語での名前） */
+export const LANGS: { id: Lang; name: string }[] = [
+  { id: 'ja', name: '日本語' }, { id: 'en', name: 'English' }, { id: 'ko', name: '한국어' }, { id: 'zh-Hans', name: '简体中文' }, { id: 'zh-Hant', name: '繁體中文' },
+  { id: 'es', name: 'Español' }, { id: 'fr', name: 'Français' }, { id: 'de', name: 'Deutsch' }, { id: 'it', name: 'Italiano' }, { id: 'pt', name: 'Português' },
+];
+/** 端末の言語から選ぶ（ないときは英語） */
+export function detectLang(): Lang {
+  try {
+    const g = getLocales()[0];
+    const l = (g?.languageTag || g?.languageCode || 'en').toLowerCase();
+    if (l.startsWith('ja')) return 'ja';
+    if (l.startsWith('ko')) return 'ko';
+    if (l.startsWith('zh')) return /hant|tw|hk|mo/.test(l) ? 'zh-Hant' : 'zh-Hans';
+    for (const x of ['es', 'fr', 'de', 'it', 'pt'] as const) if (l.startsWith(x)) return x;
+  } catch {}
+  return 'en';
+}
+/** 日付・数字の書き方に使うロケール */
+export const localeOf = (l: Lang) => (l === 'zh-Hans' ? 'zh-CN' : l === 'zh-Hant' ? 'zh-TW' : l === 'pt' ? 'pt-BR' : l === 'ja' ? 'ja-JP' : l);
+/** サーバーへ渡す言語（地名検索・通知文） */
+export const apiLang = () => (lang === 'zh-Hans' || lang === 'zh-Hant' ? 'zh' : lang);
 
 const J = {
   home: 'ホーム', reportTab: '報告', recTime: 'おすすめの時間', direction: '方向', condition: '観測条件', prob: (n: string) => `${n}の可能性`,
@@ -56,6 +78,7 @@ const J = {
   updated: (s: string) => `更新 ${s}`, place: '場所',
   goldenWhy: (c: number | null) => (c == null ? '' : `雲 ${Math.round(c)}%`),
   notifyGolden: (n: string) => `まもなく${n}です`, notifyGoldenBody: (s: string) => `夕焼けの条件：${s}`,
+  language: '言語',
 };
 type T = typeof J;
 const E: T = {
@@ -70,7 +93,7 @@ const E: T = {
   myReports: 'Your reports', noReports: 'No reports yet',
   hourly: 'Hourly clear-sky chance', close: 'Close', tonightChance: "Tonight's chance",
   outcomeName: { seen: 'Seen', looked_not_seen: 'Not seen', clouded: 'Clouded out', not_observed: "Didn't look" },
-  monthTitle: (y: number, m: number) => new Date(y, m - 1, 1).toLocaleDateString(undefined, { year: 'numeric', month: 'long' }), weekdays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+  monthTitle: (y: number, m: number) => new Date(y, m - 1, 1).toLocaleDateString('en', { year: 'numeric', month: 'long' }), weekdays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
   evMeteor: 'Meteor shower peak', evFull: 'Full moon', evNew: 'New moon', evSuper: 'Supermoon', evEclipse: 'Eclipse',
   pct: (p: number) => `${Math.round(p * 100)}%`,
   today: "Today's sky", pick: "Today's pick", changePlace: 'Change place', useHere: 'Use my location', searchCity: 'Search a city', search: 'Search', noResults: 'No results', calendar: 'Calendar', settings: 'Settings',
@@ -112,8 +135,39 @@ const E: T = {
   updated: (s: string) => `Updated ${s}`, place: 'Place',
   goldenWhy: (c: number | null) => (c == null ? '' : `Cloud ${Math.round(c)}%`),
   notifyGolden: (n: string) => `${n} soon`, notifyGoldenBody: (s: string) => `Sunset glow: ${s}`,
+  language: 'Language',
 };
-export const t: T = ja ? J : E;
-export const fmtTime = (d?: Date) => (d ? d.toLocaleTimeString(ja ? 'ja-JP' : undefined, { hour: '2-digit', minute: '2-digit' }) : '');
-export const fmtDay = (d: Date) => d.toLocaleDateString(ja ? 'ja-JP' : undefined, { month: 'short', day: 'numeric', weekday: 'short' });
+export type { T };
+const DICTS: Record<Lang, T> = { ja: J, en: E, ...OTHER } as Record<Lang, T>;
+export let lang: Lang = detectLang();
+export let ja = lang === 'ja';
+export let t: T = DICTS[lang];
+export function setLang(l: Lang) { lang = l; ja = l === 'ja'; t = DICTS[l] || E; }
+const COMPASS: Record<Lang, string[]> = {
+  ja: ['北', '北東', '東', '南東', '南', '南西', '西', '北西'], en: ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'],
+  ko: ['북', '북동', '동', '남동', '남', '남서', '서', '북서'], 'zh-Hans': ['北', '东北', '东', '东南', '南', '西南', '西', '西北'], 'zh-Hant': ['北', '東北', '東', '東南', '南', '西南', '西', '西北'],
+  es: ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'], fr: ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'], de: ['N', 'NO', 'O', 'SO', 'S', 'SW', 'W', 'NW'],
+  it: ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'], pt: ['N', 'NE', 'L', 'SE', 'S', 'SO', 'O', 'NO'],
+};
+/** 方角（8方位）を今の言語で */
+export const compassL = (deg: number | undefined) => (deg == null ? '' : COMPASS[lang][Math.round((((deg % 360) + 360) % 360) / 45) % 8]);
+const SHOWERS: Record<string, Partial<Record<Lang, string>>> = {
+  QUA: { ko: '사분의자리 유성우', 'zh-Hans': '象限仪座流星雨', 'zh-Hant': '象限儀座流星雨', es: 'Cuadrántidas', fr: 'Quadrantides', de: 'Quadrantiden', it: 'Quadrantidi', pt: 'Quadrântidas' },
+  LYR: { ko: '거문고자리 유성우', 'zh-Hans': '天琴座流星雨', 'zh-Hant': '天琴座流星雨', es: 'Líridas', fr: 'Lyrides', de: 'Lyriden', it: 'Liridi', pt: 'Líridas' },
+  ETA: { ko: '물병자리 에타 유성우', 'zh-Hans': '宝瓶座η流星雨', 'zh-Hant': '寶瓶座η流星雨', es: 'Eta Acuáridas', fr: 'Êta Aquarides', de: 'Eta-Aquariiden', it: 'Eta Aquaridi', pt: 'Eta Aquáridas' },
+  PER: { ko: '페르세우스자리 유성우', 'zh-Hans': '英仙座流星雨', 'zh-Hant': '英仙座流星雨', es: 'Perseidas', fr: 'Perséides', de: 'Perseiden', it: 'Perseidi', pt: 'Perseidas' },
+  ORI: { ko: '오리온자리 유성우', 'zh-Hans': '猎户座流星雨', 'zh-Hant': '獵戶座流星雨', es: 'Oriónidas', fr: 'Orionides', de: 'Orioniden', it: 'Orionidi', pt: 'Oriónidas' },
+  LEO: { ko: '사자자리 유성우', 'zh-Hans': '狮子座流星雨', 'zh-Hant': '獅子座流星雨', es: 'Leónidas', fr: 'Léonides', de: 'Leoniden', it: 'Leonidi', pt: 'Leónidas' },
+  GEM: { ko: '쌍둥이자리 유성우', 'zh-Hans': '双子座流星雨', 'zh-Hant': '雙子座流星雨', es: 'Gemínidas', fr: 'Géminides', de: 'Geminiden', it: 'Geminidi', pt: 'Geminídeas' },
+  URS: { ko: '작은곰자리 유성우', 'zh-Hans': '小熊座流星雨', 'zh-Hant': '小熊座流星雨', es: 'Úrsidas', fr: 'Ursides', de: 'Ursiden', it: 'Ursidi', pt: 'Ursídeas' },
+};
+/** 流星群の名前を今の言語で */
+export const showerName = (s: { id: string; ja: string; en: string }) => (lang === 'ja' ? s.ja : lang === 'en' ? s.en : SHOWERS[s.id]?.[lang] || s.en);
+export const fmtTime = (d?: Date) => (d ? d.toLocaleTimeString(localeOf(lang), { hour: '2-digit', minute: '2-digit' }) : '');
+export const fmtDay = (d: Date) => d.toLocaleDateString(localeOf(lang), { month: 'short', day: 'numeric', weekday: 'short' });
 export const fmtDayTime = (d: Date) => `${fmtDay(d)} ${fmtTime(d)}`;
+/** 区切り・範囲・かっこ（日本語・中国語は全角、ほかは半角） */
+const wide = () => lang === 'ja' || lang === 'zh-Hans' || lang === 'zh-Hant';
+export const DOT = () => (wide() ? ' ・ ' : ' · ');
+export const rng = (a: string, b: string) => (lang === 'ja' ? `${a}〜${b}` : `${a}–${b}`);
+export const par = (x: string) => (wide() ? `（${x}）` : ` (${x})`);

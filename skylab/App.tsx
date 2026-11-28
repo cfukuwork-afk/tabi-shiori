@@ -8,7 +8,7 @@ import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import * as A from 'astronomy-engine';
 import * as S from './src/sky';
-import { t, ja, fmtTime, fmtDay, fmtDayTime } from './src/i18n';
+import { t, fmtTime, fmtDay, fmtDayTime, compassL, showerName, apiLang, setLang, lang, LANGS, Lang, DOT, rng, par } from './src/i18n';
 
 const DEFAULT_PREFS = { aurora: true, golden: true, stars: true, events: true, sunset: false };
 const SERVERS = ['https://tripfold.net/skylab', 'https://skylab.160-251-171-249.sslip.io'];
@@ -48,17 +48,22 @@ async function userId() {
 type Loc = { lat: number; lon: number; name: string };
 type Tab = 'home' | 'calendar' | 'report' | 'settings';
 
+let lastTab: 'home' | 'calendar' | 'report' | 'settings' = 'home';
 export default function App() {
+  const [lng, setLng] = useState<Lang | null>(null);
+  useEffect(() => { AsyncStorage.getItem('lang').then((l) => { if (l && LANGS.some((x) => x.id === l)) setLang(l as Lang); setLng(lang); }); }, []);
+  const change = (l: Lang) => { setLang(l); AsyncStorage.setItem('lang', l).catch(() => {}); setLng(l); };
   return (
     <SafeAreaProvider>
       <StatusBar style="light" />
-      <Main />
+      {lng && <Main key={lng} onLang={change} />}
     </SafeAreaProvider>
   );
 }
 
-function Main() {
-  const [tab, setTab] = useState<Tab>('home');
+function Main({ onLang }: { onLang: (l: Lang) => void }) {
+  const [tab, setTabRaw] = useState<Tab>(lastTab);
+  const setTab = (x: Tab) => { lastTab = x; setTabRaw(x); };
   const [loc, setLoc] = useState<Loc | null>(null);
   const [locErr, setLocErr] = useState(false);
   const [data, setData] = useState<S.SkyData | null>(null);
@@ -120,7 +125,7 @@ function Main() {
           try { token = (await Notifications.getExpoPushTokenAsync({ projectId: Constants.expoConfig?.extra?.eas?.projectId })).data; } catch {}
         }
       }
-      api('/api/register', { method: 'POST', body: JSON.stringify({ user: uid, token, lat: loc.lat, lon: loc.lon, lang: ja ? 'ja' : 'en', aurora: prefs.aurora }) }).catch(() => {});
+      api('/api/register', { method: 'POST', body: JSON.stringify({ user: uid, token, lat: loc.lat, lon: loc.lon, lang: apiLang(), aurora: prefs.aurora }) }).catch(() => {});
     })();
   }, [loc, prefs.aurora]);
 
@@ -141,7 +146,7 @@ function Main() {
           {tab === 'home' && <Home loc={loc} locErr={locErr} locate={() => locate()} openPicker={() => setPicker(true)} data={data} err={err} busy={busy} at={at} items={items} reload={load} onOpen={setDetail} />}
           {tab === 'calendar' && (loc ? <Calendar loc={loc} onReport={(key) => setReport({ key })} /> : <Center><ActivityIndicator color={C.accent} /></Center>)}
           {tab === 'report' && <ReportTab items={items} onReport={(key, item) => setReport({ key, item })} />}
-          {tab === 'settings' && <Settings prefs={prefs} setPrefs={savePrefs} />}
+          {tab === 'settings' && <Settings prefs={prefs} setPrefs={savePrefs} onLang={onLang} />}
         </View>
       </SafeAreaView>
       <TabBar tab={tab} setTab={setTab} />
@@ -212,7 +217,7 @@ function when(it: S.Item) {
   const d = it.start || it.peak;
   if (!d) return '';
   const r = relDay(d);
-  if (it.start && it.end && it.end.getTime() - it.start.getTime() >= 30 * 60e3) return `${r}${fmtTime(it.start)}〜${fmtTime(it.end)}`;
+  if (it.start && it.end && it.end.getTime() - it.start.getTime() >= 30 * 60e3) return `${r}${rng(fmtTime(it.start), fmtTime(it.end))}`;
   return `${r}${fmtTime(it.peak || it.start)}`;
 }
 function relDay(d: Date) {
@@ -241,7 +246,7 @@ function Hero({ it, onPress }: { it: S.Item; onPress: () => void }) {
             <View style={{ flex: 1 }}>
               <Text style={st.heroLabel}>{t.recTime}</Text>
               <Text style={st.heroValue}>{when(it)}</Text>
-              {it.dir != null && <><Text style={[st.heroLabel, { marginTop: 8 }]}>{t.direction}</Text><Text style={st.heroValue}>{t.dirSky(S.compass(it.dir, ja))}</Text></>}
+              {it.dir != null && <><Text style={[st.heroLabel, { marginTop: 8 }]}>{t.direction}</Text><Text style={st.heroValue}>{t.dirSky(compassL(it.dir))}</Text></>}
             </View>
             <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
               <Text style={st.heroPct}>{pctText(it.p)}</Text>
@@ -260,7 +265,7 @@ function Row({ it, onPress }: { it: S.Item; onPress: () => void }) {
       <Image source={SCENE[it.key] || SCENE.stars} style={st.thumb} />
       <View style={{ flex: 1, marginLeft: 12 }}>
         <View style={st.row}><Text style={st.h2}>{t.names[it.key]}</Text>{it.exp && <Text style={[st.expText, { marginLeft: 6 }]}>⚗</Text>}</View>
-        <Text style={st.rowSub} numberOfLines={1}>{when(it) || t.lv[String(it.level)]}{it.dir != null ? ` ・ ${t.dirSky(S.compass(it.dir, ja))}` : ''}</Text>
+        <Text style={st.rowSub} numberOfLines={1}>{when(it) || t.lv[String(it.level)]}{it.dir != null ? `${DOT()}${t.dirSky(compassL(it.dir))}` : ''}</Text>
       </View>
       <View style={[st.pctPill, { borderColor: LV_COLOR[String(it.level)] }]}><Text style={[st.pctPillText, { color: LV_COLOR[String(it.level)] }]}>{pctText(it.p)}</Text></View>
       <Text style={st.chev}>›</Text>
@@ -281,7 +286,7 @@ function Detail({ it, data, onClose, onReport }: { it: S.Item | null; data: S.Sk
   if (it.key === 'milkyway' && x.reason === 'moon') notes.unshift(t.milkyMoon);
   if (it.key === 'stars' && x.nelm != null) notes.unshift(t.nelm(x.nelm));
   if (it.key === 'rainbow' && it.level === 0) notes.unshift(t.noRainbow);
-  if (it.key === 'rainbow' && it.dir != null && it.level > 0) notes.unshift(t.rainbowAt(S.compass(it.dir, ja), x.top));
+  if (it.key === 'rainbow' && it.dir != null && it.level > 0) notes.unshift(t.rainbowAt(compassL(it.dir), x.top));
   if ((it.key === 'sunset' || it.key === 'sunrise') && x.tot != null && x.tot < 10) notes.unshift(t.clearSky);
   const calibrated = !!data?.calibration;
   notes.push(it.exp ? t.probNoteExp : calibrated ? t.probNote : t.probNoteRaw);
@@ -313,7 +318,7 @@ function Detail({ it, data, onClose, onReport }: { it: S.Item | null; data: S.Sk
                 </View>
               ))}
             </View>
-            {it.dir != null && <View style={[st.card, st.row]}><Text style={[st.line, { flex: 1 }]}>{t.viewDir}</Text><Text style={st.h2}>{t.dirSky(S.compass(it.dir, ja))}（{Math.round(it.dir)}°）</Text></View>}
+            {it.dir != null && <View style={[st.card, st.row]}><Text style={[st.line, { flex: 1 }]}>{t.viewDir}</Text><Text style={st.h2}>{t.dirSky(compassL(it.dir))}{par(`${Math.round(it.dir)}°`)}</Text></View>}
             {!!it.factors?.length && (
               <View style={st.card}>
                 <Text style={[st.h2, { marginBottom: 4 }]}>{t.breakdown}</Text>
@@ -373,7 +378,7 @@ function ReportTab({ items, onReport }: { items: S.Item[]; onReport: (k: string,
       {mine.slice(0, 30).map((r, i) => (
         <View key={i} style={[st.card, st.row]}>
           <Text style={[st.line, { flex: 1 }]}>{t.names[r.k] || r.k}</Text>
-          <Text style={st.small}>{t.outcomeName[r.o]} ・ {fmtDayTime(new Date(r.at))}</Text>
+          <Text style={st.small}>{t.outcomeName[r.o]}{DOT()}{fmtDayTime(new Date(r.at))}</Text>
         </View>
       ))}
     </ScrollView>
@@ -387,16 +392,16 @@ function Calendar({ loc, onReport }: { loc: Loc; onReport: (k: string) => void }
   const [sel, setSel] = useState<number | null>(null);
   const events = useMemo<Ev[]>(() => {
     const out: Ev[] = [];
-    for (const s of S.meteorShowers(loc.lat, loc.lon, now)) out.push({ d: s.best, kind: 'meteor', title: ja ? s.ja : s.en, sub: `${t.evMeteor} ・ ${s.rate > 0 ? t.perHour(s.rate) : t.notHere} ・ ${t.moonLit(Math.round(s.moonFrac * 100))}`, img: 'meteor' });
+    for (const s of S.meteorShowers(loc.lat, loc.lon, now)) out.push({ d: s.best, kind: 'meteor', title: showerName(s), sub: `${t.evMeteor}${DOT()}${s.rate > 0 ? t.perHour(s.rate) : t.notHere}${DOT()}${t.moonLit(Math.round(s.moonFrac * 100))}`, img: 'meteor' });
     let tt = new Date(now.getTime() - 32 * 86400e3);
     for (let i = 0; i < 15; i++) {
       const f = A.SearchMoonPhase(180, tt, 40)!.date, n = A.SearchMoonPhase(0, tt, 40)!.date;
       const km = A.GeoMoon(f).Length() * A.KM_PER_AU;
-      out.push({ d: f, kind: 'full', title: km < 360000 ? `${t.evFull}（${t.supermoon}）` : t.evFull, sub: `${Math.round(km).toLocaleString()} km`, img: 'moon' });
+      out.push({ d: f, kind: 'full', title: km < 360000 ? `${t.evFull}${par(t.supermoon)}` : t.evFull, sub: `${Math.round(km).toLocaleString()} km`, img: 'moon' });
       out.push({ d: n, kind: 'new', title: t.evNew, sub: '', img: 'stars' });
       tt = new Date(Math.max(f.getTime(), n.getTime()) + 86400e3);
     }
-    for (const e of S.eclipses(loc.lat, loc.lon, now)) out.push({ d: e.peak, kind: 'eclipse', title: e.kind === 'lunar' ? t.lunar[e.type] : t.solar[e.type], sub: (e.visible ? t.visibleHere : t.notHere) + (e.kind === 'solar' ? ' ・ ' + t.eclipseSafety : ''), img: 'eclipse' });
+    for (const e of S.eclipses(loc.lat, loc.lon, now)) out.push({ d: e.peak, kind: 'eclipse', title: e.kind === 'lunar' ? t.lunar[e.type] : t.solar[e.type], sub: (e.visible ? t.visibleHere : t.notHere) + (e.kind === 'solar' ? DOT() + t.eclipseSafety : ''), img: 'eclipse' });
     return out.sort((a, b) => a.d.getTime() - b.d.getTime());
   }, [loc]);
   const first = new Date(ym.y, ym.m, 1), days = new Date(ym.y, ym.m + 1, 0).getDate();
@@ -448,7 +453,7 @@ function Calendar({ loc, onReport }: { loc: Loc; onReport: (k: string) => void }
   );
 }
 
-function Settings({ prefs, setPrefs }: { prefs: typeof DEFAULT_PREFS; setPrefs: (p: any) => void }) {
+function Settings({ prefs, setPrefs, onLang }: { prefs: typeof DEFAULT_PREFS; setPrefs: (p: any) => void; onLang: (l: Lang) => void }) {
   const [msg, setMsg] = useState('');
   return (
     <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
@@ -460,9 +465,17 @@ function Settings({ prefs, setPrefs }: { prefs: typeof DEFAULT_PREFS; setPrefs: 
           <View key={k} style={[st.row, i > 0 && { marginTop: 10 }]}><Text style={[st.line, { flex: 1 }]}>{l}</Text><Switch value={(prefs as any)[k]} onValueChange={(v) => setPrefs({ ...prefs, [k]: v })} /></View>
         ))}
       </View>
+      <Text style={st.h3}>{t.language}</Text>
+      <View style={[st.card, { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }]}>
+        {LANGS.map((l) => (
+          <Pressable key={l.id} onPress={() => onLang(l.id)} style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 18, borderWidth: 1, borderColor: l.id === lang ? C.accent : 'rgba(255,255,255,0.18)', backgroundColor: l.id === lang ? 'rgba(255,255,255,0.10)' : 'transparent' }}>
+            <Text style={[st.line, { color: l.id === lang ? C.accent : undefined }]}>{l.name}</Text>
+          </Pressable>
+        ))}
+      </View>
       <View style={st.card}><Text style={st.line}>{t.about}</Text></View>
       {[[t.privacy, '/privacy'], [t.terms, '/terms'], [t.support, '/support']].map(([l, u]) => (
-        <Pressable key={u} style={st.card} onPress={() => Linking.openURL(WEB + u)}><Text style={[st.line, { color: C.accent }]}>{l}</Text></Pressable>
+        <Pressable key={u} style={st.card} onPress={() => Linking.openURL(`${WEB}${u}?lang=${apiLang()}`)}><Text style={[st.line, { color: C.accent }]}>{l}</Text></Pressable>
       ))}
       <Pressable style={st.card} onPress={async () => { const uid = await userId(); await api('/api/delete', { method: 'POST', body: JSON.stringify({ user: uid }) }).catch(() => {}); await AsyncStorage.removeItem('reports'); setMsg(t.deleted); }}>
         <Text style={[st.line, { color: '#FF8A8A' }]}>{t.deleteData}</Text>
@@ -535,7 +548,7 @@ function ReportSheet({ r, loc, issuedAt, onClose }: { r: { key: string; item?: S
 function PlacePicker({ open, onClose, onPick }: { open: boolean; onClose: () => void; onPick: (l: Loc | null) => void }) {
   const [q, setQ] = useState('');
   const [res, setRes] = useState<any[] | null>(null);
-  const go = async () => { try { const j = await api(`/api/geo?q=${encodeURIComponent(q)}&lang=${ja ? 'ja' : 'en'}`); setRes(j.results || []); } catch { setRes([]); } };
+  const go = async () => { try { const j = await api(`/api/geo?q=${encodeURIComponent(q)}&lang=${apiLang()}`); setRes(j.results || []); } catch { setRes([]); } };
   return (
     <Modal transparent animationType="slide" visible={open} onRequestClose={onClose}>
       <Pressable style={st.backdrop} onPress={onClose} />
@@ -566,16 +579,16 @@ async function scheduleLocal(loc: Loc, items: S.Item[], prefs: typeof DEFAULT_PR
     if (status !== 'granted') return;
     const now = Date.now();
     const plan: { at: Date; title: string; body: string }[] = [];
-    if (prefs.golden) for (const g of items.filter((x) => x.key === 'goldenhour' && x.start && x.start.getTime() > now + 60e3)) plan.push({ at: new Date(g.start!.getTime() - 10 * 60e3), title: t.names.goldenhour, body: `${fmtTime(g.start)}〜${fmtTime(g.end)} ・ ${t.dirSky(S.compass(g.dir, ja))} ・ ${pctText(g.p)}` });
+    if (prefs.golden) for (const g of items.filter((x) => x.key === 'goldenhour' && x.start && x.start.getTime() > now + 60e3)) plan.push({ at: new Date(g.start!.getTime() - 10 * 60e3), title: t.names.goldenhour, body: `${rng(fmtTime(g.start), fmtTime(g.end))}${DOT()}${t.dirSky(compassL(g.dir))}${DOT()}${pctText(g.p)}` });
     const stars = items.find((i) => i.key === 'stars');
-    if (prefs.stars && (stars?.p ?? 0) >= 0.6 && stars?.start && stars.start.getTime() > now) plan.push({ at: stars.start, title: t.names.stars, body: `${pctText(stars.p)} ・ ${fmtTime(stars.start)}〜${fmtTime(stars.end)}` });
+    if (prefs.stars && (stars?.p ?? 0) >= 0.6 && stars?.start && stars.start.getTime() > now) plan.push({ at: stars.start, title: t.names.stars, body: `${pctText(stars.p)}${DOT()}${rng(fmtTime(stars.start), fmtTime(stars.end))}` });
     const ss = items.find((i) => i.key === 'sunset');
-    if (prefs.sunset && (ss?.p ?? 0) >= 0.5 && ss?.peak) plan.push({ at: new Date(ss.peak.getTime() - 30 * 60e3), title: t.names.sunset, body: `${pctText(ss.p)}（${t.exp}）・ ${fmtTime(ss.peak)} ・ ${t.dirSky(S.compass(ss.dir, ja))}` });
+    if (prefs.sunset && (ss?.p ?? 0) >= 0.5 && ss?.peak) plan.push({ at: new Date(ss.peak.getTime() - 30 * 60e3), title: t.names.sunset, body: `${pctText(ss.p)}${par(t.exp)}${DOT()}${fmtTime(ss.peak)}${DOT()}${t.dirSky(compassL(ss.dir))}` });
     if (prefs.events) {
-      for (const m of S.meteorShowers(loc.lat, loc.lon, new Date())) if (m.best.getTime() - now < 30 * 86400e3 && m.rate >= 10) plan.push({ at: new Date(m.best.getTime() - 3 * 3600e3), title: ja ? m.ja : m.en, body: `${fmtTime(m.best)} ・ ${t.perHour(m.rate)}` });
+      for (const m of S.meteorShowers(loc.lat, loc.lon, new Date())) if (m.best.getTime() - now < 30 * 86400e3 && m.rate >= 10) plan.push({ at: new Date(m.best.getTime() - 3 * 3600e3), title: showerName(m), body: `${fmtTime(m.best)}${DOT()}${t.perHour(m.rate)}` });
       const mi = S.moonInfo(loc.lat, loc.lon, new Date());
       plan.push({ at: new Date(mi.full.getTime() - 6 * 3600e3), title: t.fullMoon, body: fmtDayTime(mi.full) });
-      for (const e of S.eclipses(loc.lat, loc.lon, new Date())) if (e.visible && e.peak.getTime() - now < 60 * 86400e3) plan.push({ at: new Date(e.peak.getTime() - 24 * 3600e3), title: e.kind === 'lunar' ? t.lunar[e.type] : t.solar[e.type], body: fmtDayTime(e.peak) + (e.kind === 'solar' ? ' ・ ' + t.eclipseSafety : '') });
+      for (const e of S.eclipses(loc.lat, loc.lon, new Date())) if (e.visible && e.peak.getTime() - now < 60 * 86400e3) plan.push({ at: new Date(e.peak.getTime() - 24 * 3600e3), title: e.kind === 'lunar' ? t.lunar[e.type] : t.solar[e.type], body: fmtDayTime(e.peak) + (e.kind === 'solar' ? DOT() + t.eclipseSafety : '') });
     }
     for (const n of plan.filter((x) => x.at.getTime() > now + 60e3).slice(0, 40)) {
       await Notifications.scheduleNotificationAsync({ content: { title: n.title, body: n.body }, trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: n.at } });
