@@ -1,6 +1,23 @@
+// 文言（10言語）。最初は端末の言語、アプリの「設定」から変えられる
 import { getLocales } from 'expo-localization';
+import { OTHER } from './locales';
 
-export const LANG: 'ja' | 'en' = (getLocales()[0]?.languageCode || 'en') === 'ja' ? 'ja' : 'en';
+export type Lang = 'ja' | 'en' | 'ko' | 'zh-Hans' | 'zh-Hant' | 'es' | 'fr' | 'de' | 'it' | 'pt';
+export const LANGS: { id: Lang; name: string }[] = [
+  { id: 'ja', name: '日本語' }, { id: 'en', name: 'English' }, { id: 'ko', name: '한국어' }, { id: 'zh-Hans', name: '简体中文' }, { id: 'zh-Hant', name: '繁體中文' },
+  { id: 'es', name: 'Español' }, { id: 'fr', name: 'Français' }, { id: 'de', name: 'Deutsch' }, { id: 'it', name: 'Italiano' }, { id: 'pt', name: 'Português' },
+];
+export function detectLang(): Lang {
+  try {
+    const g = getLocales()[0];
+    const l = (g?.languageTag || g?.languageCode || 'en').toLowerCase();
+    if (l.startsWith('ja')) return 'ja';
+    if (l.startsWith('ko')) return 'ko';
+    if (l.startsWith('zh')) return /hant|tw|hk|mo/.test(l) ? 'zh-Hant' : 'zh-Hans';
+    for (const x of ['es', 'fr', 'de', 'it', 'pt'] as const) if (l.startsWith(x)) return x;
+  } catch {}
+  return 'en';
+}
 const ja = {
   hello: '静かな作業部屋へようこそ',
   helloSub: '友だちと机を並べて、それぞれの作業を。\n誰かが机に向かうと、部屋の明かりがつきます。',
@@ -84,6 +101,7 @@ const ja = {
   me: 'あなた',
   min: '分',
   h: '時間',
+  language: '言語',
 };
 const en: typeof ja = {
   hello: 'Welcome to a quiet study room',
@@ -168,5 +186,10 @@ const en: typeof ja = {
   me: 'You',
   min: 'm',
   h: 'h',
+  language: 'Language',
 };
-export const t = LANG === 'ja' ? ja : en;
+export type Dict = typeof ja;
+const DICTS: Record<Lang, Dict> = { ja, en, ...OTHER };
+export let LANG: Lang = detectLang();
+export let t: Dict = DICTS[LANG];
+export function setLang(l: Lang) { LANG = l; t = DICTS[l] || en; }

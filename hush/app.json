@@ -29,7 +29,15 @@
     },
     "locales": {
       "ja": "./locales/ja.json",
-      "en": "./locales/en.json"
+      "en": "./locales/en.json",
+      "ko": "./locales/ko.json",
+      "zh-Hans": "./locales/zh-Hans.json",
+      "zh-Hant": "./locales/zh-Hant.json",
+      "es": "./locales/es.json",
+      "fr": "./locales/fr.json",
+      "de": "./locales/de.json",
+      "it": "./locales/it.json",
+      "pt": "./locales/pt.json"
     },
     "plugins": [
       "expo-notifications",

@@ -1,14 +1,14 @@
 // Hush：友だちと机を並べて作業する、静かな作業部屋
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, Share, Switch, Text, TextInput, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import * as ExpoLinking from 'expo-linking';
 import * as A from './src/api';
 import type { Member, Room, Session, Sync } from './src/api';
-import { LANG, t } from './src/i18n';
+import { LANG, LANGS, setLang, t, type Lang } from './src/i18n';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ITEM_COUNT, RoomView } from './src/room';
 import { pushStatus, registerPush } from './src/push';
 
@@ -31,11 +31,22 @@ const dayKey = (ms: number) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
+const LangCtx = React.createContext<(l: Lang) => void>(() => {});
 export default function App() {
+  const [lng, setLng] = useState<Lang | null>(null);
+  useEffect(() => {
+    AsyncStorage.getItem('hush_lang').then((l) => { if (l && LANGS.some((x) => x.id === l)) setLang(l as Lang); setLng(LANG); }).catch(() => setLng(LANG));
+  }, []);
+  const change = useCallback((l: Lang) => {
+    setLang(l);
+    AsyncStorage.setItem('hush_lang', l).catch(() => {});
+    A.updateMe({ lang: l }).catch(() => {});
+    setLng(l);
+  }, []);
   return (
     <SafeAreaProvider>
       <StatusBar style="light" />
-      <Main />
+      <LangCtx.Provider value={change}>{lng && <Main key={lng} />}</LangCtx.Provider>
     </SafeAreaProvider>
   );
 }
@@ -619,7 +630,7 @@ function LogScreen({ s }: { s: Sync }) {
                 {x.msg ? `　${x.msg}` : ''}
               </Text>
               <Text style={{ fontSize: 12, color: C.sub }}>
-                {new Date(x.start).toLocaleDateString(LANG === 'ja' ? 'ja-JP' : 'en-GB', { month: 'short', day: 'numeric' })} {pad(new Date(x.start).getHours())}:{pad(new Date(x.start).getMinutes())}
+                {new Date(x.start).toLocaleDateString(LANG === 'ja' ? 'ja-JP' : LANG === 'zh-Hans' ? 'zh-CN' : LANG === 'zh-Hant' ? 'zh-TW' : LANG === 'pt' ? 'pt-BR' : LANG === 'en' ? 'en-GB' : LANG, { month: 'short', day: 'numeric' })} {pad(new Date(x.start).getHours())}:{pad(new Date(x.start).getMinutes())}
               </Text>
             </View>
             <Text style={{ fontWeight: '900', color: C.ink }}>{hm(x.ms)}</Text>
@@ -634,12 +645,13 @@ function SettingsScreen({ s, apply, reset }: { s: Sync; apply: (s: Sync) => void
   const [name, setName] = useState(s.me.name);
   const [perm, setPerm] = useState('granted');
   const [notify, setNotify] = useState(true);
+  const setLangNow = React.useContext(LangCtx);
   useEffect(() => {
     pushStatus().then(setPerm);
   }, []);
   const row = { backgroundColor: '#fff', borderRadius: 14, padding: 14, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 };
   const link = (label: string, path: string) => (
-    <Pressable key={path} onPress={() => Linking.openURL(`${A.SERVER}${path}?lang=${LANG}`)} style={row}>
+    <Pressable key={path} onPress={() => Linking.openURL(`${A.SERVER}${path}?lang=${LANG === 'ja' ? 'ja' : 'en'}`)} style={row}>
       <Text style={{ flex: 1, color: C.ink, fontWeight: '700' }}>{label}</Text>
       <Text style={{ color: C.sub }}>›</Text>
     </Pressable>
@@ -647,6 +659,14 @@ function SettingsScreen({ s, apply, reset }: { s: Sync; apply: (s: Sync) => void
   return (
     <ScrollView contentContainerStyle={{ padding: 16, gap: 10 }} keyboardShouldPersistTaps="handled">
       <Text style={{ fontSize: 22, fontWeight: '900', color: C.ink }}>{t.tabSet}</Text>
+      <Text style={{ fontSize: 12, fontWeight: '800', color: C.sub, marginTop: 6 }}>{t.language}</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+        {LANGS.map((l) => (
+          <Pressable key={l.id} onPress={() => setLangNow(l.id)} accessibilityRole="button" accessibilityState={{ selected: l.id === LANG }} style={{ paddingVertical: 7, paddingHorizontal: 11, borderRadius: 16, backgroundColor: l.id === LANG ? C.ink : '#fff' }}>
+            <Text style={{ fontSize: 13, fontWeight: '800', color: l.id === LANG ? '#fff' : C.ink }}>{l.name}</Text>
+          </Pressable>
+        ))}
+      </View>
       <Text style={{ fontSize: 12, fontWeight: '800', color: C.sub, marginTop: 6 }}>{t.name}</Text>
       <View style={row}>
         <TextInput value={name} onChangeText={(v) => setName([...v].slice(0, 5).join(''))} style={{ flex: 1, fontSize: 16, color: C.ink }} />
