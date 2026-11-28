@@ -12,7 +12,7 @@ import Svg, { Path, Circle, Rect } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as api from './src/api';
 import type { Group, Post, Sync, User } from './src/api';
-import { ago, LANG, t } from './src/i18n';
+import { ago, LANG, LANGS, setLang, t, type Lang } from './src/i18n';
 import { ART, fitFont, KAO, ltr, MOOD_IDS, type MoodId, tint } from './src/kao';
 import { usePlus, EULA_URL, SKU_MONTH, SKU_YEAR, type PlusApi } from './src/plus';
 import { hourlyOn, loadTheme, pushStatus, registerPush, registerRefresh, saveTheme, scheduleHourly } from './src/push';
@@ -29,11 +29,23 @@ const K_MYKAO = 'nm.mykao.v1'; // 登録した顔文字
 const MYKAO_FREE = 3;
 const MYKAO_PLUS = 20;
 
+const LangCtx = React.createContext<(l: Lang) => void>(() => {});
 export default function App() {
+  const [lng, setLng] = useState<Lang | null>(null);
+  useEffect(() => {
+    AsyncStorage.getItem('nm_lang').then((l) => { if (l && LANGS.some((x) => x.id === l)) setLang(l as Lang); setLng(LANG); }).catch(() => setLng(LANG));
+  }, []);
+  const change = useCallback((l: Lang) => {
+    setLang(l);
+    AsyncStorage.setItem('nm_lang', l).catch(() => {});
+    if (api.hasAuth()) api.updateMe({ lang: l }).catch(() => {});
+    hourlyOn().then((on) => { if (on) scheduleHourly(true); }).catch(() => {});
+    setLng(l);
+  }, []);
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
-      <Root />
+      <LangCtx.Provider value={change}>{lng && <Root key={lng} />}</LangCtx.Provider>
     </SafeAreaProvider>
   );
 }
@@ -904,7 +916,7 @@ function JoinSheet({ code, s, plus, apply, close, say, onJoined, needPlus }: { c
       <Image source={ART.miss} style={{ width: 110, height: 110 }} />
       {err ? <Text style={{ color: C.danger }}>{err}</Text> : !info ? <ActivityIndicator color={C.accent} /> : (
         <>
-          <Text style={[st.h3, { textAlign: 'center' }]}>{LANG === 'ja' ? `「${info.name}」に参加しますか？` : `Join “${info.name}”?`}</Text>
+          <Text style={[st.h3, { textAlign: 'center' }]}>{t.joinQ(info.name)}</Text>
           <Text style={st.note}>{`${info.count}/5`}</Text>
           {info.joined ? <Btn label={t.close} onPress={close} /> : info.full ? <Text style={{ color: C.danger }}>{t.full}</Text> : <Btn label={t.join} onPress={join} />}
         </>
@@ -1110,6 +1122,7 @@ function PlusSheet({ api: p, why, close, say }: { api: PlusApi; why?: string; cl
 function SettingsSheet({ s, apply, plusApi, theme, setTheme, close, say, needPlus, onSignedOut }: { s: Sync; apply: (s: Sync) => void; plusApi: PlusApi; theme: string; setTheme: (v: string) => void; close: () => void; say: (m: string) => void; needPlus: (why: string) => void; onSignedOut: () => void }) {
   const [name, setName] = useState(s.me.name);
   const [hourly, setHourly] = useState(true);
+  const setLangNow = React.useContext(LangCtx);
   useEffect(() => {
     hourlyOn().then(setHourly);
   }, []);
@@ -1135,6 +1148,16 @@ function SettingsSheet({ s, apply, plusApi, theme, setTheme, close, say, needPlu
           <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff' }} />
         </View>
       </Pressable>
+      <View style={{ backgroundColor: C.card, borderRadius: 14, padding: 12, gap: 8 }}>
+        <Text style={{ fontSize: 14, fontWeight: '900', color: C.ink }}>{t.language}</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+          {LANGS.map((l) => (
+            <Pressable key={l.id} onPress={() => setLangNow(l.id)} accessibilityRole="button" accessibilityState={{ selected: l.id === LANG }} style={{ paddingVertical: 7, paddingHorizontal: 11, borderRadius: 16, backgroundColor: l.id === LANG ? C.ink : '#fff', borderWidth: 1, borderColor: l.id === LANG ? C.ink : '#E3D9CD' }}>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: l.id === LANG ? '#fff' : C.ink }}>{l.name}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
       <Text style={st.label}>{t.name}</Text>
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <TextInput value={name} onChangeText={setName} maxLength={12} style={[st.input, { flex: 1 }]} />

@@ -1,14 +1,24 @@
-// 文言（日本語・英語）。端末の言語が日本語なら日本語、それ以外は英語
+// 文言（10言語）。最初は端末の言語、アプリの「設定」から変えられる
 import { getLocales } from 'expo-localization';
+import { OTHER } from './locales';
 
-export type Lang = 'ja' | 'en';
-export const LANG: Lang = (() => {
+export type Lang = 'ja' | 'en' | 'ko' | 'zh-Hans' | 'zh-Hant' | 'es' | 'fr' | 'de' | 'it' | 'pt';
+/** 選べる言語（その言語での名前） */
+export const LANGS: { id: Lang; name: string }[] = [
+  { id: 'ja', name: '日本語' }, { id: 'en', name: 'English' }, { id: 'ko', name: '한국어' }, { id: 'zh-Hans', name: '简体中文' }, { id: 'zh-Hant', name: '繁體中文' },
+  { id: 'es', name: 'Español' }, { id: 'fr', name: 'Français' }, { id: 'de', name: 'Deutsch' }, { id: 'it', name: 'Italiano' }, { id: 'pt', name: 'Português' },
+];
+export function detectLang(): Lang {
   try {
-    return getLocales()[0]?.languageCode === 'ja' ? 'ja' : 'en';
-  } catch {
-    return 'en';
-  }
-})();
+    const g = getLocales()[0];
+    const l = (g?.languageTag || g?.languageCode || 'en').toLowerCase();
+    if (l.startsWith('ja')) return 'ja';
+    if (l.startsWith('ko')) return 'ko';
+    if (l.startsWith('zh')) return /hant|tw|hk|mo/.test(l) ? 'zh-Hant' : 'zh-Hans';
+    for (const x of ['es', 'fr', 'de', 'it', 'pt'] as const) if (l.startsWith(x)) return x;
+  } catch {}
+  return 'en';
+}
 
 const S = {
   ja: {
@@ -151,6 +161,8 @@ const S = {
     week: ['日', '月', '火', '水', '木', '金', '土'],
     monthTitle: (y: number, m: number) => `${y}年${m}月`,
     dayTitle: (m: number, d: number, w: string) => `${m}月${d}日（${w}）`,
+    joinQ: (g: string) => `「${g}」に参加しますか？`,
+    language: '言語',
   },
   en: {
     tagline: 'Your mood, on your close friends’ lock screens.',
@@ -292,9 +304,19 @@ const S = {
     week: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
     monthTitle: (y: number, m: number) => `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m - 1]} ${y}`,
     dayTitle: (m: number, d: number, w: string) => `${w}, ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m - 1]} ${d}`,
+    joinQ: (g: string) => `Join “${g}”?`,
+    language: 'Language',
   },
 };
-export const t = S[LANG];
+export type Dict = typeof S.ja;
+const _checkEn: Dict = S.en;
+const DICTS: Record<Lang, Dict> = { ja: S.ja, en: _checkEn, ...OTHER };
+/** いまの言語（サーバーには ja/en/ko/zh-Hans… をそのまま送る） */
+export let LANG: Lang = detectLang();
+export let t: Dict = DICTS[LANG];
+export function setLang(l: Lang) { LANG = l; t = DICTS[l] || S.en; }
+/** 法的ページなど、日本語と英語しかないページの言語 */
+export const pageLang = () => (LANG === 'ja' ? 'ja' : 'en');
 export const ago = (at: number) => {
   const m = Math.round((Date.now() - at) / 60000);
   if (m < 1) return t.justNow;
