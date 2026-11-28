@@ -279,6 +279,7 @@ function Detail({ it, data, onClose, onReport }: { it: S.Item | null; data: S.Sk
   if (it.key === 'aurora') { if (x.maxKp != null) notes.push(t.kp(x.maxKp)); notes.push(t.auroraNote); }
   if (it.key === 'stars' || it.key === 'milkyway') notes.push(t.lightNote);
   if (it.key === 'milkyway' && x.reason === 'moon') notes.unshift(t.milkyMoon);
+  if (it.key === 'stars' && x.nelm != null) notes.unshift(t.nelm(x.nelm));
   if (it.key === 'rainbow' && it.level === 0) notes.unshift(t.noRainbow);
   if (it.key === 'rainbow' && it.dir != null && it.level > 0) notes.unshift(t.rainbowAt(S.compass(it.dir, ja), x.top));
   if ((it.key === 'sunset' || it.key === 'sunrise') && x.tot != null && x.tot < 10) notes.unshift(t.clearSky);

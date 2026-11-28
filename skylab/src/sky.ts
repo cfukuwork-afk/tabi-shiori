@@ -147,6 +147,28 @@ export function rainbow(lat: number, lon: number, w: SkyData['weather'], now: Da
 }
 
 // 星空・天の川：天文薄明の終わり（太陽 -18°）以降、月が沈んでいるか細いとき、雲が少ない時間
+// 月明かりの空の明るさ（Krisciunas & Schaefer 1991, PASP 103:1033。誤差 8〜23%）と
+// 肉眼の限界等級（Schaefer 1990 系の換算）。天頂の空で計算。k は大気の減光係数（等級/エアマス）。
+// 光害はまだ入れていない（自然の夜空 21.6 等/平方秒角を基準）＝実際の街中では暗く出る。
+export function nightSky(lat: number, lon: number, t: Date, k = 0.2) {
+  const rad = Math.PI / 180;
+  const mp = moonPos(lat, lon, t);
+  const nl = (v: number) => 34.08 * Math.exp(20.7233 - 0.92104 * v);
+  const B0 = nl(21.6);
+  let Bm = 0;
+  if (mp.alt > 0) {
+    const a = Math.acos(Math.max(-1, Math.min(1, 2 * mp.frac - 1))) / rad; // 位相角（満月 0°）
+    const rho = 90 - mp.alt; // 月と天頂の離角
+    const X = (z: number) => 1 / Math.sqrt(1 - 0.96 * Math.sin(z * rad) ** 2);
+    const I = Math.pow(10, -0.4 * (3.84 + 0.026 * a + 4e-9 * a ** 4));
+    const f = Math.pow(10, 5.36) * (1.06 + Math.cos(rho * rad) ** 2) + Math.pow(10, 6.15 - Math.max(rho, 10) / 40);
+    Bm = f * I * Math.pow(10, -0.4 * k * X(90 - mp.alt)) * (1 - Math.pow(10, -0.4 * k * X(0)));
+  }
+  const sb = (20.7233 - Math.log((B0 + Bm) / 34.08)) / 0.92104; // 等/平方秒角
+  const nelm = 7.93 - 5 * Math.log10(Math.pow(10, 4.316 - sb / 5) + 1);
+  return { sb: Math.round(sb * 100) / 100, nelm: Math.round(nelm * 10) / 10, moonAlt: mp.alt, moonFrac: mp.frac };
+}
+
 export function stars(lat: number, lon: number, w: SkyData['weather'], now: Date) {
   const res: { t: Date; cloud: number | null; moonUp: boolean; moonFrac: number }[] = [];
   for (let k = 0; k < 30; k++) {
@@ -165,7 +187,7 @@ export function stars(lat: number, lon: number, w: SkyData['weather'], now: Date
   const bestS = night.reduce((a, b) => (score(b) > score(a) ? b : a));
   star.level = score(bestS) as Level; star.peak = bestS.t;
   if (good.length) { star.start = good[0].t; star.end = new Date(good[good.length - 1].t.getTime() + 3600e3); }
-  star.extra = { cloud: bestS.cloud, nightHours: night.length };
+  star.extra = { cloud: bestS.cloud, nightHours: night.length, ...(() => { const n = nightSky(lat, lon, bestS.t); return { nelm: n.nelm, sb: n.sb }; })() };
   const dark = night.filter((r) => !r.moonUp || r.moonFrac < 0.15);
   if (!dark.length) { milky.level = 0; milky.extra = { reason: 'moon' }; }
   else {
