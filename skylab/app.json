@@ -41,6 +41,11 @@
           "locationWhenInUsePermission": "Your location is used to forecast what you can see in the sky from where you are."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "03ce3a7a-51f7-4e2c-beee-cf94b1102e6a"
+      }
+    }
   }
 }
